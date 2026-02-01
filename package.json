@@ -41,6 +41,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
+    "diff": "^8.0.3",
     "embla-carousel-react": "^8.6.0",
     "eventsource-parser": "^3.0.6",
     "input-otp": "^1.4.2",

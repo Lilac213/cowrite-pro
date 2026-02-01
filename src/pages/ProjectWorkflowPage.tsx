@@ -17,13 +17,11 @@ import ReviewStage from '@/components/workflow/ReviewStage';
 
 const stages = [
   { key: 'init', label: '开始', progress: 0 },
-  { key: 'confirm_brief', label: '明确需求', progress: 12.5 },
-  { key: 'knowledge_selected', label: '资料查询', progress: 25 },
-  { key: 'outline_confirmed', label: '段落摘要', progress: 37.5 },
-  { key: 'drafting', label: '文章生成', progress: 50 },
-  { key: 'review_pass_1', label: '内容审校', progress: 62.5 },
-  { key: 'review_pass_2', label: '风格审校', progress: 75 },
-  { key: 'review_pass_3', label: '细节打磨', progress: 87.5 },
+  { key: 'confirm_brief', label: '明确需求', progress: 14 },
+  { key: 'knowledge_selected', label: '资料查询', progress: 28 },
+  { key: 'outline_confirmed', label: '段落摘要', progress: 42 },
+  { key: 'drafting', label: '文章生成', progress: 56 },
+  { key: 'review_pass_1', label: '内容审校', progress: 70 },
   { key: 'completed', label: '完成', progress: 100 },
 ];
 
@@ -82,9 +80,7 @@ export default function ProjectWorkflowPage() {
       case 'drafting':
         return <MaterialsStage projectId={projectId} onComplete={loadProject} />;
       case 'review_pass_1':
-      case 'review_pass_2':
-      case 'review_pass_3':
-        return <ReviewStage projectId={projectId} project={project} onComplete={loadProject} />;
+        return <ReviewStage projectId={projectId} onComplete={loadProject} />;
       case 'completed':
         return <DraftStage projectId={projectId} readonly />;
       default:
