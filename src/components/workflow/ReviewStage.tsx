@@ -274,6 +274,7 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
   const [completedSteps, setCompletedSteps] = useState<ReviewStep[]>([]);
   const [processingStep, setProcessingStep] = useState<ReviewStep | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -281,15 +282,29 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
   }, [projectId]);
 
   const loadDraft = async () => {
+    setLoading(true);
     try {
       const data = await getLatestDraft(projectId);
       if (data) {
         setDraft(data);
         setCurrentContent(data.content || '');
         setOriginalContent(data.content || '');
+      } else {
+        toast({
+          title: '未找到草稿',
+          description: '请先在文章生成阶段生成内容',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
       console.error('加载草稿失败:', error);
+      toast({
+        title: '加载失败',
+        description: '无法加载文章内容',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -415,7 +430,31 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
         </CardHeader>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {loading ? (
+        <Card>
+          <CardContent className="flex items-center justify-center min-h-[400px]">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              <p className="text-muted-foreground">加载文章内容中...</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : !currentContent ? (
+        <Card>
+          <CardContent className="flex items-center justify-center min-h-[400px]">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className="rounded-full bg-destructive/10 p-4">
+                <Circle className="h-12 w-12 text-destructive" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-2">无内容</h3>
+                <p className="text-muted-foreground">请先生成文章内容</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">{/* Rest of the content */}
         {/* 左侧：文章内容 */}
         <Card className="lg:col-span-1">
           <CardHeader>
@@ -563,6 +602,7 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
           </CardContent>
         </Card>
       </div>
+      )}
     </div>
   );
 }

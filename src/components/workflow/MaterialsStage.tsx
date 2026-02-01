@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { updateProject } from '@/db/api';
+import { updateProject, createDraft, getLatestDraft, updateDraft, callLLMGenerate, getBrief, getKnowledgeBase, getOutlines } from '@/db/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface MaterialsStageProps {
@@ -15,46 +16,83 @@ export default function MaterialsStage({ projectId, onComplete }: MaterialsStage
   const [experience, setExperience] = useState('');
   const [opinion, setOpinion] = useState('');
   const [caseStudy, setCaseStudy] = useState('');
+  const [generating, setGenerating] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const { toast } = useToast();
 
-  const handleSkip = async () => {
-    setConfirming(true);
+  const generateDraft = async () => {
+    setGenerating(true);
     try {
+      const brief = await getBrief(projectId);
+      const knowledge = await getKnowledgeBase(projectId);
+      const outlines = await getOutlines(projectId);
+
+      const selectedKnowledge = knowledge.filter((k) => k.selected);
+      const selectedOutlines = outlines.filter((o) => o.selected);
+
+      let prompt = `基于以下信息生成完整文章：
+
+需求：${JSON.stringify(brief?.requirements || {})}
+
+知识库：
+${selectedKnowledge.map((k) => `- ${k.title}: ${k.content}`).join('\n')}
+
+段落结构：
+${selectedOutlines.map((o, i) => `${i + 1}. ${o.summary}`).join('\n')}`;
+
+      // 添加个人素材
+      if (experience || opinion || caseStudy) {
+        prompt += `\n\n个人素材：`;
+        if (experience) prompt += `\n亲身经历：${experience}`;
+        if (opinion) prompt += `\n个人观点：${opinion}`;
+        if (caseStudy) prompt += `\n案例故事：${caseStudy}`;
+      }
+
+      prompt += `\n\n请生成一篇完整的文章。`;
+
+      const result = await callLLMGenerate(prompt);
+
+      // 保存草稿
+      const existingDraft = await getLatestDraft(projectId);
+      if (!existingDraft) {
+        await createDraft({
+          project_id: projectId,
+          content: result,
+          version: 1,
+        });
+      } else {
+        await updateDraft(existingDraft.id, {
+          content: result,
+          version: existingDraft.version + 1,
+        });
+      }
+
+      // 更新项目状态
       await updateProject(projectId, { status: 'review_pass_1' });
+      
       toast({
-        title: '已跳过',
-        description: '进入文章生成阶段',
+        title: '生成成功',
+        description: '文章已生成，进入审校阶段',
       });
+      
       onComplete();
-    } catch (error) {
+    } catch (error: any) {
       toast({
-        title: '操作失败',
+        title: '生成失败',
+        description: error.message || '无法生成文章',
         variant: 'destructive',
       });
     } finally {
-      setConfirming(false);
+      setGenerating(false);
     }
   };
 
+  const handleSkip = async () => {
+    await generateDraft();
+  };
+
   const handleConfirm = async () => {
-    setConfirming(true);
-    try {
-      // 这里可以保存个人素材到数据库
-      await updateProject(projectId, { status: 'review_pass_1' });
-      toast({
-        title: '确认成功',
-        description: '进入文章生成阶段',
-      });
-      onComplete();
-    } catch (error) {
-      toast({
-        title: '确认失败',
-        variant: 'destructive',
-      });
-    } finally {
-      setConfirming(false);
-    }
+    await generateDraft();
   };
 
   return (
@@ -96,11 +134,25 @@ export default function MaterialsStage({ projectId, onComplete }: MaterialsStage
             />
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={handleSkip} disabled={confirming}>
-              跳过
+            <Button variant="outline" onClick={handleSkip} disabled={generating}>
+              {generating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  生成中...
+                </>
+              ) : (
+                '跳过'
+              )}
             </Button>
-            <Button onClick={handleConfirm} disabled={confirming}>
-              {confirming ? '确认中...' : '确认并继续'}
+            <Button onClick={handleConfirm} disabled={generating}>
+              {generating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  生成中...
+                </>
+              ) : (
+                '确认并继续'
+              )}
             </Button>
           </div>
         </CardContent>
