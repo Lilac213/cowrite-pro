@@ -516,3 +516,170 @@ export async function callWebSearch(query: string) {
   if (!data) throw new Error('未收到响应');
   return data.results;
 }
+
+// ============ AI Assistant API ============
+
+// AI 生成模板规则
+export async function generateTemplateRules(description: string) {
+  const systemMessage = `你是一个"文档排版规则解析器"，而不是写作助手。
+
+你的唯一任务是：
+- 将用户提供的【文档格式 / 排版 / 规范说明】
+- 转换为【结构化的排版规则数据】
+
+严格禁止：
+- 生成任何正文内容
+- 补充用户未提及的格式要求
+- 推测学校或期刊的默认规范
+
+如果用户的描述不完整：
+- 使用 null
+- 或在 issues 字段中明确指出缺失项
+
+请以 JSON 格式返回，包含以下字段：
+{
+  "page_structure": {}, // 页面结构
+  "style_rules": {}, // 样式规则
+  "validation_rules": {}, // 校验规则
+  "issues": [] // 缺失或不明确的项
+}`;
+
+  const result = await callLLMGenerate(description, '', systemMessage);
+  return JSON.parse(result);
+}
+
+// AI 分析参考文章
+export async function analyzeReferenceArticle(title: string, content: string) {
+  const prompt = `请分析以下文章，提取关键信息：
+
+标题：${title}
+
+内容：
+${content}
+
+请以 JSON 格式返回：
+{
+  "core_points": ["核心观点1", "核心观点2", "核心观点3"],
+  "structure": {
+    "introduction": "引言概要",
+    "main_sections": ["主要章节1", "主要章节2"],
+    "conclusion": "结论概要"
+  },
+  "borrowable_segments": [
+    {
+      "content": "可借鉴的段落内容",
+      "usage": "适用场景说明"
+    }
+  ],
+  "tags": ["标签1", "标签2", "标签3"]
+}`;
+
+  const result = await callLLMGenerate(prompt);
+  return JSON.parse(result);
+}
+
+// AI 整理素材库
+export async function organizeMaterials(materials: Material[]) {
+  const prompt = `请分析以下素材，提供整理建议：
+
+${materials.map((m, i) => `${i + 1}. ${m.title}\n${m.content.substring(0, 200)}...`).join('\n\n')}
+
+请以 JSON 格式返回：
+{
+  "auto_tags": {
+    "material_id": ["标签1", "标签2"]
+  },
+  "similar_groups": [
+    {
+      "material_ids": ["id1", "id2"],
+      "reason": "相似原因"
+    }
+  ],
+  "article_suggestions": [
+    {
+      "title": "建议文章标题",
+      "material_ids": ["id1", "id2", "id3"],
+      "outline": "文章大纲"
+    }
+  ]
+}`;
+
+  const result = await callLLMGenerate(prompt);
+  return JSON.parse(result);
+}
+
+// 更新素材关联项目
+export async function linkMaterialToProjects(materialId: string, projectIds: string[]) {
+  const { data, error } = await supabase
+    .from('materials')
+    .update({ 
+      project_ids: projectIds,
+      status: projectIds.length > 0 ? 'in_project' : 'unused',
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', materialId)
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as Material;
+}
+
+// 更新素材标签
+export async function updateMaterialTags(materialId: string, tags: string[]) {
+  const { data, error } = await supabase
+    .from('materials')
+    .update({ 
+      tags,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', materialId)
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as Material;
+}
+
+// 更新参考文章 AI 分析结果
+export async function updateReferenceAnalysis(articleId: string, analysis: any) {
+  const { data, error } = await supabase
+    .from('reference_articles')
+    .update({ 
+      ai_analysis: analysis,
+      tags: analysis.tags || [],
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', articleId)
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as ReferenceArticle;
+}
+
+// 按标签筛选素材
+export async function getMaterialsByTags(userId: string, tags: string[]) {
+  const { data, error } = await supabase
+    .from('materials')
+    .select('*')
+    .eq('user_id', userId)
+    .contains('tags', tags)
+    .order('updated_at', { ascending: false });
+
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as Material[];
+}
+
+// 按标签筛选参考文章
+export async function getReferencesByTags(userId: string, tags: string[]) {
+  const { data, error } = await supabase
+    .from('reference_articles')
+    .select('*')
+    .eq('user_id', userId)
+    .contains('tags', tags)
+    .order('updated_at', { ascending: false });
+
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as ReferenceArticle[];
+}

@@ -12,6 +12,8 @@ export type ProjectStatus =
   | 'completed';
 
 export type MaterialType = 'experience' | 'opinion' | 'case';
+export type MaterialSource = 'manual' | 'ai_generated' | 'imported';
+export type MaterialStatus = 'unused' | 'used' | 'in_project';
 
 export interface Profile {
   id: string;
@@ -78,8 +80,17 @@ export interface ReferenceArticle {
   title: string;
   content: string;
   source_type?: string;
+  source_url?: string;
+  tags?: string[];
+  ai_analysis?: {
+    core_points?: string[];
+    structure?: any;
+    borrowable_segments?: any[];
+    recommended_projects?: string[];
+  };
   keywords?: string[];
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Material {
@@ -89,8 +100,13 @@ export interface Material {
   title: string;
   material_type: MaterialType;
   content: string;
+  source?: MaterialSource;
+  tags?: string[];
+  status?: MaterialStatus;
+  project_ids?: string[];
   keywords?: string[];
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Draft {
@@ -116,9 +132,17 @@ export interface Template {
   id: string;
   user_id: string;
   name: string;
+  description?: string;
   content: string;
   format: string;
+  rules?: {
+    page_structure?: any;
+    style_rules?: any;
+    validation_rules?: any;
+  };
+  preview_content?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface SearchResult {

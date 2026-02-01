@@ -5,9 +5,9 @@ import LoginPage from './pages/LoginPage';
 import ProjectListPage from './pages/ProjectListPage';
 import ProjectWorkflowPage from './pages/ProjectWorkflowPage';
 import AIReducerPage from './pages/AIReducerPage';
-import MaterialsPage from './pages/MaterialsPage';
-import ReferencesPage from './pages/ReferencesPage';
-import TemplatesPage from './pages/TemplatesPage';
+import MaterialsPageEnhanced from './pages/MaterialsPageEnhanced';
+import ReferencesPageEnhanced from './pages/ReferencesPageEnhanced';
+import TemplatesPageEnhanced from './pages/TemplatesPageEnhanced';
 import SettingsPage from './pages/SettingsPage';
 import AdminPage from './pages/AdminPage';
 import NotFound from './pages/NotFound';
@@ -49,17 +49,17 @@ const routes: RouteConfig[] = [
   {
     name: 'Materials',
     path: '/materials',
-    element: <MaterialsPage />,
+    element: <MaterialsPageEnhanced />,
   },
   {
     name: 'References',
     path: '/references',
-    element: <ReferencesPage />,
+    element: <ReferencesPageEnhanced />,
   },
   {
     name: 'Templates',
     path: '/templates',
-    element: <TemplatesPage />,
+    element: <TemplatesPageEnhanced />,
   },
   {
     name: 'Settings',
