@@ -9,7 +9,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { FileText, Library, BookOpen, FileCode, Settings, Menu, ChevronLeft, Shield } from 'lucide-react';
+import { FileText, Library, BookOpen, Wand2, FileCode, Settings, Menu, ChevronLeft, Shield } from 'lucide-react';
 
 const mainMenuItems = [
   { title: '项目列表', url: '/', icon: FileText },
@@ -18,7 +18,7 @@ const mainMenuItems = [
 ];
 
 const toolboxItems = [
-  { title: 'AI 降重工具', url: '/ai-reducer', icon: FileCode },
+  { title: 'AI 降重工具', url: '/ai-reducer', icon: Wand2 },
   { title: '模板管理', url: '/templates', icon: FileCode },
   { title: '设置', url: '/settings', icon: Settings },
 ];
