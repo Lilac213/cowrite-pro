@@ -1,21 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { getProfile, updateProfile } from '@/db/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/db/supabase';
+import { LogOut, User as UserIcon } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, signOut } = useAuth();
+  const navigate = useNavigate();
   const [llmProvider, setLlmProvider] = useState('');
   const [llmApiKey, setLlmApiKey] = useState('');
   const [searchProvider, setSearchProvider] = useState('');
   const [searchApiKey, setSearchApiKey] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -57,7 +65,7 @@ export default function SettingsPage() {
       await refreshProfile();
       toast({
         title: '保存成功',
-        description: '设置已更新',
+        description: 'API 配置已更新',
       });
     } catch (error) {
       toast({
@@ -68,6 +76,64 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      toast({
+        title: '请填写完整',
+        description: '请输入新密码和确认密码',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: '密码不匹配',
+        description: '两次输入的密码不一致',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: '密码太短',
+        description: '密码至少需要 6 个字符',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) throw error;
+
+      setNewPassword('');
+      setConfirmPassword('');
+      toast({
+        title: '密码已更新',
+        description: '您的密码已成功修改',
+      });
+    } catch (error: any) {
+      toast({
+        title: '修改失败',
+        description: error.message || '无法修改密码',
+        variant: 'destructive',
+      });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
   };
 
   if (loading) {
@@ -86,6 +152,63 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-6">
+        {/* 用户信息 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>用户信息</CardTitle>
+            <CardDescription>您的账户基本信息</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
+              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
+                <UserIcon className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="font-medium">{profile?.username || user?.email}</p>
+                <p className="text-sm text-muted-foreground">
+                  {profile?.role === 'admin' ? '管理员' : '用户'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 密码修改 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>修改密码</CardTitle>
+            <CardDescription>更新您的登录密码</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">新密码</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                placeholder="输入新密码（至少 6 个字符）"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">确认密码</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="再次输入新密码"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+            <Button onClick={handleChangePassword} disabled={changingPassword}>
+              {changingPassword ? '修改中...' : '修改密码'}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Separator />
+
+        {/* LLM 配置 */}
         <Card>
           <CardHeader>
             <CardTitle>LLM 配置</CardTitle>
@@ -123,6 +246,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* 搜索配置 */}
         <Card>
           <CardHeader>
             <CardTitle>搜索配置</CardTitle>
@@ -162,7 +286,11 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <div className="flex justify-end">
+        <div className="flex justify-between items-center pt-4">
+          <Button variant="outline" onClick={handleSignOut}>
+            <LogOut className="h-4 w-4 mr-2" />
+            退出登录
+          </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? '保存中...' : '保存设置'}
           </Button>

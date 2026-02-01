@@ -3,21 +3,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { FileText, Library, BookOpen, FileCode, Settings, LogOut, User, Shield, Menu, ChevronLeft } from 'lucide-react';
+import { FileText, Library, BookOpen, FileCode, Settings, Menu, ChevronLeft, Shield } from 'lucide-react';
 
 const mainMenuItems = [
   { title: '项目列表', url: '/', icon: FileText },
@@ -86,9 +78,9 @@ function SidebarContent({
       </div>
 
       {/* 菜单内容 */}
-      <div className="flex-1 overflow-y-auto py-4">
+      <div className="flex-1 overflow-y-auto py-4 flex flex-col">
         {/* 主菜单 */}
-        <div className={`mb-6 ${isCollapsed ? 'px-2' : 'px-4'}`}>
+        <div className={`${isCollapsed ? 'px-2' : 'px-4'}`}>
           {!isCollapsed && (
             <div className="px-2 mb-2">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -127,6 +119,9 @@ function SidebarContent({
             })}
           </nav>
         </div>
+
+        {/* 间隔 */}
+        <div className="flex-1 min-h-[40px]" />
 
         {/* 工具箱 */}
         <div className={`${isCollapsed ? 'px-2' : 'px-4'}`}>
@@ -232,18 +227,13 @@ export function AppLayout() {
     localStorage.setItem('sidebar-collapsed', String(newState));
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/login');
-  };
-
   return (
     <TooltipProvider delayDuration={0}>
       <div className="flex min-h-screen w-full">
         {/* PC 端侧边栏 */}
         <aside
           className={`hidden md:block border-r border-border bg-sidebar transition-all duration-300 ease-in-out shrink-0 ${
-            isCollapsed ? 'w-[50px]' : 'w-[200px]'
+            isCollapsed ? 'w-[56px]' : 'w-[220px]'
           }`}
         >
           <SidebarContent
@@ -254,53 +244,28 @@ export function AppLayout() {
           />
         </aside>
 
-        <div className="flex-1 flex flex-col min-w-0">
-          <header className="border-b border-border bg-background shrink-0">
-            <div className="flex h-16 items-center px-4 md:px-6 gap-4">
-              {/* 移动端菜单按钮 */}
-              <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="sm" className="md:hidden">
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-[50vw] p-0 bg-sidebar">
-                  <SidebarContent
-                    isCollapsed={false}
-                    location={location}
-                    profile={profile}
-                    isMobile={true}
-                    onNavigate={() => setMobileOpen(false)}
-                  />
-                </SheetContent>
-              </Sheet>
+        {/* 移动端侧边栏 */}
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent side="left" className="w-[50vw] p-0 bg-sidebar md:hidden">
+            <SidebarContent
+              isCollapsed={false}
+              location={location}
+              profile={profile}
+              isMobile={true}
+              onNavigate={() => setMobileOpen(false)}
+            />
+          </SheetContent>
+        </Sheet>
 
-              <div className="flex-1" />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm">
-                    <User className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">{profile?.username || user?.email}</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>我的账户</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to="/settings">
-                      <Settings className="h-4 w-4 mr-2" />
-                      设置
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut}>
-                    <LogOut className="h-4 w-4 mr-2" />
-                    退出登录
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* 移动端顶部菜单按钮 */}
+          <div className="md:hidden border-b border-border bg-background">
+            <div className="flex h-14 items-center px-4">
+              <Button variant="ghost" size="sm" onClick={() => setMobileOpen(true)}>
+                <Menu className="h-5 w-5" />
+              </Button>
             </div>
-          </header>
+          </div>
 
           <main className="flex-1 overflow-auto">
             {<Outlet />}
