@@ -19,10 +19,15 @@ export interface Profile {
   id: string;
   username: string;
   role: UserRole;
-  llm_api_key?: string;
-  llm_provider?: string;
-  search_api_key?: string;
-  search_provider?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SystemConfig {
+  id: string;
+  config_key: string;
+  config_value: string;
+  updated_by?: string;
   created_at: string;
   updated_at: string;
 }

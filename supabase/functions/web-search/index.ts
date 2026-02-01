@@ -28,26 +28,26 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 获取用户配置
-    const { data: profile, error: profileError } = await supabaseClient
-      .from('profiles')
-      .select('search_api_key, search_provider')
-      .eq('id', user.id)
-      .maybeSingle();
+    // 获取系统配置（从 system_config 表读取）
+    const { data: configs, error: configError } = await supabaseClient
+      .from('system_config')
+      .select('config_key, config_value')
+      .in('config_key', ['search_provider', 'search_api_key']);
 
-    if (profileError || !profile) {
+    if (configError) {
       return new Response(
-        JSON.stringify({ error: '无法获取用户配置' }),
+        JSON.stringify({ error: '无法获取系统配置' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (!profile.search_api_key || !profile.search_provider) {
-      return new Response(
-        JSON.stringify({ error: '请先在设置中配置搜索 API 密钥和提供商' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const configMap = configs.reduce((acc, item) => {
+      acc[item.config_key] = item.config_value;
+      return acc;
+    }, {} as Record<string, string>);
+
+    const searchProvider = configMap['search_provider'] || 'openalex';
+    const searchApiKey = configMap['search_api_key'];
 
     // 解析请求体
     const { query } = await req.json();
@@ -68,9 +68,35 @@ Deno.serve(async (req) => {
       publishedAt?: string;
     }> = [];
     
-    if (profile.search_provider === 'google') {
+    if (searchProvider === 'openalex') {
+      // OpenAlex 是开放 API，不需要密钥
       const response = await fetch(
-        `https://www.googleapis.com/customsearch/v1?key=${profile.search_api_key}&cx=${Deno.env.get('GOOGLE_SEARCH_ENGINE_ID')}&q=${encodeURIComponent(query)}&num=10`
+        `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per-page=10&mailto=cowrite@example.com`
+      );
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`OpenAlex API 错误: ${error}`);
+      }
+
+      const data = await response.json();
+      results = (data.results || []).map((item: any) => ({
+        title: item.title || item.display_name || '无标题',
+        content: item.abstract || item.description || '无摘要',
+        source: item.primary_location?.source?.display_name || 'OpenAlex',
+        url: item.doi ? `https://doi.org/${item.doi}` : (item.id || ''),
+        publishedAt: item.publication_date,
+      }));
+    } else if (searchProvider === 'google') {
+      if (!searchApiKey) {
+        return new Response(
+          JSON.stringify({ error: '系统搜索配置未完成，请联系管理员配置' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const response = await fetch(
+        `https://www.googleapis.com/customsearch/v1?key=${searchApiKey}&cx=${Deno.env.get('GOOGLE_SEARCH_ENGINE_ID')}&q=${encodeURIComponent(query)}&num=10`
       );
 
       if (!response.ok) {
@@ -86,12 +112,19 @@ Deno.serve(async (req) => {
         url: item.link,
         publishedAt: item.pagemap?.metatags?.[0]?.['article:published_time'],
       }));
-    } else if (profile.search_provider === 'bing') {
+    } else if (searchProvider === 'bing') {
+      if (!searchApiKey) {
+        return new Response(
+          JSON.stringify({ error: '系统搜索配置未完成，请联系管理员配置' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       const response = await fetch(
         `https://api.bing.microsoft.com/v7.0/search?q=${encodeURIComponent(query)}&count=10`,
         {
           headers: {
-            'Ocp-Apim-Subscription-Key': profile.search_api_key,
+            'Ocp-Apim-Subscription-Key': searchApiKey,
           },
         }
       );
@@ -109,48 +142,9 @@ Deno.serve(async (req) => {
         url: item.url,
         publishedAt: item.datePublished,
       }));
-    } else if (profile.search_provider === 'perplexity') {
-      const response = await fetch('https://api.perplexity.ai/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${profile.search_api_key}`,
-        },
-        body: JSON.stringify({
-          model: 'llama-3.1-sonar-small-128k-online',
-          messages: [
-            {
-              role: 'system',
-              content: '你是一个搜索助手，请返回与查询相关的最新信息，包括来源和链接。',
-            },
-            {
-              role: 'user',
-              content: query,
-            },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Perplexity API 错误: ${error}`);
-      }
-
-      const data = await response.json();
-      const content = data.choices[0].message.content;
-      const citations = data.citations || [];
-      
-      // Perplexity 返回的是综合结果，我们将其作为单个结果返回
-      results = [{
-        title: query,
-        content: content,
-        source: 'Perplexity AI',
-        url: citations[0] || '',
-        publishedAt: new Date().toISOString(),
-      }];
     } else {
       return new Response(
-        JSON.stringify({ error: `不支持的搜索提供商: ${profile.search_provider}` }),
+        JSON.stringify({ error: `不支持的搜索提供商: ${searchProvider}` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

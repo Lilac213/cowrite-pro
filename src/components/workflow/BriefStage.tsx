@@ -104,10 +104,12 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
       let errorMessage = '无法生成需求文档';
       
       // 检查是否是 API 配置问题
-      if (error.message && error.message.includes('请先在设置中配置')) {
-        errorMessage = '请先在设置页面配置 LLM API 密钥';
+      if (error.message && error.message.includes('系统 LLM 配置未完成')) {
+        errorMessage = '系统 LLM 配置未完成，请联系管理员配置通义千问 API 密钥';
+      } else if (error.message && error.message.includes('请先在设置中配置')) {
+        errorMessage = '系统 LLM 配置未完成，请联系管理员配置';
       } else if (error.message && error.message.includes('API 错误')) {
-        errorMessage = 'API 调用失败，请检查 API 密钥是否正确';
+        errorMessage = 'API 调用失败，请联系管理员检查 API 密钥是否正确';
       } else if (error.message) {
         errorMessage = error.message;
       }

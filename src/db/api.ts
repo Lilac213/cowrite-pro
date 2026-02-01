@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type {
   Profile,
+  SystemConfig,
   Project,
   Brief,
   KnowledgeBase,
@@ -12,6 +13,28 @@ import type {
   Template,
   SearchResult,
 } from '@/types';
+
+// ============ System Config API ============
+export async function getSystemConfig() {
+  const { data, error } = await supabase
+    .from('system_config')
+    .select('*');
+
+  if (error) throw error;
+  return data as SystemConfig[];
+}
+
+export async function updateSystemConfig(configKey: string, configValue: string) {
+  const { data, error } = await supabase
+    .from('system_config')
+    .update({ config_value: configValue })
+    .eq('config_key', configKey)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as SystemConfig;
+}
 
 // ============ Profile API ============
 export async function getProfile(userId: string) {

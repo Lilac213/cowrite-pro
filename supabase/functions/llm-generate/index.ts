@@ -28,23 +28,30 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 获取用户配置
-    const { data: profile, error: profileError } = await supabaseClient
-      .from('profiles')
-      .select('llm_api_key, llm_provider')
-      .eq('id', user.id)
-      .maybeSingle();
+    // 获取系统配置（从 system_config 表读取）
+    const { data: configs, error: configError } = await supabaseClient
+      .from('system_config')
+      .select('config_key, config_value')
+      .in('config_key', ['llm_provider', 'llm_api_key']);
 
-    if (profileError || !profile) {
+    if (configError) {
       return new Response(
-        JSON.stringify({ error: '无法获取用户配置' }),
+        JSON.stringify({ error: '无法获取系统配置' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (!profile.llm_api_key || !profile.llm_provider) {
+    const configMap = configs.reduce((acc, item) => {
+      acc[item.config_key] = item.config_value;
+      return acc;
+    }, {} as Record<string, string>);
+
+    const llmProvider = configMap['llm_provider'];
+    const llmApiKey = configMap['llm_api_key'];
+
+    if (!llmApiKey || !llmProvider) {
       return new Response(
-        JSON.stringify({ error: '请先在设置中配置 LLM API 密钥和提供商' }),
+        JSON.stringify({ error: '系统 LLM 配置未完成，请联系管理员配置' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -62,12 +69,42 @@ Deno.serve(async (req) => {
     // 根据提供商调用不同的 API
     let result = '';
     
-    if (profile.llm_provider === 'openai') {
+    if (llmProvider === 'qwen') {
+      // 通义千问 API
+      const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${llmApiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'qwen-plus',
+          input: {
+            messages: [
+              ...(systemMessage ? [{ role: 'system', content: systemMessage }] : []),
+              ...(context ? [{ role: 'user', content: context }] : []),
+              { role: 'user', content: prompt },
+            ],
+          },
+          parameters: {
+            temperature: 0.7,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`通义千问 API 错误: ${error}`);
+      }
+
+      const data = await response.json();
+      result = data.output?.text || data.output?.choices?.[0]?.message?.content || '';
+    } else if (llmProvider === 'openai') {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${profile.llm_api_key}`,
+          'Authorization': `Bearer ${llmApiKey}`,
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
@@ -87,12 +124,12 @@ Deno.serve(async (req) => {
 
       const data = await response.json();
       result = data.choices[0].message.content;
-    } else if (profile.llm_provider === 'anthropic') {
+    } else if (llmProvider === 'anthropic') {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': profile.llm_api_key,
+          'x-api-key': llmApiKey,
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
@@ -115,7 +152,7 @@ Deno.serve(async (req) => {
       result = data.content[0].text;
     } else {
       return new Response(
-        JSON.stringify({ error: `不支持的 LLM 提供商: ${profile.llm_provider}` }),
+        JSON.stringify({ error: `不支持的 LLM 提供商: ${llmProvider}` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
