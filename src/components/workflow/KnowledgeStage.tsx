@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { getKnowledgeBase, createKnowledgeBase, updateKnowledgeBase, updateProject, callWebSearch } from '@/db/api';
+import { getKnowledgeBase, createKnowledgeBase, updateKnowledgeBase, updateProject, academicSearchWorkflow } from '@/db/api';
 import type { KnowledgeBase } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Search } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Search, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface KnowledgeStageProps {
@@ -19,6 +20,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [workflowResult, setWorkflowResult] = useState<any>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -39,27 +41,30 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
     setSearching(true);
     try {
-      const results = await callWebSearch(query);
+      // 使用学术搜索工作流
+      const result = await academicSearchWorkflow(query);
+      setWorkflowResult(result);
       
-      for (const result of results) {
+      // 保存搜索结果到知识库
+      for (const paper of result.papers) {
         await createKnowledgeBase({
           project_id: projectId,
-          title: result.title,
-          content: result.content,
-          source: result.source,
-          source_url: result.url,
-          published_at: result.publishedAt || undefined,
+          title: paper.title,
+          content: paper.content,
+          source: paper.source,
+          source_url: paper.url,
+          published_at: paper.publishedAt || undefined,
           collected_at: new Date().toISOString(),
           next_update_suggestion: '建议 30 天后更新',
           selected: false,
-          keywords: [],
+          keywords: result.keywords.main_keywords || [],
         });
       }
 
       await loadKnowledge();
       toast({
-        title: '搜索成功',
-        description: `找到 ${results.length} 条结果`,
+        title: '学术搜索完成',
+        description: `找到 ${result.papers.length} 篇高质量论文`,
       });
     } catch (error: any) {
       toast({
@@ -116,13 +121,18 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>资料查询</CardTitle>
-          <CardDescription>搜索相关信息并选择需要的内容</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            学术资料查询
+          </CardTitle>
+          <CardDescription>
+            输入中文研究需求，AI 将自动转换为学术关键词并搜索高质量论文
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
             <Input
-              placeholder="输入搜索关键词"
+              placeholder="例如：人工智能在医学影像中的应用"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -133,11 +143,99 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             />
             <Button onClick={handleSearch} disabled={searching || !query.trim()}>
               <Search className="h-4 w-4 mr-2" />
-              {searching ? '搜索中...' : '搜索'}
+              {searching ? '搜索中...' : '智能搜索'}
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* 显示工作流结果 */}
+      {workflowResult && (
+        <Card>
+          <CardHeader>
+            <CardTitle>搜索分析</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* 学术关键词 */}
+            <div>
+              <h4 className="text-sm font-semibold mb-2">学术关键词</h4>
+              <div className="flex flex-wrap gap-2">
+                {workflowResult.keywords.main_keywords.map((keyword: string) => (
+                  <Badge key={keyword} variant="default">{keyword}</Badge>
+                ))}
+                {workflowResult.keywords.related_keywords.map((keyword: string) => (
+                  <Badge key={keyword} variant="outline">{keyword}</Badge>
+                ))}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* 研究关注重点 */}
+            {workflowResult.searchIntent && workflowResult.searchIntent.focus && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">研究关注重点</h4>
+                <div className="flex flex-wrap gap-2">
+                  {workflowResult.searchIntent.focus.map((focus: string) => (
+                    <Badge key={focus} variant="secondary">{focus}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Separator />
+
+            {/* 学术共识要点 */}
+            {workflowResult.consensusPoints && workflowResult.consensusPoints.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">学术共识要点</h4>
+                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                  {workflowResult.consensusPoints.map((point: string, index: number) => (
+                    <li key={index}>{point}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <Separator />
+
+            {/* CoWrite 写作素材 */}
+            {workflowResult.cowriteInput && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">写作素材</h4>
+                <div className="space-y-3 text-sm">
+                  {workflowResult.cowriteInput.research_background && (
+                    <div>
+                      <p className="font-medium">研究背景</p>
+                      <p className="text-muted-foreground">{workflowResult.cowriteInput.research_background}</p>
+                    </div>
+                  )}
+                  {workflowResult.cowriteInput.technical_progress && workflowResult.cowriteInput.technical_progress.length > 0 && (
+                    <div>
+                      <p className="font-medium">技术进展</p>
+                      <ul className="list-disc list-inside text-muted-foreground">
+                        {workflowResult.cowriteInput.technical_progress.map((item: string, index: number) => (
+                          <li key={index}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {workflowResult.cowriteInput.open_challenges && workflowResult.cowriteInput.open_challenges.length > 0 && (
+                    <div>
+                      <p className="font-medium">开放挑战</p>
+                      <ul className="list-disc list-inside text-muted-foreground">
+                        {workflowResult.cowriteInput.open_challenges.map((item: string, index: number) => (
+                          <li key={index}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {knowledge.length > 0 && (
         <Card>
@@ -162,6 +260,16 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                       <Badge variant="outline">{item.source}</Badge>
                       {item.published_at && (
                         <span>{new Date(item.published_at).toLocaleDateString('zh-CN')}</span>
+                      )}
+                      {item.source_url && (
+                        <a 
+                          href={item.source_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          查看原文 →
+                        </a>
                       )}
                     </div>
                   </div>

@@ -746,3 +746,224 @@ export async function getReferencesByTags(userId: string, tags: string[]) {
   if (error) throw error;
   return (Array.isArray(data) ? data : []) as ReferenceArticle[];
 }
+
+// ============ Academic Search Workflow API ============
+
+// P1: 中文需求 → 英文学术关键词
+export async function academicSearchRewriting(userQueryZh: string) {
+  const systemMessage = `你是一名学术搜索专家。
+
+请将以下【中文研究需求】转写为【用于英文学术数据库（如 OpenAlex）检索的关键词】。
+
+要求：
+1. 使用学术界常见术语，而不是直译
+2. 关键词需覆盖研究对象 + 技术方法
+3. 关键词数量 3–6 个
+4. 必须为英文
+5. 不要解释
+
+输出格式（JSON）：
+{
+  "main_keywords": [],
+  "related_keywords": []
+}`;
+
+  const result = await callLLMGenerate(userQueryZh, '', systemMessage);
+  
+  try {
+    return JSON.parse(result);
+  } catch (e) {
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('无法解析学术关键词');
+  }
+}
+
+// P2: 学术搜索意图澄清
+export async function searchScopeClarifier(academicKeywords: string[]) {
+  const systemMessage = `你是一名科研助理。
+
+请基于以下学术搜索关键词，判断用户的【研究关注重点】更偏向哪一类（可多选）：
+
+A. 方法与技术原理
+B. 应用场景与实践
+C. 性能评估与对比
+D. 挑战、限制与问题
+E. 研究趋势与综述
+
+输出 JSON，不要解释：
+{
+  "focus": []
+}`;
+
+  const prompt = `关键词：${academicKeywords.join(', ')}`;
+  const result = await callLLMGenerate(prompt, '', systemMessage);
+  
+  try {
+    return JSON.parse(result);
+  } catch (e) {
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('无法解析搜索意图');
+  }
+}
+
+// P3: Top N 论文筛选
+export async function topPaperSelector(searchTopic: string, papers: any[]) {
+  const systemMessage = `你是一名学术研究助理。
+
+请从以下论文中筛选出【最能代表该研究主题的 Top N 篇论文】。
+
+筛选标准：
+1. 与研究主题高度相关
+2. 发表时间较新（优先近 3–5 年）
+3. 具有一定引用影响力
+4. 内容具有代表性，而非细分噪声
+
+要求：
+- 选择 3–6 篇
+- 不要改写论文内容
+- 输出被选论文的 index（从 0 开始）
+
+输出格式（JSON）：
+{
+  "selected_indexes": []
+}`;
+
+  const prompt = `研究主题：${searchTopic}
+
+论文列表：
+${JSON.stringify(papers, null, 2)}`;
+
+  const result = await callLLMGenerate(prompt, '', systemMessage);
+  
+  try {
+    return JSON.parse(result);
+  } catch (e) {
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('无法解析论文筛选结果');
+  }
+}
+
+// P4: 结构化学术摘要
+export async function academicConsensusExtractor(selectedPapers: any[]) {
+  const systemMessage = `你是一名学术研究助理。
+
+请基于以下论文摘要，提炼【学术研究共识要点】。
+
+要求：
+1. 仅基于提供的论文摘要内容
+2. 不引入外部知识
+3. 不进行推测或预测
+4. 使用客观、中性表述
+5. 输出 3–6 条
+6. 每条不超过 40 字
+7. 不出现"本文认为 / 我们认为"等主观表达
+
+输出格式（JSON 数组）：
+[
+  "要点1",
+  "要点2"
+]`;
+
+  const prompt = `论文数据：
+${JSON.stringify(selectedPapers, null, 2)}`;
+
+  const result = await callLLMGenerate(prompt, '', systemMessage);
+  
+  try {
+    return JSON.parse(result);
+  } catch (e) {
+    const jsonMatch = result.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('无法解析学术共识要点');
+  }
+}
+
+// P5: CoWrite 输入整理
+export async function cowriteInputFormatter(consensusPoints: string[]) {
+  const systemMessage = `你是一名专业写作助手。
+
+请将以下【学术共识要点】整理为【可供 CoWrite 使用的结构化写作素材】。
+
+要求：
+1. 不新增研究结论
+2. 保持学术严谨
+3. 用于后续专业写作或论文背景撰写
+
+输出结构（JSON）：
+{
+  "research_background": "",
+  "technical_progress": [],
+  "open_challenges": []
+}`;
+
+  const prompt = `学术共识要点：
+${JSON.stringify(consensusPoints, null, 2)}`;
+
+  const result = await callLLMGenerate(prompt, '', systemMessage);
+  
+  try {
+    return JSON.parse(result);
+  } catch (e) {
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('无法解析 CoWrite 输入格式');
+  }
+}
+
+// 完整的学术搜索工作流
+export async function academicSearchWorkflow(userQueryZh: string) {
+  // P1: 转写为英文学术关键词
+  const keywords = await academicSearchRewriting(userQueryZh);
+  
+  // 合并主关键词和相关关键词
+  const allKeywords = [...keywords.main_keywords, ...keywords.related_keywords];
+  const searchQuery = allKeywords.join(' ');
+  
+  // P2: 澄清搜索意图（可选）
+  const searchIntent = await searchScopeClarifier(allKeywords);
+  
+  // 使用 OpenAlex 搜索
+  const searchResults = await callWebSearch(searchQuery);
+  
+  // 如果没有结果，返回空
+  if (!searchResults || searchResults.length === 0) {
+    return {
+      keywords,
+      searchIntent,
+      papers: [],
+      consensusPoints: [],
+      cowriteInput: null,
+    };
+  }
+  
+  // P3: 筛选 Top N 论文
+  const selection = await topPaperSelector(userQueryZh, searchResults);
+  const selectedPapers = selection.selected_indexes.map((idx: number) => searchResults[idx]);
+  
+  // P4: 提取学术共识要点
+  const consensusPoints = await academicConsensusExtractor(selectedPapers);
+  
+  // P5: 整理为 CoWrite 输入
+  const cowriteInput = await cowriteInputFormatter(consensusPoints);
+  
+  return {
+    keywords,
+    searchIntent,
+    papers: selectedPapers,
+    consensusPoints,
+    cowriteInput,
+  };
+}
