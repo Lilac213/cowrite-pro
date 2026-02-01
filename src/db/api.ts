@@ -935,23 +935,57 @@ export async function academicSearchWorkflow(userQueryZh: string) {
   // P2: 澄清搜索意图（可选）
   const searchIntent = await searchScopeClarifier(allKeywords);
   
-  // 使用 OpenAlex 搜索
-  const searchResults = await callWebSearch(searchQuery);
+  // 并行搜索：Google Scholar（学术论文）+ AI Search（实时内容和观点）
+  const [scholarResults, aiResults] = await Promise.allSettled([
+    searchGoogleScholar(searchQuery),
+    searchAI(userQueryZh),
+  ]);
+  
+  // 合并搜索结果
+  let allPapers: any[] = [];
+  
+  if (scholarResults.status === 'fulfilled' && scholarResults.value.papers) {
+    allPapers = [...allPapers, ...scholarResults.value.papers];
+  }
+  
+  // AI Search 结果作为补充
+  let aiSummary = '';
+  let aiSources: any[] = [];
+  if (aiResults.status === 'fulfilled' && aiResults.value) {
+    aiSummary = aiResults.value.summary || '';
+    aiSources = aiResults.value.sources || [];
+    
+    // 将 AI Search 的来源也加入到论文列表
+    for (const source of aiSources) {
+      if (source.url && source.title) {
+        allPapers.push({
+          title: source.title,
+          authors: 'AI Search',
+          year: new Date().getFullYear().toString(),
+          abstract: aiSummary.substring(0, 200),
+          citations: 0,
+          url: source.url,
+          source: 'AI Search',
+        });
+      }
+    }
+  }
   
   // 如果没有结果，返回空
-  if (!searchResults || searchResults.length === 0) {
+  if (allPapers.length === 0) {
     return {
       keywords,
       searchIntent,
       papers: [],
       consensusPoints: [],
       cowriteInput: null,
+      aiSummary: '',
     };
   }
   
   // P3: 筛选 Top N 论文
-  const selection = await topPaperSelector(userQueryZh, searchResults);
-  const selectedPapers = selection.selected_indexes.map((idx: number) => searchResults[idx]);
+  const selection = await topPaperSelector(userQueryZh, allPapers);
+  const selectedPapers = selection.selected_indexes.map((idx: number) => allPapers[idx]);
   
   // P4: 提取学术共识要点
   const consensusPoints = await academicConsensusExtractor(selectedPapers);
@@ -965,5 +999,26 @@ export async function academicSearchWorkflow(userQueryZh: string) {
     papers: selectedPapers,
     consensusPoints,
     cowriteInput,
+    aiSummary,
   };
+}
+
+// Google Scholar 搜索
+async function searchGoogleScholar(query: string) {
+  const { data, error } = await supabase.functions.invoke('google-scholar-search', {
+    body: { query, yearStart: '2020', yearEnd: new Date().getFullYear().toString() },
+  });
+  
+  if (error) throw error;
+  return data;
+}
+
+// AI Search 搜索
+async function searchAI(query: string) {
+  const { data, error } = await supabase.functions.invoke('ai-search', {
+    body: { query },
+  });
+  
+  if (error) throw error;
+  return data;
 }

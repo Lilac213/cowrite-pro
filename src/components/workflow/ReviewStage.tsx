@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getLatestDraft, updateDraft, updateProject, callLLMGenerate } from '@/db/api';
 import type { Draft } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
 import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { diffWords } from 'diff';
@@ -98,9 +100,14 @@ const CONTENT_REVIEW_PROMPT = `# 角色 (Role)
 const STYLE_REVIEW_PROMPT = `# 角色 (Role)
 你现在扮演一个"风格拟态专家"（Style Mimicry Expert）。你的核心任务是接收一段原文，并根据其语言（中文或英文），将其改写成一种与人类写作风格高度一致、极难被AI检测工具识别的文本。
 
+**关键规则：输入什么语言，输出什么语言。中文输入必须输出中文，英文输入必须输出英文。**
+
 你必须严格遵守以下两大语言专属策略。在处理文本时，首先判断语言，然后只应用对应的策略。
 
 ### **策略A: 中文文本 — 系统化、增益型"人类化"**
+*（目标：通过增加解释性、扩展短语、系统性地替换特定词汇，使文本在保持专业性的前提下，更具"啰嗦"和自然的解释风格，从而降低AI文本特征。）*
+
+**重要：此策略仅适用于中文文本，输出必须是中文。**
 
 #### 1. 中文：增加冗余与解释性 (Verbose Elaboration)
 
@@ -170,9 +177,14 @@ const STYLE_REVIEW_PROMPT = `# 角色 (Role)
 -   **增加连接词:** 在句首或句中适时添加"那么"、"这样一来"、"同时"等词。
 
 ### 策略B: 英文文本 — "结构重塑"范式 (Strategy B: English Text — "Structural Reshaping" Paradigm)
+*（目标：通过"英译中-结构优化-机械回译"的流程，生成一种在句子结构上显著区别于标准英文和AI生成文本的学术写作风格。此范式严格规避修辞、口语及任何非必要的"华丽"词汇，以达到纯粹的结构性"人类化"。）*
+
+**重要：此策略仅适用于英文文本，输出必须是英文。**
 
 #### **核心理念：以结构为核心的跨语言重塑 (Core Philosophy: Structure-centric Cross-lingual Reshaping)**
 此策略的核心在于利用不同语言（中文）的语法结构作为"模具"，来重塑原始的英文文本。最终产出的独特性不来源于词汇选择或修辞手法，而来源于其底层句法结构的非典型性。
+
+**注意：这个策略只用于处理英文文本，不要用于中文文本。**
 
 #### **步骤一：初步转译 (Step 1: Initial Translation)**（要确保句子流程自然合理，不要出现语病或表达冗余）
 在内部，将输入的英文文本按照中文的自然语言习惯，转译为流畅、通顺的中文。此阶段的目标是准确传达原文的技术逻辑。
@@ -273,9 +285,11 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
   const [originalContent, setOriginalContent] = useState('');
   const [completedSteps, setCompletedSteps] = useState<ReviewStep[]>([]);
   const [processingStep, setProcessingStep] = useState<ReviewStep | null>(null);
+  const [progress, setProgress] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadDraft();
@@ -319,6 +333,16 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
     }
 
     setProcessingStep(step);
+    setProgress(0);
+    
+    // 模拟进度更新
+    const progressInterval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 90) return prev;
+        return prev + Math.random() * 15;
+      });
+    }, 500);
+    
     try {
       let systemMessage = '';
       
@@ -331,6 +355,12 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
       }
 
       const result = await callLLMGenerate(currentContent, '', systemMessage);
+      
+      clearInterval(progressInterval);
+      setProgress(100);
+      
+      // 等待一下让用户看到100%
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       setCurrentContent(result);
       setCompletedSteps([...completedSteps, step]);
@@ -345,6 +375,7 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
         description: getStepName(step) + ' 已完成',
       });
     } catch (error: any) {
+      clearInterval(progressInterval);
       toast({
         title: '审校失败',
         description: error.message || '无法完成审校',
@@ -352,6 +383,7 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
       });
     } finally {
       setProcessingStep(null);
+      setProgress(0);
     }
   };
 
@@ -369,15 +401,18 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
       await updateProject(projectId, { status: 'completed' });
       toast({
         title: '审校完成',
-        description: '文章已完成所有审校',
+        description: '文章已完成所有审校，即将进入导出页面',
       });
-      onComplete();
+      
+      // 导航到导出页面
+      setTimeout(() => {
+        navigate(`/project/${projectId}/export`);
+      }, 1000);
     } catch (error) {
       toast({
         title: '确认失败',
         variant: 'destructive',
       });
-    } finally {
       setConfirming(false);
     }
   };
@@ -501,7 +536,16 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
                   检查事实准确性、逻辑清晰性、结构合理性
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {processingStep === 'content' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">处理中...</span>
+                      <span className="font-medium">{Math.round(progress)}%</span>
+                    </div>
+                    <Progress value={progress} className="h-2" />
+                  </div>
+                )}
                 <Button
                   onClick={() => handleReview('content')}
                   disabled={processingStep !== null || completedSteps.includes('content')}
@@ -537,7 +581,16 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
                   降低 AI 味，删除套话，改成口语化，加入真实细节
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {processingStep === 'style' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">处理中...</span>
+                      <span className="font-medium">{Math.round(progress)}%</span>
+                    </div>
+                    <Progress value={progress} className="h-2" />
+                  </div>
+                )}
                 <Button
                   onClick={() => handleReview('style')}
                   disabled={processingStep !== null || !completedSteps.includes('content') || completedSteps.includes('style')}
@@ -573,7 +626,16 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
                   检查句子长度、段落长度、标点自然、节奏变化
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {processingStep === 'detail' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">处理中...</span>
+                      <span className="font-medium">{Math.round(progress)}%</span>
+                    </div>
+                    <Progress value={progress} className="h-2" />
+                  </div>
+                )}
                 <Button
                   onClick={() => handleReview('detail')}
                   disabled={processingStep !== null || !completedSteps.includes('style') || completedSteps.includes('detail')}

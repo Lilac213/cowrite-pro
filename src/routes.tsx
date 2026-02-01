@@ -4,6 +4,7 @@ import { AppLayout } from './components/layouts/AppLayout';
 import LoginPage from './pages/LoginPage';
 import ProjectListPage from './pages/ProjectListPage';
 import ProjectWorkflowPage from './pages/ProjectWorkflowPage';
+import ExportPage from './pages/ExportPage';
 import AIReducerPage from './pages/AIReducerPage';
 import MaterialsPageEnhanced from './pages/MaterialsPageEnhanced';
 import ReferencesPageEnhanced from './pages/ReferencesPageEnhanced';
@@ -40,6 +41,11 @@ const routes: RouteConfig[] = [
     name: 'Project Workflow',
     path: '/project/:projectId',
     element: <ProjectWorkflowPage />,
+  },
+  {
+    name: 'Export',
+    path: '/project/:projectId/export',
+    element: <ExportPage />,
   },
   {
     name: 'AI Reducer',
