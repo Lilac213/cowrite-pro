@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useState, useEffect } from 'react';
 import {
   Sidebar,
   SidebarContent,
@@ -10,7 +11,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,7 +21,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { FileText, Library, BookOpen, FileCode, Settings, LogOut, User, Shield } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { FileText, Library, BookOpen, FileCode, Settings, LogOut, User, Shield, Menu, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 const mainMenuItems = [
   { title: '项目列表', url: '/', icon: FileText },
@@ -39,6 +45,22 @@ export function AppLayout() {
   const { user, profile, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // 从 localStorage 读取折叠状态
+  useEffect(() => {
+    const savedState = localStorage.getItem('sidebar-collapsed');
+    if (savedState !== null) {
+      setIsCollapsed(savedState === 'true');
+    }
+  }, []);
+
+  // 保存折叠状态到 localStorage
+  const toggleSidebar = () => {
+    const newState = !isCollapsed;
+    setIsCollapsed(newState);
+    localStorage.setItem('sidebar-collapsed', String(newState));
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -46,67 +68,172 @@ export function AppLayout() {
   };
 
   return (
-    <SidebarProvider>
+    <TooltipProvider delayDuration={0}>
       <div className="flex min-h-screen w-full">
-        <Sidebar collapsible="icon" className="border-r border-border">
-          <SidebarContent>
-            <div className="p-6">
-              <h1 className="text-2xl font-bold">CoWrite</h1>
-              <p className="text-sm text-muted-foreground mt-1">写作辅助工具</p>
+        <aside
+          className={`border-r border-border bg-sidebar transition-all duration-300 ease-in-out shrink-0 ${
+            isCollapsed ? 'w-16' : 'w-60'
+          }`}
+        >
+          <div className="flex flex-col h-full">
+            {/* Logo 区域 */}
+            <div className={`p-4 border-b border-border ${isCollapsed ? 'px-3' : 'px-6'}`}>
+              {isCollapsed ? (
+                <div className="flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
+                    CW
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <h1 className="text-2xl font-bold">CoWrite</h1>
+                  <p className="text-sm text-muted-foreground mt-1">写作辅助工具</p>
+                </>
+              )}
             </div>
 
-            <SidebarGroup>
-              <SidebarGroupLabel>主菜单</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {mainMenuItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild isActive={location.pathname === item.url}>
-                        <Link to={item.url}>
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+            {/* 折叠按钮 */}
+            <div className={`p-2 border-b border-border ${isCollapsed ? 'px-2' : 'px-4'}`}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleSidebar}
+                className={`w-full ${isCollapsed ? 'px-2' : 'justify-start'}`}
+              >
+                {isCollapsed ? (
+                  <ChevronsRight className="h-4 w-4" />
+                ) : (
+                  <>
+                    <ChevronsLeft className="h-4 w-4 mr-2" />
+                    <span>收起侧边栏</span>
+                  </>
+                )}
+              </Button>
+            </div>
 
-            <SidebarGroup>
-              <SidebarGroupLabel>工具箱</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {toolboxItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild isActive={location.pathname === item.url}>
-                        <Link to={item.url}>
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
+            {/* 菜单内容 */}
+            <div className="flex-1 overflow-y-auto py-4">
+              {/* 主菜单 */}
+              <div className={`mb-6 ${isCollapsed ? 'px-2' : 'px-4'}`}>
+                {!isCollapsed && (
+                  <div className="px-2 mb-2">
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      主菜单
+                    </h3>
+                  </div>
+                )}
+                <nav className="space-y-1">
+                  {mainMenuItems.map((item) => {
+                    const isActive = location.pathname === item.url;
+                    const menuButton = (
+                      <Link
+                        to={item.url}
+                        className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                        } ${isCollapsed ? 'justify-center' : ''}`}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        {!isCollapsed && <span>{item.title}</span>}
+                      </Link>
+                    );
+
+                    return isCollapsed ? (
+                      <Tooltip key={item.title}>
+                        <TooltipTrigger asChild>{menuButton}</TooltipTrigger>
+                        <TooltipContent side="right">
+                          <p>{item.title}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <div key={item.title}>{menuButton}</div>
+                    );
+                  })}
+                </nav>
+              </div>
+
+              {/* 工具箱 */}
+              <div className={`${isCollapsed ? 'px-2' : 'px-4'}`}>
+                {!isCollapsed && (
+                  <div className="px-2 mb-2">
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      工具箱
+                    </h3>
+                  </div>
+                )}
+                <nav className="space-y-1">
+                  {toolboxItems.map((item) => {
+                    const isActive = location.pathname === item.url;
+                    const menuButton = (
+                      <Link
+                        to={item.url}
+                        className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                        } ${isCollapsed ? 'justify-center' : ''}`}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        {!isCollapsed && <span>{item.title}</span>}
+                      </Link>
+                    );
+
+                    return isCollapsed ? (
+                      <Tooltip key={item.title}>
+                        <TooltipTrigger asChild>{menuButton}</TooltipTrigger>
+                        <TooltipContent side="right">
+                          <p>{item.title}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <div key={item.title}>{menuButton}</div>
+                    );
+                  })}
                   {profile?.role === 'admin' && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={location.pathname === '/admin'}>
-                        <Link to="/admin">
-                          <Shield className="h-4 w-4" />
+                    <>
+                      {isCollapsed ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Link
+                              to="/admin"
+                              className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors justify-center ${
+                                location.pathname === '/admin'
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                              }`}
+                            >
+                              <Shield className="h-4 w-4 shrink-0" />
+                            </Link>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">
+                            <p>管理面板</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Link
+                          to="/admin"
+                          className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+                            location.pathname === '/admin'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                          }`}
+                        >
+                          <Shield className="h-4 w-4 shrink-0" />
                           <span>管理面板</span>
                         </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
+                      )}
+                    </>
                   )}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
-        </Sidebar>
+                </nav>
+              </div>
+            </div>
+          </div>
+        </aside>
 
         <div className="flex-1 flex flex-col min-w-0">
           <header className="border-b border-border bg-background shrink-0">
             <div className="flex h-16 items-center px-6 gap-4">
-              <SidebarTrigger />
               <div className="flex-1" />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -139,6 +266,6 @@ export function AppLayout() {
           </main>
         </div>
       </div>
-    </SidebarProvider>
+    </TooltipProvider>
   );
 }
