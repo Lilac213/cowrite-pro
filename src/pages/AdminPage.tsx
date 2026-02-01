@@ -143,34 +143,111 @@ export default function AdminPage() {
           <Card>
             <CardHeader>
               <CardTitle>搜索配置</CardTitle>
-              <CardDescription>配置全局搜索服务（OpenAlex）</CardDescription>
+              <CardDescription>配置全局搜索服务（Google Scholar、AI Search、Tavily）</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="search-provider">搜索提供商</Label>
-                <Input
-                  id="search-provider"
-                  value="OpenAlex"
-                  disabled
-                  className="bg-muted"
-                />
-                <p className="text-xs text-muted-foreground">
-                  系统默认使用 OpenAlex 作为搜索提供商（免费开放 API）
-                </p>
+            <CardContent className="space-y-6">
+              {/* Google Scholar 配置 */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium">Google Scholar API</h3>
+                  <Badge variant="secondary">学术论文搜索</Badge>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="google-scholar-status">状态</Label>
+                  <Input
+                    id="google-scholar-status"
+                    value="已启用"
+                    disabled
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    用于搜索权威学术论文，提供标题、作者、引用数等信息
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="google-scholar-api-key">API 密钥</Label>
+                  <Input
+                    id="google-scholar-api-key"
+                    type="password"
+                    placeholder="请输入 INTEGRATIONS_API_KEY"
+                    value={systemConfig.google_scholar_api_key || ''}
+                    onChange={(e) => setSystemConfig({ ...systemConfig, google_scholar_api_key: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    此密钥用于访问 Google Scholar API，可在 API 提供商处获取
+                  </p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="search-api-key">API 密钥（可选）</Label>
-                <Input
-                  id="search-api-key"
-                  type="password"
-                  placeholder="OpenAlex 不需要 API 密钥"
-                  value={systemConfig.search_api_key || ''}
-                  onChange={(e) => setSystemConfig({ ...systemConfig, search_api_key: e.target.value })}
-                  disabled
-                  className="bg-muted"
-                />
-                <p className="text-xs text-muted-foreground">
-                  OpenAlex 是开放 API，无需配置密钥
+
+              {/* AI Search 配置 */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium">AI Search (Gemini 2.5 Flash)</h3>
+                  <Badge variant="secondary">实时内容搜索</Badge>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-search-status">状态</Label>
+                  <Input
+                    id="ai-search-status"
+                    value="已启用"
+                    disabled
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    用于搜索实时内容和观点，提供 AI 生成的摘要和来源链接
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-search-api-key">API 密钥</Label>
+                  <Input
+                    id="ai-search-api-key"
+                    type="password"
+                    placeholder="请输入 INTEGRATIONS_API_KEY"
+                    value={systemConfig.ai_search_api_key || ''}
+                    onChange={(e) => setSystemConfig({ ...systemConfig, ai_search_api_key: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    此密钥用于访问 AI Search API，可在 API 提供商处获取
+                  </p>
+                </div>
+              </div>
+
+              {/* Tavily 配置 */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium">Tavily API</h3>
+                  <Badge variant="outline">可选</Badge>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tavily-status">状态</Label>
+                  <Input
+                    id="tavily-status"
+                    value={systemConfig.tavily_api_key ? '已配置' : '未配置'}
+                    disabled
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Tavily 提供高质量的实时搜索结果，可作为 AI Search 的补充
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tavily-api-key">API 密钥</Label>
+                  <Input
+                    id="tavily-api-key"
+                    type="password"
+                    placeholder="请输入 Tavily API Key（可选）"
+                    value={systemConfig.tavily_api_key || ''}
+                    onChange={(e) => setSystemConfig({ ...systemConfig, tavily_api_key: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    可在 <a href="https://tavily.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Tavily 官网</a> 获取 API 密钥
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  <strong>说明：</strong>系统使用多引擎搜索策略，Google Scholar 用于学术论文，AI Search 用于实时内容和观点。Tavily 为可选配置，可提供更高质量的搜索结果。
                 </p>
               </div>
             </CardContent>

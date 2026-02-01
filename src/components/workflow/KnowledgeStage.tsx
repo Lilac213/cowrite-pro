@@ -49,15 +49,15 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       for (const paper of result.papers) {
         await createKnowledgeBase({
           project_id: projectId,
-          title: paper.title,
-          content: paper.content,
-          source: paper.source,
-          source_url: paper.url,
+          title: paper.title || '无标题',
+          content: paper.abstract || paper.content || '暂无摘要',
+          source: paper.source || 'Unknown',
+          source_url: paper.url || undefined,
           published_at: paper.publishedAt || undefined,
           collected_at: new Date().toISOString(),
           next_update_suggestion: '建议 30 天后更新',
           selected: false,
-          keywords: result.keywords.main_keywords || [],
+          keywords: result.keywords?.main_keywords || [],
         });
       }
 
