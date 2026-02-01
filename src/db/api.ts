@@ -935,39 +935,29 @@ export async function academicSearchWorkflow(userQueryZh: string) {
   // P2: 澄清搜索意图（可选）
   const searchIntent = await searchScopeClarifier(allKeywords);
   
-  // 并行搜索：Google Scholar（学术论文）+ AI Search（实时内容和观点）
-  const [scholarResults, aiResults] = await Promise.allSettled([
-    searchGoogleScholar(searchQuery),
-    searchAI(userQueryZh),
+  // 并行搜索：OpenAlex（学术论文）+ Tavily（实时内容和观点）
+  const [openAlexResults, tavilyResults] = await Promise.allSettled([
+    searchOpenAlex(searchQuery),
+    searchTavily(userQueryZh),
   ]);
   
   // 合并搜索结果
   let allPapers: any[] = [];
   
-  if (scholarResults.status === 'fulfilled' && scholarResults.value.papers) {
-    allPapers = [...allPapers, ...scholarResults.value.papers];
+  if (openAlexResults.status === 'fulfilled' && openAlexResults.value.papers) {
+    allPapers = [...allPapers, ...openAlexResults.value.papers];
   }
   
-  // AI Search 结果作为补充
-  let aiSummary = '';
-  let aiSources: any[] = [];
-  if (aiResults.status === 'fulfilled' && aiResults.value) {
-    aiSummary = aiResults.value.summary || '';
-    aiSources = aiResults.value.sources || [];
+  // Tavily 结果作为补充
+  let tavilySummary = '';
+  let tavilySources: any[] = [];
+  if (tavilyResults.status === 'fulfilled' && tavilyResults.value) {
+    tavilySummary = tavilyResults.value.summary || '';
+    tavilySources = tavilyResults.value.sources || [];
     
-    // 将 AI Search 的来源也加入到论文列表
-    for (const source of aiSources) {
-      if (source.url && source.title) {
-        allPapers.push({
-          title: source.title,
-          authors: 'AI Search',
-          year: new Date().getFullYear().toString(),
-          abstract: aiSummary.substring(0, 200),
-          citations: 0,
-          url: source.url,
-          source: 'AI Search',
-        });
-      }
+    // 将 Tavily 的论文也加入到列表
+    if (tavilyResults.value.papers) {
+      allPapers = [...allPapers, ...tavilyResults.value.papers];
     }
   }
   
@@ -979,7 +969,7 @@ export async function academicSearchWorkflow(userQueryZh: string) {
       papers: [],
       consensusPoints: [],
       cowriteInput: null,
-      aiSummary: '',
+      tavilySummary: '',
     };
   }
   
@@ -999,13 +989,13 @@ export async function academicSearchWorkflow(userQueryZh: string) {
     papers: selectedPapers,
     consensusPoints,
     cowriteInput,
-    aiSummary,
+    tavilySummary,
   };
 }
 
-// Google Scholar 搜索
-async function searchGoogleScholar(query: string) {
-  const { data, error } = await supabase.functions.invoke('google-scholar-search', {
+// OpenAlex 搜索
+async function searchOpenAlex(query: string) {
+  const { data, error } = await supabase.functions.invoke('openalex-search', {
     body: { query, yearStart: '2020', yearEnd: new Date().getFullYear().toString() },
   });
   
@@ -1013,12 +1003,53 @@ async function searchGoogleScholar(query: string) {
   return data;
 }
 
-// AI Search 搜索
-async function searchAI(query: string) {
-  const { data, error } = await supabase.functions.invoke('ai-search', {
+// Tavily 搜索
+async function searchTavily(query: string) {
+  const { data, error } = await supabase.functions.invoke('tavily-search', {
     body: { query },
   });
   
+  if (error) throw error;
+  return data;
+}
+
+// ============ Project History API ============
+export async function saveProjectHistory(projectId: string, stage: string, data: any) {
+  const { data: historyData, error } = await supabase
+    .from('project_history')
+    .insert({
+      project_id: projectId,
+      stage,
+      data,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return historyData;
+}
+
+export async function getProjectHistory(projectId: string) {
+  const { data, error } = await supabase
+    .from('project_history')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getProjectHistoryByStage(projectId: string, stage: string) {
+  const { data, error } = await supabase
+    .from('project_history')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('stage', stage)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   if (error) throw error;
   return data;
 }

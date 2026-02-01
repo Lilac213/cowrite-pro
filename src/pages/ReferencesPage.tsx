@@ -1,25 +1,33 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getReferenceArticles, createReferenceArticle, deleteReferenceArticle, searchReferenceArticles } from '@/db/api';
-import type { ReferenceArticle } from '@/types';
+import { getReferenceArticles, createReferenceArticle, deleteReferenceArticle, searchReferenceArticles, getProjects } from '@/db/api';
+import { supabase } from '@/db/supabase';
+import type { ReferenceArticle, Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Search, Trash2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Search, Trash2, Link as LinkIcon, Upload, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function ReferencesPage() {
   const [references, setReferences] = useState<ReferenceArticle[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [inputMethod, setInputMethod] = useState<'url' | 'file' | 'text'>('text');
   const [newReference, setNewReference] = useState({
     title: '',
     content: '',
     sourceType: '',
+    sourceUrl: '',
+    projectId: '',
   });
+  const [extracting, setExtracting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const { user } = useAuth();
@@ -27,6 +35,7 @@ export default function ReferencesPage() {
 
   useEffect(() => {
     loadReferences();
+    loadProjects();
   }, [user]);
 
   const loadReferences = async () => {
@@ -41,6 +50,97 @@ export default function ReferencesPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadProjects = async () => {
+    if (!user) return;
+    try {
+      const data = await getProjects(user.id);
+      setProjects(data);
+    } catch (error) {
+      console.error('加载项目失败:', error);
+    }
+  };
+
+  const handleExtractUrl = async () => {
+    if (!newReference.sourceUrl.trim()) {
+      toast({
+        title: '请输入 URL',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setExtracting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('extract-url-content', {
+        body: { url: newReference.sourceUrl },
+      });
+
+      if (error) throw error;
+
+      setNewReference({
+        ...newReference,
+        title: data.title || '无标题',
+        content: data.content || '',
+      });
+
+      toast({
+        title: '提取成功',
+        description: '已从 URL 提取内容',
+      });
+    } catch (error: any) {
+      toast({
+        title: '提取失败',
+        description: error.message || '无法从 URL 提取内容',
+        variant: 'destructive',
+      });
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 限制文件大小为 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: '文件过大',
+        description: '文件大小不能超过 5MB',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // 只支持文本文件
+    if (!file.type.startsWith('text/') && !file.name.endsWith('.md') && !file.name.endsWith('.txt')) {
+      toast({
+        title: '不支持的文件类型',
+        description: '只支持文本文件（.txt, .md）',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const content = await file.text();
+      setNewReference({
+        ...newReference,
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        content,
+      });
+
+      toast({
+        title: '文件上传成功',
+      });
+    } catch (error) {
+      toast({
+        title: '文件读取失败',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -77,9 +177,11 @@ export default function ReferencesPage() {
         title: newReference.title,
         content: newReference.content,
         source_type: newReference.sourceType || undefined,
+        source_url: newReference.sourceUrl || undefined,
+        project_id: newReference.projectId || undefined,
         keywords: [],
       });
-      setNewReference({ title: '', content: '', sourceType: '' });
+      setNewReference({ title: '', content: '', sourceType: '', sourceUrl: '', projectId: '' });
       setDialogOpen(false);
       await loadReferences();
       toast({
@@ -132,12 +234,70 @@ export default function ReferencesPage() {
               新建参考文章
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>新建参考文章</DialogTitle>
               <DialogDescription>添加参考文章或资料</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              <Tabs value={inputMethod} onValueChange={(v) => setInputMethod(v as 'url' | 'file' | 'text')}>
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="url">
+                    <LinkIcon className="h-4 w-4 mr-2" />
+                    URL 链接
+                  </TabsTrigger>
+                  <TabsTrigger value="file">
+                    <Upload className="h-4 w-4 mr-2" />
+                    上传文件
+                  </TabsTrigger>
+                  <TabsTrigger value="text">
+                    <FileText className="h-4 w-4 mr-2" />
+                    直接输入
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="url" className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="url">文章链接</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="url"
+                        placeholder="https://example.com/article"
+                        value={newReference.sourceUrl}
+                        onChange={(e) => setNewReference({ ...newReference, sourceUrl: e.target.value })}
+                      />
+                      <Button onClick={handleExtractUrl} disabled={extracting}>
+                        {extracting ? '提取中...' : '提取'}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      输入文章 URL，系统将自动提取标题和内容
+                    </p>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="file" className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="file">上传文件</Label>
+                    <Input
+                      id="file"
+                      type="file"
+                      accept=".txt,.md,text/*"
+                      onChange={handleFileUpload}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      支持 .txt 和 .md 文件，最大 5MB
+                    </p>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="text" className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    直接在下方输入文章标题和内容
+                  </p>
+                </TabsContent>
+              </Tabs>
+
               <div className="space-y-2">
                 <Label htmlFor="title">标题</Label>
                 <Input
@@ -154,6 +314,28 @@ export default function ReferencesPage() {
                   value={newReference.sourceType}
                   onChange={(e) => setNewReference({ ...newReference, sourceType: e.target.value })}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="project">关联项目（可选）</Label>
+                <Select
+                  value={newReference.projectId || 'none'}
+                  onValueChange={(value) => setNewReference({ ...newReference, projectId: value === 'none' ? '' : value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择项目" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">不关联项目</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  关联到项目后，可在项目中直接使用此参考文章
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="content">内容</Label>

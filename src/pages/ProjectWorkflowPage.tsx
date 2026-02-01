@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { getProject } from '@/db/api';
+import { getProject, updateProject, saveProjectHistory, getProjectHistoryByStage } from '@/db/api';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,6 +59,35 @@ export default function ProjectWorkflowPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStageClick = async (stageKey: string) => {
+    if (!project || !projectId) return;
+
+    // 保存当前阶段的历史记录
+    try {
+      await saveProjectHistory(projectId, project.status, {
+        timestamp: new Date().toISOString(),
+        status: project.status,
+      });
+
+      // 更新项目状态
+      await updateProject(projectId, { status: stageKey as any });
+
+      toast({
+        title: '已跳转',
+        description: `已跳转到${stages.find((s) => s.key === stageKey)?.label}阶段`,
+      });
+
+      // 重新加载项目
+      await loadProject();
+    } catch (error) {
+      toast({
+        title: '跳转失败',
+        description: '无法跳转到该阶段',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -124,25 +153,34 @@ export default function ProjectWorkflowPage() {
             </div>
             <Progress value={currentStage.progress} />
             <div className="flex justify-between text-xs text-muted-foreground mt-4">
-              {stages.map((stage, index) => (
-                <div
-                  key={stage.key}
-                  className={`flex flex-col items-center ${
-                    index <= stages.findIndex((s) => s.key === project.status)
-                      ? 'text-foreground'
-                      : ''
-                  }`}
-                >
+              {stages.map((stage, index) => {
+                const isCompleted = index < stages.findIndex((s) => s.key === project.status);
+                const isCurrent = stage.key === project.status;
+                const isClickable = isCompleted || isCurrent;
+                
+                return (
                   <div
-                    className={`w-2 h-2 rounded-full mb-1 ${
+                    key={stage.key}
+                    className={`flex flex-col items-center ${
+                      isClickable ? 'cursor-pointer hover:text-primary transition-colors' : ''
+                    } ${
                       index <= stages.findIndex((s) => s.key === project.status)
-                        ? 'bg-primary'
-                        : 'bg-muted'
+                        ? 'text-foreground'
+                        : ''
                     }`}
-                  />
-                  <span className="hidden md:block">{stage.label}</span>
-                </div>
-              ))}
+                    onClick={() => isClickable && handleStageClick(stage.key)}
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-full mb-1 ${
+                        index <= stages.findIndex((s) => s.key === project.status)
+                          ? 'bg-primary'
+                          : 'bg-muted'
+                      } ${isClickable ? 'hover:scale-125 transition-transform' : ''}`}
+                    />
+                    <span className="hidden md:block">{stage.label}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </CardContent>
