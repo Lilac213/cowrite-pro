@@ -69,10 +69,34 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
 5. 写作风格
 6. 关键要点
 
-以 JSON 格式返回。`;
+请严格按照以下 JSON 格式返回，不要包含任何其他文字说明：
+{
+  "主题": "文章主题",
+  "目标读者": "目标读者群体",
+  "核心观点": ["观点1", "观点2"],
+  "预期长度": "字数范围",
+  "写作风格": "风格描述",
+  "关键要点": ["要点1", "要点2"]
+}`;
 
       const result = await callLLMGenerate(prompt);
-      setGeneratedRequirements(result);
+      
+      // 尝试提取 JSON
+      let parsedResult;
+      try {
+        // 尝试直接解析
+        parsedResult = JSON.parse(result);
+      } catch (e) {
+        // 如果失败，尝试提取 JSON 部分
+        const jsonMatch = result.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          parsedResult = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error('AI 返回的内容不是有效的 JSON 格式');
+        }
+      }
+      
+      setGeneratedRequirements(JSON.stringify(parsedResult, null, 2));
 
       if (!brief) {
         const newBrief = await createBrief({
@@ -80,7 +104,7 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
           topic,
           format_template: formatTemplate || undefined,
           output_format: outputFormat || undefined,
-          requirements: JSON.parse(result),
+          requirements: parsedResult,
           confirmed: false,
         });
         setBrief(newBrief);
@@ -89,7 +113,7 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
           topic,
           format_template: formatTemplate || undefined,
           output_format: outputFormat || undefined,
-          requirements: JSON.parse(result),
+          requirements: parsedResult,
         });
         setBrief(updated);
       }
@@ -110,6 +134,8 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
         errorMessage = '系统 LLM 配置未完成，请联系管理员配置';
       } else if (error.message && error.message.includes('API 错误')) {
         errorMessage = 'API 调用失败，请联系管理员检查 API 密钥是否正确';
+      } else if (error.message && error.message.includes('JSON')) {
+        errorMessage = 'AI 返回格式错误，请重试或联系管理员';
       } else if (error.message) {
         errorMessage = error.message;
       }

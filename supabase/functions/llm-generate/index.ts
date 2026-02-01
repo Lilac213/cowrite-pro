@@ -99,6 +99,9 @@ Deno.serve(async (req) => {
 
       const data = await response.json();
       result = data.output?.text || data.output?.choices?.[0]?.message?.content || '';
+      
+      // 清理可能的 markdown 代码块标记
+      result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     } else if (llmProvider === 'openai') {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -124,6 +127,9 @@ Deno.serve(async (req) => {
 
       const data = await response.json();
       result = data.choices[0].message.content;
+      
+      // 清理可能的 markdown 代码块标记
+      result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     } else if (llmProvider === 'anthropic') {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -150,6 +156,9 @@ Deno.serve(async (req) => {
 
       const data = await response.json();
       result = data.content[0].text;
+      
+      // 清理可能的 markdown 代码块标记
+      result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     } else {
       return new Response(
         JSON.stringify({ error: `不支持的 LLM 提供商: ${llmProvider}` }),
