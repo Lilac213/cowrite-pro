@@ -498,22 +498,62 @@ export async function deleteTemplate(templateId: string) {
 
 // ============ Edge Function API ============
 export async function callLLMGenerate(prompt: string, context?: string, systemMessage?: string) {
-  const { data, error } = await supabase.functions.invoke<{ result: string }>('llm-generate', {
+  const { data, error } = await supabase.functions.invoke<{ result?: string; error?: string }>('llm-generate', {
     body: { prompt, context, systemMessage },
   });
 
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error('未收到响应');
+  if (error) {
+    // 尝试从 error.context 中提取更详细的错误信息
+    if (error.context && typeof error.context === 'object') {
+      const contextError = await error.context.text?.();
+      if (contextError) {
+        try {
+          const parsed = JSON.parse(contextError);
+          throw new Error(parsed.error || error.message);
+        } catch {
+          throw new Error(contextError || error.message);
+        }
+      }
+    }
+    throw new Error(error.message);
+  }
+  
+  // 检查响应中的错误
+  if (data && 'error' in data && data.error) {
+    throw new Error(data.error);
+  }
+  
+  if (!data || !data.result) throw new Error('未收到响应');
   return data.result;
 }
 
 export async function callWebSearch(query: string) {
-  const { data, error } = await supabase.functions.invoke<{ results: SearchResult[] }>('web-search', {
+  const { data, error } = await supabase.functions.invoke<{ results?: SearchResult[]; error?: string }>('web-search', {
     body: { query },
   });
 
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error('未收到响应');
+  if (error) {
+    // 尝试从 error.context 中提取更详细的错误信息
+    if (error.context && typeof error.context === 'object') {
+      const contextError = await error.context.text?.();
+      if (contextError) {
+        try {
+          const parsed = JSON.parse(contextError);
+          throw new Error(parsed.error || error.message);
+        } catch {
+          throw new Error(contextError || error.message);
+        }
+      }
+    }
+    throw new Error(error.message);
+  }
+  
+  // 检查响应中的错误
+  if (data && 'error' in data && data.error) {
+    throw new Error(data.error);
+  }
+  
+  if (!data || !data.results) throw new Error('未收到响应');
   return data.results;
 }
 

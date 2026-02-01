@@ -99,9 +99,22 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
         description: '需求文档已生成',
       });
     } catch (error: any) {
+      console.error('生成失败详情:', error);
+      
+      let errorMessage = '无法生成需求文档';
+      
+      // 检查是否是 API 配置问题
+      if (error.message && error.message.includes('请先在设置中配置')) {
+        errorMessage = '请先在设置页面配置 LLM API 密钥';
+      } else if (error.message && error.message.includes('API 错误')) {
+        errorMessage = 'API 调用失败，请检查 API 密钥是否正确';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: '生成失败',
-        description: error.message || '无法生成需求文档',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
