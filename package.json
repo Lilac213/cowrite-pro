@@ -46,8 +46,8 @@
     "input-otp": "^1.4.2",
     "ky": "^1.13.0",
     "lucide-react": "^0.553.0",
-    "miaoda-auth-react": "^2.0.6",
-    "miaoda-sc-plugin": "1.0.51",
+    "miaoda-auth-react": "2.0.6",
+    "miaoda-sc-plugin": "1.0.52",
     "motion": "^12.23.25",
     "next-themes": "^0.4.6",
     "qrcode": "^1.5.4",
@@ -84,6 +84,7 @@
     "tailwindcss": "^3.4.11",
     "typescript": "~5.9.3",
     "vite": "^5.1.4",
-    "vite-plugin-svgr": "^4.5.0"
+    "vite-plugin-svgr": "^4.5.0",
+    "miaoda-sc-plugin": "^1.0.4"
   }
 }
