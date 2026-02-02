@@ -1122,6 +1122,58 @@ ${JSON.stringify(webSupporting, null, 2)}`;
   }
 }
 
+// P6: 最终写作级摘要生成（综合学术和实时信息）
+export async function generateWritingSummary(selectedKnowledge: any[]) {
+  const systemMessage = `你是 CoWrite 的"研究摘要生成模块"。
+
+基于已筛选的高质量来源，请完成以下任务：
+
+1️⃣ 用 **中立、专业、可引用的语言** 总结核心观点  
+2️⃣ 明确区分：
+   - 学术共识
+   - 行业实践 / 现实应用
+3️⃣ 避免编造结论，不确定的地方需标注
+
+输出结构必须包含：
+
+{
+  "background_summary": "...",
+  "academic_insights": [
+    {
+      "point": "...",
+      "evidence_source": "academic"
+    }
+  ],
+  "industry_insights": [
+    {
+      "point": "...",
+      "evidence_source": "industry"
+    }
+  ],
+  "open_questions_or_debates": [
+    "..."
+  ],
+  "suggested_writing_angles": [
+    "..."
+  ]
+}`;
+
+  const prompt = `已筛选的高质量来源：
+${JSON.stringify(selectedKnowledge, null, 2)}`;
+
+  const result = await callLLMGenerate(prompt, '', systemMessage);
+  
+  try {
+    return JSON.parse(result);
+  } catch (e) {
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('无法解析写作摘要');
+  }
+}
+
 // 完整的混合搜索工作流
 export async function academicSearchWorkflow(userQueryZh: string) {
   // P1: 搜索意图拆解

@@ -34,6 +34,16 @@
   - [x] Update routes.tsx with all routes
   - [x] Run lint and fix issues
   - [x] Final verification
+- [x] Step 7: Hybrid Search System Implementation
+  - [x] Replace Google Scholar and AI Search with OpenAlex and Tavily
+  - [x] Implement 5-step hybrid search pipeline (P1-P5)
+  - [x] Add progress bar history saving and stage navigation
+  - [x] Enhance reference article creation with URL/file upload
+- [x] Step 8: Knowledge Stage Enhancements
+  - [x] Reset brief confirmation when regenerating
+  - [x] Add P6 writing-level summary generation
+  - [x] Add synthesis button and display in KnowledgeStage
+  - [x] Require synthesis before proceeding to next stage
 
 ## Notes
 - Using Supabase for authentication, database, and storage
@@ -41,5 +51,7 @@
 - Minimal design aesthetic with ample whitespace
 - State machine workflow: init → confirm_brief → knowledge_selected → outline_confirmed → drafting → review_pass_1 → review_pass_2 → review_pass_3 → completed
 - File storage structure: _briefs/, _knowledge_base/, _reference/, _human_character/
+- Hybrid search system: OpenAlex (academic) + Tavily (real-time)
+- P1: Intent decomposition, P2: Academic keywords, P3: Web queries, P4: Cross-source alignment, P5: Structured summary, P6: Writing-level synthesis
 - All core features implemented successfully
 - Lint passed with no errors

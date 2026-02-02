@@ -109,11 +109,13 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
         });
         setBrief(newBrief);
       } else {
+        // 重新生成时，重置确认状态
         const updated = await updateBrief(brief.id, {
           topic,
           format_template: formatTemplate || undefined,
           output_format: outputFormat || undefined,
           requirements: parsedResult,
+          confirmed: false,
         });
         setBrief(updated);
       }
