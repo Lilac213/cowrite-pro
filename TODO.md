@@ -57,6 +57,19 @@
   - [x] Integrate Rhythm Prompt for detail polishing (Step 3)
   - [x] Update ReviewStage component to use imported prompts
   - [x] Update AIReducerPage to use DEFAULT_ENHANCE_PROMPT
+- [x] Step 11: Enhanced File Upload and Content Management
+  - [x] Add PDF and Word document parsing support
+  - [x] Create document parsing Edge Function
+  - [x] Create content summarization Edge Function
+  - [x] Deploy Edge Functions
+  - [x] Add database columns for summary, file_url, file_type, tags
+  - [x] Update type definitions
+  - [x] Add API functions for parsing, summarization, and tag search
+  - [x] Update MaterialsPage with file upload, AI summarization, edit/delete, tag search
+  - [ ] Update ReferencesPage with similar features (file upload already exists, need AI summarization)
+  - [ ] Update TemplatesPage with similar features
+  - [ ] Add template dropdown in BriefStage
+  - [ ] Update brief generation to reference selected template
 
 ## Notes
 - Using Supabase for authentication, database, and storage

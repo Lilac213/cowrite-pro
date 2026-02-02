@@ -94,6 +94,9 @@ export interface ReferenceArticle {
     recommended_projects?: string[];
   };
   keywords?: string[];
+  summary?: string;
+  file_url?: string;
+  file_type?: string;
   created_at: string;
   updated_at?: string;
 }
@@ -110,6 +113,9 @@ export interface Material {
   status?: MaterialStatus;
   project_ids?: string[];
   keywords?: string[];
+  summary?: string;
+  file_url?: string;
+  file_type?: string;
   created_at: string;
   updated_at?: string;
 }
@@ -146,6 +152,8 @@ export interface Template {
     validation_rules?: any;
   };
   preview_content?: string;
+  summary?: string;
+  tags?: string[];
   created_at: string;
   updated_at?: string;
 }

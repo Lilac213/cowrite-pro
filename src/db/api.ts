@@ -1330,3 +1330,61 @@ export async function getProjectHistoryByStage(projectId: string, stage: string)
   if (error) throw error;
   return data;
 }
+
+// ============ Document Parsing API ============
+export async function parseDocument(fileUrl: string, fileType: string): Promise<string> {
+  const { data, error } = await supabase.functions.invoke('parse-document', {
+    body: { fileUrl, fileType },
+  });
+
+  if (error) throw error;
+  return data.text;
+}
+
+// ============ Content Summarization API ============
+export async function summarizeContent(content: string): Promise<{ summary: string; tags: string[] }> {
+  const { data, error } = await supabase.functions.invoke('summarize-content', {
+    body: { content },
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// ============ Tag-based Search API ============
+export async function searchMaterialsByTags(userId: string, tags: string[]) {
+  const { data, error } = await supabase
+    .from('materials')
+    .select('*')
+    .eq('user_id', userId)
+    .overlaps('keywords', tags)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data as Material[];
+}
+
+export async function searchReferencesByTags(userId: string, tags: string[]) {
+  const { data, error } = await supabase
+    .from('reference_articles')
+    .select('*')
+    .eq('user_id', userId)
+    .overlaps('keywords', tags)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data as ReferenceArticle[];
+}
+
+export async function searchTemplatesByTags(userId: string, tags: string[]) {
+  const { data, error } = await supabase
+    .from('templates')
+    .select('*')
+    .eq('user_id', userId)
+    .overlaps('tags', tags)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data as Template[];
+}
+
