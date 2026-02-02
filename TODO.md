@@ -39,6 +39,8 @@
   - [x] Implement 5-step hybrid search pipeline (P1-P5)
   - [x] Add progress bar history saving and stage navigation
   - [x] Enhance reference article creation with URL/file upload
+  - [x] Replace OpenAlex and Tavily with Google Scholar, TheNews, and Smart Search
+  - [x] Deploy new Edge Functions for improved search results
 - [x] Step 8: Knowledge Stage Enhancements
   - [x] Reset brief confirmation when regenerating
   - [x] Add P6 writing-level summary generation

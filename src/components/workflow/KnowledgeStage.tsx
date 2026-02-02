@@ -54,7 +54,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             project_id: projectId,
             title: paper.title || '无标题',
             content: paper.abstract || paper.content || '暂无摘要',
-            source: paper.source || 'OpenAlex',
+            source: paper.source || 'Google Scholar',
             source_url: paper.url || undefined,
             published_at: paper.publishedAt || undefined,
             collected_at: new Date().toISOString(),
@@ -72,7 +72,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             project_id: projectId,
             title: paper.title || '无标题',
             content: paper.abstract || paper.content || '暂无摘要',
-            source: paper.source || 'Tavily',
+            source: paper.source || 'Web Search',
             source_url: paper.url || undefined,
             published_at: paper.publishedAt || undefined,
             collected_at: new Date().toISOString(),
@@ -236,7 +236,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             {/* 学术关键词 */}
             {workflowResult.academicKeywords && workflowResult.academicKeywords.main_keywords.length > 0 && (
               <div>
-                <h4 className="text-sm font-semibold mb-2">学术关键词（OpenAlex）</h4>
+                <h4 className="text-sm font-semibold mb-2">学术关键词（Google Scholar）</h4>
                 <div className="flex flex-wrap gap-2">
                   {workflowResult.academicKeywords.main_keywords.map((keyword: string) => (
                     <Badge key={keyword} variant="default">{keyword}</Badge>
@@ -251,7 +251,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             {/* 网页搜索查询 */}
             {workflowResult.webQueries && workflowResult.webQueries.queries.length > 0 && (
               <div>
-                <h4 className="text-sm font-semibold mb-2">网页搜索查询（Tavily）</h4>
+                <h4 className="text-sm font-semibold mb-2">网页搜索查询（TheNews + Smart Search）</h4>
                 <div className="flex flex-wrap gap-2">
                   {workflowResult.webQueries.queries.map((query: string) => (
                     <Badge key={query} variant="secondary">{query}</Badge>

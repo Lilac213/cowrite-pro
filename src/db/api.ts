@@ -1189,32 +1189,43 @@ export async function academicSearchWorkflow(userQueryZh: string) {
   // 执行搜索
   const searchPromises: Promise<any>[] = [];
   
-  // OpenAlex 搜索（如果有学术意图）
+  // Google Scholar 搜索（如果有学术意图）
   if (academicKeywords.main_keywords.length > 0) {
     const allKeywords = [...academicKeywords.main_keywords, ...academicKeywords.related_keywords];
     const searchQuery = allKeywords.join(' ');
     searchPromises.push(
-      searchOpenAlex(searchQuery).catch(() => ({ papers: [] }))
+      searchGoogleScholar(searchQuery).catch(() => ({ papers: [] }))
     );
   } else {
     searchPromises.push(Promise.resolve({ papers: [] }));
   }
   
-  // Tavily 搜索（如果有网页意图）
+  // TheNews + Smart Search 搜索（如果有网页意图）
   if (webQueries.queries.length > 0) {
-    // 使用第一个查询
+    // 使用第一个查询同时搜索 TheNews 和 Smart Search
+    const query = webQueries.queries[0];
     searchPromises.push(
-      searchTavily(webQueries.queries[0]).catch(() => ({ papers: [], summary: '', sources: [] }))
+      Promise.all([
+        searchTheNews(query).catch(() => ({ papers: [], summary: '', sources: [] })),
+        searchSmartSearch(query).catch(() => ({ papers: [], summary: '', sources: [] })),
+      ]).then(([newsResults, webResults]) => {
+        // 合并两个搜索结果
+        return {
+          papers: [...(newsResults.papers || []), ...(webResults.papers || [])],
+          summary: newsResults.summary || webResults.summary || '',
+          sources: [...(newsResults.sources || []), ...(webResults.sources || [])],
+        };
+      })
     );
   } else {
     searchPromises.push(Promise.resolve({ papers: [], summary: '', sources: [] }));
   }
   
-  const [openAlexResults, tavilyResults] = await Promise.all(searchPromises);
+  const [scholarResults, webResults] = await Promise.all(searchPromises);
   
   // 提取结果
-  const academicPapers = openAlexResults.papers || [];
-  const webPapers = tavilyResults.papers || [];
+  const academicPapers = scholarResults.papers || [];
+  const webPapers = webResults.papers || [];
   
   // 如果两边都没有结果，直接返回
   if (academicPapers.length === 0 && webPapers.length === 0) {
@@ -1249,9 +1260,9 @@ export async function academicSearchWorkflow(userQueryZh: string) {
   };
 }
 
-// OpenAlex 搜索
-async function searchOpenAlex(query: string) {
-  const { data, error } = await supabase.functions.invoke('openalex-search', {
+// Google Scholar 搜索（学术论文）
+async function searchGoogleScholar(query: string) {
+  const { data, error } = await supabase.functions.invoke('google-scholar-search', {
     body: { query, yearStart: '2020', yearEnd: new Date().getFullYear().toString() },
   });
   
@@ -1259,10 +1270,20 @@ async function searchOpenAlex(query: string) {
   return data;
 }
 
-// Tavily 搜索
-async function searchTavily(query: string) {
-  const { data, error } = await supabase.functions.invoke('tavily-search', {
-    body: { query },
+// TheNews 搜索（新闻资讯）
+async function searchTheNews(query: string) {
+  const { data, error } = await supabase.functions.invoke('thenews-search', {
+    body: { query, limit: 10 },
+  });
+  
+  if (error) throw error;
+  return data;
+}
+
+// Smart Search 搜索（网页搜索）
+async function searchSmartSearch(query: string) {
+  const { data, error } = await supabase.functions.invoke('smart-search', {
+    body: { query, count: 10, freshness: 'Month' },
   });
   
   if (error) throw error;
