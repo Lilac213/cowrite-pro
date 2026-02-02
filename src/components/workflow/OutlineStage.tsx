@@ -204,30 +204,130 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
     }
   };
 
-  // 保存文章级论证结构
+  // 保存文章级论证结构（带自动调整）
   const handleSaveArticleStructure = async () => {
     try {
+      // 调用调整接口，确保结构连贯且最后一块是总结
+      const { data, error } = await supabase.functions.invoke('adjust-article-structure', {
+        body: {
+          coreThesis,
+          argumentBlocks,
+          operation: 'check',
+        },
+      });
+
+      if (error) throw error;
+
+      // 使用调整后的结构
+      const adjustedStructure = {
+        core_thesis: data.core_thesis,
+        argument_blocks: data.argument_blocks,
+      };
+
       const { error: saveError } = await supabase
         .from('projects')
         // @ts-ignore - article_argument_structure is a JSONB field
         .update({
-          article_argument_structure: {
-            core_thesis: coreThesis,
-            argument_blocks: argumentBlocks,
-          },
+          article_argument_structure: adjustedStructure,
         })
         .eq('id', projectId);
 
       if (saveError) throw saveError;
 
+      // 更新本地状态
+      setCoreThesis(data.core_thesis);
+      setArgumentBlocks(data.argument_blocks);
       setEditingStructure(false);
+
       toast({
         title: '保存成功',
+        description: '论证结构已优化并保存',
       });
     } catch (error: any) {
       toast({
         title: '保存失败',
         description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // 添加论证块
+  const handleAddArgumentBlock = async (index: number) => {
+    const newBlock = {
+      id: `block_${Date.now()}`,
+      title: '',
+      description: '',
+      order: index + 1,
+      relation: '',
+    };
+
+    const updatedBlocks = [
+      ...argumentBlocks.slice(0, index),
+      newBlock,
+      ...argumentBlocks.slice(index),
+    ].map((block, idx) => ({ ...block, order: idx + 1 }));
+
+    setArgumentBlocks(updatedBlocks);
+
+    // 自动调整结构
+    try {
+      const { data, error } = await supabase.functions.invoke('adjust-article-structure', {
+        body: {
+          coreThesis,
+          argumentBlocks: updatedBlocks,
+          operation: 'add',
+          blockIndex: index,
+        },
+      });
+
+      if (error) throw error;
+
+      setArgumentBlocks(data.argument_blocks);
+      toast({
+        title: '已添加',
+        description: '论证块已自动调整以保持连贯',
+      });
+    } catch (error: any) {
+      toast({
+        title: '自动调整失败',
+        description: '请手动调整论证块内容',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // 删除论证块
+  const handleDeleteArgumentBlock = async (blockId: string) => {
+    const blockIndex = argumentBlocks.findIndex((b) => b.id === blockId);
+    const updatedBlocks = argumentBlocks
+      .filter((b) => b.id !== blockId)
+      .map((block, idx) => ({ ...block, order: idx + 1 }));
+
+    setArgumentBlocks(updatedBlocks);
+
+    // 自动调整结构
+    try {
+      const { data, error } = await supabase.functions.invoke('adjust-article-structure', {
+        body: {
+          coreThesis,
+          argumentBlocks: updatedBlocks,
+          operation: 'delete',
+          blockIndex,
+        },
+      });
+
+      if (error) throw error;
+
+      setArgumentBlocks(data.argument_blocks);
+      toast({
+        title: '已删除',
+        description: '论证结构已自动调整',
+      });
+    } catch (error: any) {
+      toast({
+        title: '自动调整失败',
+        description: '请手动调整论证块内容',
         variant: 'destructive',
       });
     }
@@ -448,37 +548,46 @@ ${selectedKnowledge.map((k) => `- ${k.title}: ${k.content}`).join('\n')}
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-semibold">论证块</label>
                   <Button
-                    onClick={() =>
-                      setArgumentBlocks([
-                        ...argumentBlocks,
-                        {
-                          id: `block_${Date.now()}`,
-                          title: '',
-                          description: '',
-                          order: argumentBlocks.length + 1,
-                        },
-                      ])
-                    }
+                    onClick={() => handleAddArgumentBlock(argumentBlocks.length)}
                     size="sm"
                     variant="outline"
                   >
                     <Plus className="h-4 w-4 mr-1" />
-                    添加
+                    添加到末尾
                   </Button>
                 </div>
                 <div className="space-y-3">
                   {argumentBlocks.map((block, index) => (
                     <Card key={block.id} className="p-3">
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">论证块 {index + 1}</span>
-                          <Button
-                            onClick={() => setArgumentBlocks(argumentBlocks.filter((b) => b.id !== block.id))}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">
+                            论证块 {index + 1}
+                            {index === argumentBlocks.length - 1 && (
+                              <Badge variant="secondary" className="ml-2">
+                                结尾
+                              </Badge>
+                            )}
+                          </span>
+                          <div className="flex gap-1">
+                            <Button
+                              onClick={() => handleAddArgumentBlock(index + 1)}
+                              size="sm"
+                              variant="ghost"
+                              title="在此后插入"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              onClick={() => handleDeleteArgumentBlock(block.id)}
+                              size="sm"
+                              variant="ghost"
+                              disabled={argumentBlocks.length <= 3}
+                              title={argumentBlocks.length <= 3 ? '至少保留3个论证块' : '删除'}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                         <Input
                           value={block.title}
@@ -500,9 +609,18 @@ ${selectedKnowledge.map((k) => `- ${k.title}: ${k.content}`).join('\n')}
                               )
                             )
                           }
-                          placeholder="该论证块的作用和要证明的内容"
+                          placeholder={
+                            index === argumentBlocks.length - 1
+                              ? '该论证块的作用（结尾应复述总论点/总结升华/展望未来）'
+                              : '该论证块的作用和要证明的内容'
+                          }
                           rows={2}
                         />
+                        {block.relation && (
+                          <p className="text-xs text-muted-foreground">
+                            与前一块关系：{block.relation}
+                          </p>
+                        )}
                       </div>
                     </Card>
                   ))}
@@ -525,10 +643,22 @@ ${selectedKnowledge.map((k) => `- ${k.title}: ${k.content}`).join('\n')}
                         <div className="space-y-2">
                           {argumentBlocks.map((block, index) => (
                             <Card key={block.id} className="p-3">
-                              <p className="text-sm font-semibold">
-                                {index + 1}. {block.title}
-                              </p>
-                              <p className="text-sm text-muted-foreground mt-1">{block.description}</p>
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-sm font-semibold">
+                                  {index + 1}. {block.title}
+                                </p>
+                                {index === argumentBlocks.length - 1 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    结尾
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground">{block.description}</p>
+                              {block.relation && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  关系：{block.relation}
+                                </p>
+                              )}
                             </Card>
                           ))}
                         </div>

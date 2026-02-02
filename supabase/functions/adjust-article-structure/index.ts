@@ -11,11 +11,11 @@ serve(async (req) => {
   }
 
   try {
-    const { topic, requirements, referenceArticles, materials } = await req.json();
+    const { coreThesis, argumentBlocks, operation, blockIndex } = await req.json();
 
-    if (!topic) {
+    if (!coreThesis || !argumentBlocks) {
       return new Response(
-        JSON.stringify({ error: '缺少主题信息' }),
+        JSON.stringify({ error: '缺少核心论点或论证块信息' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -28,59 +28,42 @@ serve(async (req) => {
       );
     }
 
-    // 构建输入部分
-    let inputSection = `- 写作目标 / 主题：${topic}\n`;
-    
-    if (requirements) {
-      const targetAudience = requirements.target_audience || requirements.audience || '通用读者';
-      inputSection += `- 目标读者：${targetAudience}\n`;
+    // 构建当前结构描述
+    let currentStructure = `核心论点：${coreThesis}\n\n当前论证块：\n`;
+    argumentBlocks.forEach((block: any, index: number) => {
+      currentStructure += `${index + 1}. ${block.title}\n   作用：${block.description}\n`;
+    });
+
+    let taskDescription = '';
+    if (operation === 'add') {
+      taskDescription = `用户在位置 ${blockIndex + 1} 添加了一个新的论证块。请为这个新论证块生成合适的标题和作用说明，并确保与前后论证块的逻辑关系流畅。同时检查最后一个论证块是否为总结性质（复述总论点/总结升华/展望未来），如果不是，请调整最后一个论证块使其成为合适的结尾。`;
+    } else if (operation === 'delete') {
+      taskDescription = `用户删除了位置 ${blockIndex + 1} 的论证块。请调整剩余论证块的关系说明，确保整体论证流畅。同时确保最后一个论证块为总结性质（复述总论点/总结升华/展望未来）。`;
+    } else if (operation === 'modify') {
+      taskDescription = `用户修改了位置 ${blockIndex + 1} 的论证块。请检查并调整相邻论证块的关系说明，确保整体论证连贯。同时确保最后一个论证块为总结性质（复述总论点/总结升华/展望未来）。`;
+    } else {
+      taskDescription = `请检查整体论证结构的连贯性，确保论证块之间的关系清晰，并确保最后一个论证块为总结性质（复述总论点/总结升华/展望未来）。`;
     }
 
-    if (referenceArticles && referenceArticles.length > 0) {
-      inputSection += `- 参考文章摘要（如有）：\n`;
-      referenceArticles.forEach((article: any, index: number) => {
-        inputSection += `  ${index + 1}. ${article.title}\n     ${article.content.substring(0, 300)}...\n`;
-      });
-    }
+    const prompt = `你是写作系统中的「文章级论证架构调整模块」。
 
-    if (materials && materials.length > 0) {
-      inputSection += `- 作者已有观点或素材（如有）：\n`;
-      materials.forEach((material: any, index: number) => {
-        inputSection += `  ${index + 1}. ${material.title}\n     ${material.content.substring(0, 200)}...\n`;
-      });
-    }
+【当前结构】
+${currentStructure}
 
-    const prompt = `你是写作系统中的「文章级论证架构模块」。
+【调整任务】
+${taskDescription}
 
-请基于以下输入，构建文章的整体论证结构，而不是生成正文内容。
+【要求】
+1. 保持核心论点不变
+2. 确保论证块之间的逻辑关系清晰（并列/递进/因果/对比）
+3. 最后一个论证块必须是总结性质：复述总论点、总结升华或展望未来
+4. 整体结构应该完整：引入→展开→总结
+5. 不生成具体段落内容
+6. 输出应稳定、抽象、可编辑
 
-【输入】
-${inputSection}
-
-【你的任务】
-1. 提炼文章的「核心论点」（一句话）
-2. 拆分 3–5 个一级论证块（章节级）
-3. 说明每个论证块的作用（为什么需要这一块）
-4. 标注论证块之间的关系（并列 / 递进 / 因果 / 对比）
-
-【输出格式】
-- 核心论点：
-- 论证结构：
-  - 论证块 A：
-    - 作用：
-  - 论证块 B：
-    - 作用：
-  - …
-- 结构关系说明：
-
-【约束】
-- 不生成具体段落
-- 不引用案例、数据或研究
-- 输出应稳定、抽象、可编辑
-
-请将输出转换为JSON格式返回：
+请返回调整后的完整结构，JSON格式：
 {
-  "core_thesis": "核心论点",
+  "core_thesis": "核心论点（保持不变）",
   "argument_blocks": [
     {
       "id": "block_1",
@@ -90,7 +73,7 @@ ${inputSection}
       "relation": "与前一块的关系"
     }
   ],
-  "structure_relations": "结构关系说明"
+  "structure_relations": "整体结构关系说明"
 }`;
 
     const response = await fetch('https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse', {
@@ -149,15 +132,12 @@ ${inputSection}
     // 提取JSON内容
     let structure;
     try {
-      // 尝试直接解析
       structure = JSON.parse(fullText);
     } catch (e) {
-      // 尝试从markdown代码块中提取
       const jsonMatch = fullText.match(/```json\s*([\s\S]*?)\s*```/) || fullText.match(/```\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
         structure = JSON.parse(jsonMatch[1]);
       } else {
-        // 尝试查找JSON对象
         const jsonStart = fullText.indexOf('{');
         const jsonEnd = fullText.lastIndexOf('}');
         if (jsonStart !== -1 && jsonEnd !== -1) {
@@ -168,7 +148,6 @@ ${inputSection}
       }
     }
 
-    // 确保返回的结构包含必要字段
     if (!structure.core_thesis || !structure.argument_blocks) {
       throw new Error('返回的结构缺少必要字段');
     }
