@@ -12,17 +12,19 @@ serve(async (req) => {
 
   try {
     const {
-      paragraphSummary,
-      articleStructure,
-      argumentBlock,
-      referenceArticles,
-      materials,
+      coreThesis,
+      currentBlock,
+      previousParagraph,
+      relationToPrevious,
+      newInformation,
+      referenceMaterials,
+      personalMaterials,
       knowledgeBase,
     } = await req.json();
 
-    if (!paragraphSummary) {
+    if (!coreThesis || !currentBlock) {
       return new Response(
-        JSON.stringify({ error: '缺少段落摘要信息' }),
+        JSON.stringify({ error: '缺少核心论点或当前论证块信息' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -35,68 +37,67 @@ serve(async (req) => {
       );
     }
 
-    // 构建上下文
-    let context = `【段落摘要】\n${paragraphSummary}\n\n`;
-    
-    if (articleStructure) {
-      context += `【文章核心论点】\n${articleStructure.core_thesis}\n\n`;
+    // 构建参考内容字符串
+    let refContent = '';
+    if (referenceMaterials && referenceMaterials.length > 0) {
+      refContent = referenceMaterials.map((item: any) => `${item.title}: ${item.content?.substring(0, 200) || ''}`).join('\n');
     }
 
-    if (argumentBlock) {
-      context += `【所属论证块】\n${argumentBlock.title}\n${argumentBlock.description}\n\n`;
+    let personalContent = '';
+    if (personalMaterials && personalMaterials.length > 0) {
+      personalContent = personalMaterials.map((item: any) => `${item.title}: ${item.content?.substring(0, 200) || ''}`).join('\n');
     }
 
-    if (referenceArticles && referenceArticles.length > 0) {
-      context += `【参考文章】\n`;
-      referenceArticles.forEach((article: any, index: number) => {
-        context += `${index + 1}. ${article.title}\n${article.content.substring(0, 400)}...\n\n`;
-      });
-    }
-
-    if (materials && materials.length > 0) {
-      context += `【个人素材】\n`;
-      materials.forEach((material: any, index: number) => {
-        context += `${index + 1}. ${material.title}\n${material.content.substring(0, 300)}...\n\n`;
-      });
-    }
-
+    let knowledgeContent = '';
     if (knowledgeBase && knowledgeBase.length > 0) {
-      context += `【资料查询结果】\n`;
-      knowledgeBase.forEach((item: any, index: number) => {
-        context += `${index + 1}. ${item.title}\n${item.content.substring(0, 300)}...\n\n`;
-      });
+      knowledgeContent = knowledgeBase.map((item: any) => `${item.title}: ${item.content?.substring(0, 200) || ''}`).join('\n');
     }
 
-    const prompt = `你是一位专业的论证结构设计专家。请根据以下信息，为这个段落设计论证结构。
+    // 使用固定的prompt（不能改）
+    const prompt = `你是写作系统中的【段落级推理模块】。
+你只负责生成"段落的论证结构"，而不是正文。
 
-${context}
+【文章级约束】
 
-请设计段落级的论证结构，包括：
-1. 总论据（main_argument）：该段落的核心论点，一句话
-2. 分论据（sub_arguments）：2-3个分论据，每个包含：
-   - content: 分论据内容
-   - order: 顺序编号
-3. 小总结（conclusion）：对该段落论证的总结
+核心论点：${coreThesis}
+当前段落所属论证块：${currentBlock.title}
+该论证块的论证任务：${currentBlock.description}
 
-要求：
-- 只提炼观点结构，不生成完整段落文本
-- 不使用修辞与文采，只关注论证逻辑
-- 分论据之间要有逻辑关系（递进或并列）
-- 必须与文章级论证结构保持一致
-- 不虚构具体案例或数据
+【段落关系信息】
 
-请严格按照以下JSON格式返回：
-{
-  "main_argument": "总论据",
-  "sub_arguments": [
-    {
-      "id": "sub_1",
-      "content": "分论据内容",
-      "order": 1
-    }
-  ],
-  "conclusion": "小总结"
-}`;
+上一段完成的论证任务：${previousParagraph || '无（这是第一段）'}
+当前段与上一段的关系：${relationToPrevious || '引入'}
+（承接 / 递进 / 转折 / 因果 / 举例 / 总结）
+当前段新增的信息是什么：${newInformation || '待确定'}
+
+【输入素材】
+
+参考内容（如有）：${refContent || '无'}
+作者个人素材（如有）：${personalContent || '无'}
+检索资料摘要（如有）：${knowledgeContent || '无'}
+
+【你的任务】
+按以下顺序输出段落结构：
+
+input_assumption（承接前文的前提）
+core_claim（本段要证明的核心主张）
+sub_claims（1–3 条分论据）
+output_state（为下一段铺垫的逻辑出口）
+
+【输出格式】
+input_assumption：
+core_claim：
+
+sub_claim 1：
+sub_claim 2：
+sub_claim 3（如有）：
+output_state：
+
+【约束】
+
+不生成完整句段
+不引入案例、数据
+所有内容必须服务于文章级论证块`;
 
     const response = await fetch('https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse', {
       method: 'POST',
@@ -151,36 +152,51 @@ ${context}
       }
     }
 
-    // 提取JSON内容
-    let reasoning;
-    try {
-      reasoning = JSON.parse(fullText);
-    } catch (e) {
-      const jsonMatch = fullText.match(/```json\s*([\s\S]*?)\s*```/) || fullText.match(/```\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        reasoning = JSON.parse(jsonMatch[1]);
-      } else {
-        const jsonStart = fullText.indexOf('{');
-        const jsonEnd = fullText.lastIndexOf('}');
-        if (jsonStart !== -1 && jsonEnd !== -1) {
-          reasoning = JSON.parse(fullText.substring(jsonStart, jsonEnd + 1));
+    // 解析返回的结构化内容
+    const lines = fullText.split('\n').filter(line => line.trim());
+    const structure: any = {
+      input_assumption: '',
+      core_claim: '',
+      sub_claims: [],
+      output_state: '',
+    };
+
+    let currentField = '';
+    for (const line of lines) {
+      if (line.startsWith('input_assumption：') || line.startsWith('input_assumption:')) {
+        currentField = 'input_assumption';
+        structure.input_assumption = line.split(/[：:]/)[1]?.trim() || '';
+      } else if (line.startsWith('core_claim：') || line.startsWith('core_claim:')) {
+        currentField = 'core_claim';
+        structure.core_claim = line.split(/[：:]/)[1]?.trim() || '';
+      } else if (line.match(/sub_claim\s*\d+[：:]/)) {
+        currentField = 'sub_claims';
+        const claim = line.split(/[：:]/)[1]?.trim();
+        if (claim) structure.sub_claims.push(claim);
+      } else if (line.startsWith('output_state：') || line.startsWith('output_state:')) {
+        currentField = 'output_state';
+        structure.output_state = line.split(/[：:]/)[1]?.trim() || '';
+      } else if (currentField && line.trim() && !line.match(/^【.*】$/)) {
+        // 继续追加到当前字段（排除标题行）
+        if (currentField === 'sub_claims') {
+          if (structure.sub_claims.length > 0) {
+            structure.sub_claims[structure.sub_claims.length - 1] += ' ' + line.trim();
+          }
         } else {
-          throw new Error('无法解析返回的JSON结构');
+          structure[currentField] += ' ' + line.trim();
         }
       }
     }
 
-    if (!reasoning.main_argument || !reasoning.sub_arguments || !reasoning.conclusion) {
-      throw new Error('返回的结构缺少必要字段');
-    }
-
     return new Response(
-      JSON.stringify(reasoning),
+      JSON.stringify(structure),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
+    console.error('Generate paragraph reasoning error:', error);
+    const errorMessage = error instanceof Error ? error.message : '生成失败，请重试';
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

@@ -1,129 +1,44 @@
 import { useState, useEffect } from 'react';
 import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import {
-  getOutlines,
-  batchCreateOutlines,
-  updateOutline,
-  deleteOutline,
+  getProject,
   updateProject,
-  callLLMGenerate,
   getBrief,
   getKnowledgeBase,
   getReferenceArticles,
   getMaterials,
-  getProject,
-  reorderOutlines,
 } from '@/db/api';
-import type { Outline, Project } from '@/types';
+import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Trash2, GripVertical, Sparkles, Edit, Save, X, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Sparkles, Save, X, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
-import ParagraphSummaryEditor from './ParagraphSummaryEditor';
 
 interface OutlineStageProps {
   projectId: string;
   onComplete: () => void;
 }
 
-interface SortableOutlineItemProps {
-  outline: Outline;
-  index: number;
-  onUpdate: (id: string, summary: string) => void;
-  onToggle: (id: string, selected: boolean) => void;
-  onDelete: (id: string) => void;
-  onEdit: (outline: Outline) => void;
-}
-
-function SortableOutlineItem({
-  outline,
-  index,
-  onUpdate,
-  onToggle,
-  onDelete,
-  onEdit,
-}: SortableOutlineItemProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: outline.id,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex items-center gap-3 p-3 border border-border rounded-md bg-card"
-    >
-      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
-        <GripVertical className="h-5 w-5 text-muted-foreground" />
-      </div>
-      <Checkbox checked={outline.selected} onCheckedChange={() => onToggle(outline.id, outline.selected)} />
-      <span className="text-sm text-muted-foreground w-8">{index + 1}.</span>
-      <Input
-        value={outline.summary}
-        onChange={(e) => onUpdate(outline.id, e.target.value)}
-        className="flex-1"
-      />
-      <Button variant="outline" size="sm" onClick={() => onEdit(outline)}>
-        <Edit className="h-4 w-4" />
-      </Button>
-      <Button variant="ghost" size="sm" onClick={() => onDelete(outline.id)}>
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </div>
-  );
+interface OutlineStageProps {
+  projectId: string;
+  onComplete: () => void;
 }
 
 export default function OutlineStage({ projectId, onComplete }: OutlineStageProps) {
   const [project, setProject] = useState<Project | null>(null);
-  const [outlines, setOutlines] = useState<Outline[]>([]);
-  const [generating, setGenerating] = useState(false);
   const [generatingStructure, setGeneratingStructure] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [editingStructure, setEditingStructure] = useState(false);
   const [coreThesis, setCoreThesis] = useState('');
   const [argumentBlocks, setArgumentBlocks] = useState<any[]>([]);
-  const [editingOutline, setEditingOutline] = useState<Outline | null>(null);
   const [referenceArticles, setReferenceArticles] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
   const [knowledgeBase, setKnowledgeBase] = useState<any[]>([]);
-  const [verifyingCoherence, setVerifyingCoherence] = useState(false);
-  const [coherenceResult, setCoherenceResult] = useState<any>(null);
   const { toast } = useToast();
-
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
 
   useEffect(() => {
     loadData();
@@ -134,16 +49,14 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [projectData, outlinesData, refArticles, mats, kb] = await Promise.all([
+      const [projectData, refArticles, mats, kb] = await Promise.all([
         getProject(projectId),
-        getOutlines(projectId),
         getReferenceArticles(user.id),
         getMaterials(user.id),
         getKnowledgeBase(projectId),
       ]);
 
       setProject(projectData);
-      setOutlines(outlinesData);
       setReferenceArticles(refArticles);
       setMaterials(mats);
       setKnowledgeBase(kb.filter((k) => k.selected));
@@ -355,189 +268,10 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
     }
   };
 
-  const handleGenerate = async () => {
-    setGenerating(true);
-    try {
-      const brief = await getBrief(projectId);
-      const knowledge = await getKnowledgeBase(projectId);
-      const selectedKnowledge = knowledge.filter((k) => k.selected);
-
-      const prompt = `基于以下需求和知识库，生成 7-8 个段落摘要（每个摘要一句话）：
-
-需求：${JSON.stringify(brief?.requirements || {})}
-
-知识库：
-${selectedKnowledge.map((k) => `- ${k.title}: ${k.content}`).join('\n')}
-
-请返回一个 JSON 数组，每个元素包含 summary 字段。`;
-
-      const result = await callLLMGenerate(prompt);
-      const summaries = JSON.parse(result);
-
-      const newOutlines = summaries.map((item: any, index: number) => ({
-        project_id: projectId,
-        paragraph_order: index + 1,
-        summary: item.summary,
-        selected: true,
-      }));
-
-      await batchCreateOutlines(newOutlines);
-      await loadData();
-
-      toast({
-        title: '生成成功',
-        description: '段落摘要已生成',
-      });
-    } catch (error: any) {
-      toast({
-        title: '生成失败',
-        description: error.message || '无法生成大纲',
-        variant: 'destructive',
-      });
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handleAddOutline = async () => {
-    try {
-      const newOutline = {
-        project_id: projectId,
-        paragraph_order: outlines.length + 1,
-        summary: '',
-        selected: true,
-      };
-
-      await batchCreateOutlines([newOutline]);
-      await loadData();
-    } catch (error: any) {
-      toast({
-        title: '添加失败',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleUpdateSummary = async (id: string, summary: string) => {
-    try {
-      await updateOutline(id, { summary });
-    } catch (error) {
-      toast({
-        title: '更新失败',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleToggleSelect = async (id: string, selected: boolean) => {
-    try {
-      await updateOutline(id, { selected: !selected });
-      await loadData();
-    } catch (error) {
-      toast({
-        title: '更新失败',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteOutline(id);
-      await loadData();
-    } catch (error) {
-      toast({
-        title: '删除失败',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id) {
-      const oldIndex = outlines.findIndex((o) => o.id === active.id);
-      const newIndex = outlines.findIndex((o) => o.id === over.id);
-
-      const newOutlines = arrayMove(outlines, oldIndex, newIndex);
-      setOutlines(newOutlines);
-
-      // 更新顺序到数据库
-      const updates = newOutlines.map((outline, index) => ({
-        id: outline.id,
-        paragraph_order: index + 1,
-      }));
-
-      try {
-        await reorderOutlines(projectId, updates);
-      } catch (error) {
-        toast({
-          title: '更新顺序失败',
-          variant: 'destructive',
-        });
-        await loadData(); // 重新加载
-      }
-    }
-  };
-
-  // 连贯性校验
-  const handleVerifyCoherence = async () => {
-    setVerifyingCoherence(true);
-    try {
-      const selectedOutlines = outlines.filter((o) => o.selected && o.paragraph_structure);
-      
-      if (selectedOutlines.length === 0) {
-        toast({
-          title: '请先完成段落论证结构',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const { data, error } = await supabase.functions.invoke('verify-coherence', {
-        body: {
-          coreThesis,
-          paragraphs: selectedOutlines.map((o) => o.paragraph_structure),
-        },
-      });
-
-      if (error) throw error;
-
-      setCoherenceResult(data);
-
-      // 检查是否有问题
-      const hasIssues = data.coherence_check.some((c: any) => c.coherence_status === '有问题');
-      
-      if (hasIssues) {
-        toast({
-          title: '发现连贯性问题',
-          description: '请查看详细报告并调整段落结构',
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: '连贯性校验通过',
-          description: '可以进入下一阶段生成正文',
-        });
-      }
-    } catch (error: any) {
-      toast({
-        title: '校验失败',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setVerifyingCoherence(false);
-    }
-  };
-
   const handleConfirm = async () => {
-    const selectedCount = outlines.filter((o) => o.selected).length;
-    if (selectedCount === 0) {
+    if (!coreThesis || argumentBlocks.length === 0) {
       toast({
-        title: '请至少选择一个段落',
+        title: '请先完成文章级论证结构',
         variant: 'destructive',
       });
       return;
@@ -545,10 +279,10 @@ ${selectedKnowledge.map((k) => `- ${k.title}: ${k.content}`).join('\n')}
 
     setConfirming(true);
     try {
-      await updateProject(projectId, { status: 'drafting' });
+      await updateProject(projectId, { status: 'paragraph_structure_confirmed' });
       toast({
         title: '确认成功',
-        description: '进入下一阶段',
+        description: '进入段落结构阶段',
       });
       onComplete();
     } catch (error) {
@@ -749,150 +483,12 @@ ${selectedKnowledge.map((k) => `- ${k.title}: ${k.content}`).join('\n')}
         </CardContent>
       </Card>
 
-      {/* 段落摘要生成 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>段落摘要</CardTitle>
-          <CardDescription>生成并编辑文章段落结构</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <Button onClick={handleGenerate} disabled={generating || outlines.length > 0}>
-              <Plus className="h-4 w-4 mr-2" />
-              {generating ? '生成中...' : '生成段落摘要'}
-            </Button>
-            {outlines.length > 0 && (
-              <Button onClick={handleAddOutline} variant="outline">
-                <Plus className="h-4 w-4 mr-2" />
-                添加段落
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 段落列表 */}
-      {outlines.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>段落列表</CardTitle>
-            <CardDescription>
-              已选择 {outlines.filter((o) => o.selected).length} / {outlines.length} 个段落
-              <br />
-              <span className="text-xs">拖拽段落可调整顺序，确保观点递进或平行，文章结构通顺</span>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={outlines.map((o) => o.id)} strategy={verticalListSortingStrategy}>
-                {outlines.map((outline, index) => (
-                  <SortableOutlineItem
-                    key={outline.id}
-                    outline={outline}
-                    index={index}
-                    onUpdate={handleUpdateSummary}
-                    onToggle={handleToggleSelect}
-                    onDelete={handleDelete}
-                    onEdit={setEditingOutline}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-            
-            {/* 连贯性校验结果 */}
-            {coherenceResult && (
-              <Card className="mt-4 border-primary">
-                <CardHeader>
-                  <CardTitle className="text-base">连贯性校验结果</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {coherenceResult.coherence_check.map((check: any, index: number) => (
-                    <div key={index} className="p-3 border border-border rounded-md">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">段落 {check.paragraph_index}</span>
-                        <Badge variant={check.coherence_status === '通过' ? 'default' : 'destructive'}>
-                          {check.coherence_status}
-                        </Badge>
-                      </div>
-                      <div className="text-sm space-y-1">
-                        <p>
-                          <span className="text-muted-foreground">论证角色：</span>
-                          {check.role}
-                        </p>
-                        {check.issues && (
-                          <p className="text-destructive">
-                            <span className="text-muted-foreground">问题：</span>
-                            {check.issues}
-                          </p>
-                        )}
-                        {check.needs_transition === '是' && (
-                          <p className="text-amber-600">
-                            <span className="text-muted-foreground">建议：</span>
-                            需要增加过渡 - {check.transition_reason}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  <div className="pt-2 border-t border-border">
-                    <p className="text-sm">
-                      <span className="font-medium">整体评价：</span>
-                      {coherenceResult.overall_assessment}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                onClick={handleVerifyCoherence}
-                disabled={verifyingCoherence || outlines.filter((o) => o.selected && o.paragraph_structure).length === 0}
-                variant="outline"
-              >
-                {verifyingCoherence ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    校验中...
-                  </>
-                ) : (
-                  '连贯性校验'
-                )}
-              </Button>
-              <Button onClick={handleConfirm} disabled={confirming}>
-                {confirming ? '确认中...' : '确认结构'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 段落摘要编辑器 */}
-      {editingOutline && (
-        <ParagraphSummaryEditor
-          outline={editingOutline}
-          projectId={projectId}
-          articleStructure={
-            coreThesis
-              ? {
-                  core_thesis: coreThesis,
-                  argument_blocks: argumentBlocks,
-                }
-              : undefined
-          }
-          previousOutline={
-            outlines.find((o) => o.paragraph_order === editingOutline.paragraph_order - 1)
-          }
-          referenceArticles={referenceArticles}
-          materials={materials}
-          knowledgeBase={knowledgeBase}
-          onSave={() => {
-            setEditingOutline(null);
-            loadData();
-          }}
-          onClose={() => setEditingOutline(null)}
-        />
-      )}
+      {/* 确认按钮 */}
+      <div className="flex justify-end">
+        <Button onClick={handleConfirm} disabled={confirming || !coreThesis || argumentBlocks.length === 0}>
+          {confirming ? '确认中...' : '确认并进入段落结构'}
+        </Button>
+      </div>
     </div>
   );
 }

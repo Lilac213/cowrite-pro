@@ -11,17 +11,19 @@ import { useToast } from '@/hooks/use-toast';
 import BriefStage from '@/components/workflow/BriefStage';
 import KnowledgeStage from '@/components/workflow/KnowledgeStage';
 import OutlineStage from '@/components/workflow/OutlineStage';
+import ParagraphStructureStage from '@/components/workflow/ParagraphStructureStage';
 import MaterialsStage from '@/components/workflow/MaterialsStage';
 import DraftStage from '@/components/workflow/DraftStage';
 import ReviewStage from '@/components/workflow/ReviewStage';
 
 const stages = [
   { key: 'init', label: '开始', progress: 0 },
-  { key: 'confirm_brief', label: '明确需求', progress: 14 },
-  { key: 'knowledge_selected', label: '资料查询', progress: 28 },
-  { key: 'outline_confirmed', label: '段落摘要', progress: 42 },
-  { key: 'drafting', label: '文章生成', progress: 56 },
-  { key: 'review_pass_1', label: '内容审校', progress: 70 },
+  { key: 'confirm_brief', label: '明确需求', progress: 12 },
+  { key: 'knowledge_selected', label: '资料查询', progress: 24 },
+  { key: 'outline_confirmed', label: '文章结构', progress: 36 },
+  { key: 'paragraph_structure_confirmed', label: '段落结构', progress: 48 },
+  { key: 'drafting', label: '文章生成', progress: 60 },
+  { key: 'review_pass_1', label: '内容审校', progress: 75 },
   { key: 'completed', label: '完成', progress: 100 },
 ];
 
@@ -106,6 +108,8 @@ export default function ProjectWorkflowPage() {
         return <KnowledgeStage projectId={projectId} onComplete={loadProject} />;
       case 'outline_confirmed':
         return <OutlineStage projectId={projectId} onComplete={loadProject} />;
+      case 'paragraph_structure_confirmed':
+        return <ParagraphStructureStage projectId={projectId} onComplete={loadProject} />;
       case 'drafting':
         return <MaterialsStage projectId={projectId} onComplete={loadProject} />;
       case 'review_pass_1':

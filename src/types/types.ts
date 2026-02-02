@@ -5,6 +5,7 @@ export type ProjectStatus =
   | 'confirm_brief'
   | 'knowledge_selected'
   | 'outline_confirmed'
+  | 'paragraph_structure_confirmed'
   | 'drafting'
   | 'review_pass_1'
   | 'review_pass_2'
@@ -50,6 +51,7 @@ export interface Project {
   title: string;
   status: ProjectStatus;
   article_argument_structure?: ArticleArgumentStructure;
+  paragraph_structures?: any[];
   created_at: string;
   updated_at: string;
 }
