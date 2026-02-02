@@ -218,7 +218,14 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message || '调整论证结构失败');
+      }
+
+      if (!data) {
+        throw new Error('未返回调整后的结构');
+      }
 
       // 使用调整后的结构
       const adjustedStructure = {
@@ -246,6 +253,7 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
         description: '论证结构已优化并保存',
       });
     } catch (error: any) {
+      console.error('Save article structure error:', error);
       toast({
         title: '保存失败',
         description: error.message,
@@ -283,17 +291,23 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Adjust structure error:', error);
+        throw new Error(error.message || '调整失败');
+      }
 
-      setArgumentBlocks(data.argument_blocks);
-      toast({
-        title: '已添加',
-        description: '论证块已自动调整以保持连贯',
-      });
+      if (data && data.argument_blocks) {
+        setArgumentBlocks(data.argument_blocks);
+        toast({
+          title: '已添加',
+          description: '论证块已自动调整以保持连贯',
+        });
+      }
     } catch (error: any) {
+      console.error('Add block error:', error);
       toast({
         title: '自动调整失败',
-        description: '请手动调整论证块内容',
+        description: error.message || '请手动调整论证块内容',
         variant: 'destructive',
       });
     }
@@ -319,17 +333,23 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Adjust structure error:', error);
+        throw new Error(error.message || '调整失败');
+      }
 
-      setArgumentBlocks(data.argument_blocks);
-      toast({
-        title: '已删除',
-        description: '论证结构已自动调整',
-      });
+      if (data && data.argument_blocks) {
+        setArgumentBlocks(data.argument_blocks);
+        toast({
+          title: '已删除',
+          description: '论证结构已自动调整',
+        });
+      }
     } catch (error: any) {
+      console.error('Delete block error:', error);
       toast({
         title: '自动调整失败',
-        description: '请手动调整论证块内容',
+        description: error.message || '请手动调整论证块内容',
         variant: 'destructive',
       });
     }

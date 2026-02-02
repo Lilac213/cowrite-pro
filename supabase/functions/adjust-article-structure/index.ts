@@ -134,31 +134,54 @@ ${taskDescription}
     try {
       structure = JSON.parse(fullText);
     } catch (e) {
+      console.error('Initial JSON parse failed, trying to extract from markdown:', e);
       const jsonMatch = fullText.match(/```json\s*([\s\S]*?)\s*```/) || fullText.match(/```\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
-        structure = JSON.parse(jsonMatch[1]);
+        try {
+          structure = JSON.parse(jsonMatch[1]);
+        } catch (e2) {
+          console.error('Markdown JSON parse failed:', e2);
+          throw new Error(`无法解析JSON: ${jsonMatch[1].substring(0, 100)}...`);
+        }
       } else {
         const jsonStart = fullText.indexOf('{');
         const jsonEnd = fullText.lastIndexOf('}');
         if (jsonStart !== -1 && jsonEnd !== -1) {
-          structure = JSON.parse(fullText.substring(jsonStart, jsonEnd + 1));
+          const jsonStr = fullText.substring(jsonStart, jsonEnd + 1);
+          try {
+            structure = JSON.parse(jsonStr);
+          } catch (e3) {
+            console.error('Extracted JSON parse failed:', e3);
+            console.error('Full text:', fullText);
+            throw new Error(`无法解析返回的JSON结构。返回内容: ${fullText.substring(0, 200)}...`);
+          }
         } else {
-          throw new Error('无法解析返回的JSON结构');
+          console.error('No JSON found in response:', fullText);
+          throw new Error(`响应中未找到JSON结构。返回内容: ${fullText.substring(0, 200)}...`);
         }
       }
     }
 
     if (!structure.core_thesis || !structure.argument_blocks) {
-      throw new Error('返回的结构缺少必要字段');
+      console.error('Missing required fields in structure:', structure);
+      throw new Error(`返回的结构缺少必要字段。当前结构: ${JSON.stringify(structure)}`);
     }
 
-    // 确保保留原始的block id
+    // 确保保留原始的block id，并为新增的块生成新ID
     if (argumentBlocks && Array.isArray(argumentBlocks)) {
+      const timestamp = Date.now();
       structure.argument_blocks = structure.argument_blocks.map((block: any, index: number) => {
-        const originalBlock = argumentBlocks[index];
+        // 尝试通过标题匹配原始块
+        const matchedOriginal = argumentBlocks.find((orig: any) => 
+          orig.title === block.title || orig.description === block.description
+        );
+        
+        // 如果找到匹配的原始块，保留其ID；否则生成新ID
+        const blockId = matchedOriginal?.id || `block_${timestamp}_${index}`;
+        
         return {
           ...block,
-          id: originalBlock?.id || block.id || `block_${Date.now()}_${index}`,
+          id: blockId,
           order: index + 1,
         };
       });
@@ -170,8 +193,12 @@ ${taskDescription}
     );
   } catch (error) {
     console.error('Adjust structure error:', error);
+    const errorMessage = error instanceof Error ? error.message : '调整失败，请重试';
     return new Response(
-      JSON.stringify({ error: error.message || '调整失败，请重试' }),
+      JSON.stringify({ 
+        error: errorMessage,
+        details: error instanceof Error ? error.stack : undefined
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
