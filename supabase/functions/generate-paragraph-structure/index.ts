@@ -11,11 +11,21 @@ serve(async (req) => {
   }
 
   try {
-    const { coreThesis, argumentBlocks, operation, blockIndex } = await req.json();
+    const {
+      coreThesis,
+      currentArgumentBlock,
+      blockTask,
+      previousParagraphTask,
+      relationWithPrevious,
+      newInformation,
+      referenceContent,
+      authorMaterials,
+      retrievedData,
+    } = await req.json();
 
-    if (!coreThesis || !argumentBlocks) {
+    if (!coreThesis || !currentArgumentBlock) {
       return new Response(
-        JSON.stringify({ error: '缺少核心论点或论证块信息' }),
+        JSON.stringify({ error: '缺少必要参数' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -28,52 +38,66 @@ serve(async (req) => {
       );
     }
 
-    // 构建当前结构描述
-    let currentStructure = `核心论点：${coreThesis}\n\n当前论证块：\n`;
-    argumentBlocks.forEach((block: any, index: number) => {
-      currentStructure += `${index + 1}. ${block.title}\n   作用：${block.description}\n`;
-    });
-
-    let taskDescription = '';
-    if (operation === 'add') {
-      taskDescription = `用户在位置 ${blockIndex + 1} 添加了一个新的论证块。请为这个新论证块生成合适的标题和作用说明，并确保与前后论证块的逻辑关系流畅。同时检查最后一个论证块是否为总结性质（复述总论点/总结升华/展望未来），如果不是，请调整最后一个论证块使其成为合适的结尾。`;
-    } else if (operation === 'delete') {
-      taskDescription = `用户删除了位置 ${blockIndex + 1} 的论证块。请调整剩余论证块的关系说明，确保整体论证流畅。同时确保最后一个论证块为总结性质（复述总论点/总结升华/展望未来）。`;
-    } else if (operation === 'modify') {
-      taskDescription = `用户修改了位置 ${blockIndex + 1} 的论证块。请检查并调整相邻论证块的关系说明，确保整体论证连贯。同时确保最后一个论证块为总结性质（复述总论点/总结升华/展望未来）。`;
-    } else {
-      taskDescription = `请检查整体论证结构的连贯性，确保论证块之间的关系清晰，并确保最后一个论证块为总结性质（复述总论点/总结升华/展望未来）。`;
+    // 构建输入素材部分
+    let materialsSection = '';
+    if (referenceContent) {
+      materialsSection += `- 参考内容（如有）：\n${referenceContent}\n`;
+    }
+    if (authorMaterials) {
+      materialsSection += `- 作者个人素材（如有）：\n${authorMaterials}\n`;
+    }
+    if (retrievedData) {
+      materialsSection += `- 检索资料摘要（如有）：\n${retrievedData}\n`;
     }
 
-    const prompt = `你是写作系统中的「文章级论证架构调整模块」。
+    const prompt = `你是写作系统中的【段落级推理模块】。
 
-【当前结构】
-${currentStructure}
+你只负责生成"段落的论证结构"，而不是正文。
 
-【调整任务】
-${taskDescription}
+【文章级约束】
+- 核心论点：${coreThesis}
+- 当前段落所属论证块：${currentArgumentBlock}
+- 该论证块的论证任务：${blockTask || '展开论证'}
 
-【要求】
-1. 保持核心论点不变
-2. 确保论证块之间的逻辑关系清晰（并列/递进/因果/对比）
-3. 最后一个论证块必须是总结性质：复述总论点、总结升华或展望未来
-4. 整体结构应该完整：引入→展开→总结
-5. 不生成具体段落内容
-6. 输出应稳定、抽象、可编辑
+【段落关系信息】
+- 上一段完成的论证任务：${previousParagraphTask || '无（首段）'}
+- 当前段与上一段的关系：
+  ${relationWithPrevious || '承接'}
+- 当前段新增的信息是什么：${newInformation || '待确定'}
 
-请返回调整后的完整结构，JSON格式：
+【输入素材】
+${materialsSection || '- 无'}
+
+【你的任务】
+按以下顺序输出段落结构：
+1. input_assumption（承接前文的前提）
+2. core_claim（本段要证明的核心主张）
+3. sub_claims（1–3 条分论据）
+4. output_state（为下一段铺垫的逻辑出口）
+
+【输出格式】
+input_assumption：
+core_claim：
+- sub_claim 1：
+- sub_claim 2：
+- sub_claim 3（如有）：
+output_state：
+
+【约束】
+- 不生成完整句段
+- 不引入案例、数据
+- 所有内容必须服务于文章级论证块
+
+请将输出转换为JSON格式返回：
 {
-  "core_thesis": "核心论点（保持不变）",
-  "argument_blocks": [
-    {
-      "id": "block_1",
-      "title": "论证块标题",
-      "description": "该论证块的作用",
-      "order": 1,
-      "relation": "与前一块的关系"
-    }
+  "input_assumption": "承接前文的前提",
+  "core_claim": "本段要证明的核心主张",
+  "sub_claims": [
+    "分论据1",
+    "分论据2",
+    "分论据3（如有）"
   ],
-  "structure_relations": "整体结构关系说明"
+  "output_state": "为下一段铺垫的逻辑出口"
 }`;
 
     const response = await fetch('https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse', {
@@ -148,20 +172,8 @@ ${taskDescription}
       }
     }
 
-    if (!structure.core_thesis || !structure.argument_blocks) {
+    if (!structure.core_claim || !structure.sub_claims) {
       throw new Error('返回的结构缺少必要字段');
-    }
-
-    // 确保保留原始的block id
-    if (argumentBlocks && Array.isArray(argumentBlocks)) {
-      structure.argument_blocks = structure.argument_blocks.map((block: any, index: number) => {
-        const originalBlock = argumentBlocks[index];
-        return {
-          ...block,
-          id: originalBlock?.id || block.id || `block_${Date.now()}_${index}`,
-          order: index + 1,
-        };
-      });
     }
 
     return new Response(
@@ -169,9 +181,9 @@ ${taskDescription}
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Adjust structure error:', error);
+    console.error('Generate paragraph structure error:', error);
     return new Response(
-      JSON.stringify({ error: error.message || '调整失败，请重试' }),
+      JSON.stringify({ error: error.message || '生成失败，请重试' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

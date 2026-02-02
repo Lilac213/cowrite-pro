@@ -1,14 +1,33 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
-import { Loader2, Plus, Trash2, Sparkles, Save } from 'lucide-react';
+import { Loader2, Plus, Trash2, Sparkles, Save, AlertCircle } from 'lucide-react';
 import { supabase } from '@/db/supabase';
-import type { Outline, SubArgument, EvidenceItem } from '@/types';
+import type { Outline } from '@/types';
+import { useToast } from '@/hooks/use-toast';
+
+interface ParagraphStructure {
+  input_assumption: string;
+  core_claim: string;
+  sub_claims: string[];
+  output_state: string;
+}
+
+interface SupportingMaterial {
+  type: string;
+  content: string;
+  uncertainty?: string;
+}
+
+interface SubClaimWithMaterials {
+  sub_claim: string;
+  materials: SupportingMaterial[];
+  selected_materials: number[];
+}
 
 interface ParagraphSummaryEditorProps {
   outline: Outline;
@@ -22,6 +41,7 @@ interface ParagraphSummaryEditorProps {
       order: number;
     }>;
   };
+  previousOutline?: Outline;
   referenceArticles?: any[];
   materials?: any[];
   knowledgeBase?: any[];
@@ -33,341 +53,382 @@ export default function ParagraphSummaryEditor({
   outline,
   projectId,
   articleStructure,
+  previousOutline,
   referenceArticles = [],
   materials = [],
   knowledgeBase = [],
   onSave,
   onClose,
 }: ParagraphSummaryEditorProps) {
-  const [mainArgument, setMainArgument] = useState(outline.reasoning_structure?.main_argument || '');
-  const [subArguments, setSubArguments] = useState<SubArgument[]>(
-    outline.reasoning_structure?.sub_arguments || []
+  const { toast } = useToast();
+  
+  const [paragraphStructure, setParagraphStructure] = useState<ParagraphStructure | null>(
+    outline.paragraph_structure || null
   );
-  const [conclusion, setConclusion] = useState(outline.reasoning_structure?.conclusion || '');
-  const [evidencePool, setEvidencePool] = useState<EvidenceItem[]>(outline.evidence_pool || []);
-  const [generating, setGenerating] = useState(false);
-  const [generatingEvidence, setGeneratingEvidence] = useState(false);
+  
+  const [subClaimsWithMaterials, setSubClaimsWithMaterials] = useState<SubClaimWithMaterials[]>([]);
+  
+  const [generatingStructure, setGeneratingStructure] = useState(false);
+  const [generatingEvidence, setGeneratingEvidence] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // 生成论证结构（Step 1）
-  const handleGenerateReasoning = async () => {
-    setGenerating(true);
+  useEffect(() => {
+    if (outline.paragraph_structure) {
+      setParagraphStructure(outline.paragraph_structure);
+      
+      if (outline.paragraph_structure.sub_claims) {
+        setSubClaimsWithMaterials(
+          outline.paragraph_structure.sub_claims.map((sc: string) => ({
+            sub_claim: sc,
+            materials: [],
+            selected_materials: [],
+          }))
+        );
+      }
+    }
+  }, [outline]);
+
+  const handleGenerateParagraphStructure = async () => {
+    setGeneratingStructure(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-paragraph-reasoning', {
+      const currentBlock = articleStructure?.argument_blocks.find(
+        (block) => block.order === Math.ceil(outline.paragraph_order / 2)
+      );
+
+      const { data, error } = await supabase.functions.invoke('generate-paragraph-structure', {
         body: {
-          paragraphSummary: outline.summary,
-          articleStructure,
-          argumentBlock: articleStructure?.argument_blocks.find(
-            (block) => block.order === outline.paragraph_order
-          ),
-          referenceArticles,
-          materials,
-          knowledgeBase,
+          coreThesis: articleStructure?.core_thesis,
+          currentArgumentBlock: currentBlock?.title,
+          blockTask: currentBlock?.description,
+          previousParagraphTask: previousOutline?.paragraph_structure?.core_claim,
+          relationWithPrevious: '承接',
+          newInformation: outline.summary,
+          referenceContent: referenceArticles.map((r) => r.content).join('\n'),
+          authorMaterials: materials.map((m) => m.content).join('\n'),
+          retrievedData: knowledgeBase.map((k) => k.content).join('\n'),
         },
       });
 
       if (error) throw error;
 
-      setMainArgument(data.main_argument);
-      setSubArguments(data.sub_arguments);
-      setConclusion(data.conclusion);
+      setParagraphStructure(data);
+      
+      setSubClaimsWithMaterials(
+        data.sub_claims.map((sc: string) => ({
+          sub_claim: sc,
+          materials: [],
+          selected_materials: [],
+        }))
+      );
+
+      toast({
+        title: '生成成功',
+        description: '段落论证结构已生成',
+      });
     } catch (error: any) {
-      console.error('生成论证结构失败:', error);
-      alert('生成论证结构失败：' + error.message);
+      toast({
+        title: '生成失败',
+        description: error.message,
+        variant: 'destructive',
+      });
     } finally {
-      setGenerating(false);
+      setGeneratingStructure(false);
     }
   };
 
-  // 生成论据池（Step 2）
-  const handleGenerateEvidence = async () => {
-    if (subArguments.length === 0) {
-      alert('请先生成或填写分论据');
+  const handleGenerateEvidence = async (index: number) => {
+    if (!paragraphStructure) return;
+
+    setGeneratingEvidence(index);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-evidence', {
+        body: {
+          articleTopic: articleStructure?.core_thesis,
+          coreClaim: paragraphStructure.core_claim,
+          subClaim: subClaimsWithMaterials[index].sub_claim,
+        },
+      });
+
+      if (error) throw error;
+
+      const updated = [...subClaimsWithMaterials];
+      updated[index].materials = data.supporting_materials;
+      setSubClaimsWithMaterials(updated);
+
+      toast({
+        title: '生成成功',
+        description: '支撑材料已生成',
+      });
+    } catch (error: any) {
+      toast({
+        title: '生成失败',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setGeneratingEvidence(null);
+    }
+  };
+
+  const toggleMaterialSelection = (subClaimIndex: number, materialIndex: number) => {
+    const updated = [...subClaimsWithMaterials];
+    const selected = updated[subClaimIndex].selected_materials;
+    
+    if (selected.includes(materialIndex)) {
+      updated[subClaimIndex].selected_materials = selected.filter((i) => i !== materialIndex);
+    } else {
+      updated[subClaimIndex].selected_materials = [...selected, materialIndex];
+    }
+    
+    setSubClaimsWithMaterials(updated);
+  };
+
+  const handleSave = async () => {
+    if (!paragraphStructure) {
+      toast({
+        title: '请先生成论证结构',
+        variant: 'destructive',
+      });
       return;
     }
 
-    setGeneratingEvidence(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('generate-evidence-pool', {
-        body: {
-          subArguments,
-          referenceArticles,
-          materials,
-          knowledgeBase,
-        },
-      });
-
-      if (error) throw error;
-
-      setEvidencePool(data.evidence_pool);
-    } catch (error: any) {
-      console.error('生成论据池失败:', error);
-      alert('生成论据池失败：' + error.message);
-    } finally {
-      setGeneratingEvidence(false);
-    }
-  };
-
-  // 添加分论据
-  const handleAddSubArgument = () => {
-    const newSubArg: SubArgument = {
-      id: `sub_${Date.now()}`,
-      content: '',
-      order: subArguments.length + 1,
-    };
-    setSubArguments([...subArguments, newSubArg]);
-  };
-
-  // 删除分论据
-  const handleDeleteSubArgument = (id: string) => {
-    setSubArguments(subArguments.filter((arg) => arg.id !== id));
-    // 同时删除相关的论据
-    setEvidencePool(evidencePool.filter((ev) => ev.sub_argument_id !== id));
-  };
-
-  // 更新分论据内容
-  const handleUpdateSubArgument = (id: string, content: string) => {
-    setSubArguments(
-      subArguments.map((arg) => (arg.id === id ? { ...arg, content } : arg))
-    );
-  };
-
-  // 切换论据选择状态
-  const handleToggleEvidence = (id: string) => {
-    setEvidencePool(
-      evidencePool.map((ev) => (ev.id === id ? { ...ev, selected: !ev.selected } : ev))
-    );
-  };
-
-  // 保存
-  const handleSave = async () => {
     setSaving(true);
     try {
-      // 更新论证结构
-      const { error: reasoningError } = await supabase
+      const { error } = await supabase
         .from('outlines')
-        // @ts-ignore - reasoning_structure and evidence_pool are JSONB fields
+        // @ts-ignore - JSONB fields not in generated types
         .update({
-          reasoning_structure: {
-            main_argument: mainArgument,
-            sub_arguments: subArguments,
-            conclusion,
-          },
-          evidence_pool: evidencePool,
+          paragraph_structure: paragraphStructure,
+          sub_claims_materials: subClaimsWithMaterials,
         })
         .eq('id', outline.id);
 
-      if (reasoningError) throw reasoningError;
+      if (error) throw error;
 
+      toast({
+        title: '保存成功',
+      });
+      
       onSave();
     } catch (error: any) {
-      console.error('保存失败:', error);
-      alert('保存失败：' + error.message);
+      toast({
+        title: '保存失败',
+        description: error.message,
+        variant: 'destructive',
+      });
     } finally {
       setSaving(false);
     }
   };
 
-  const getEvidenceTypeLabel = (type: string) => {
-    switch (type) {
-      case 'case':
-        return '案例';
-      case 'data':
-        return '数据';
-      case 'analogy':
-        return '类比';
-      default:
-        return type;
-    }
-  };
-
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
-        <CardHeader className="border-b">
+      <Card className="w-full max-w-7xl max-h-[90vh] overflow-y-auto">
+        <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>段落摘要生成 - 两步走</CardTitle>
+            <div>
+              <CardTitle>段落 {outline.paragraph_order} - 论证结构编辑</CardTitle>
+              <CardDescription className="mt-1">{outline.summary}</CardDescription>
+            </div>
             <div className="flex gap-2">
-              <Button onClick={onClose} variant="outline">
-                取消
+              <Button onClick={handleSave} disabled={saving || !paragraphStructure}>
+                <Save className="h-4 w-4 mr-2" />
+                {saving ? '保存中...' : '保存'}
               </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                保存
+              <Button variant="outline" onClick={onClose}>
+                关闭
               </Button>
             </div>
           </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            段落 {outline.paragraph_order}：{outline.summary}
-          </p>
-          {articleStructure && (
-            <p className="text-sm text-muted-foreground">
-              文章核心论点：{articleStructure.core_thesis}
-            </p>
-          )}
         </CardHeader>
-
-        <CardContent className="flex-1 overflow-auto p-6">
+        <CardContent>
           <div className="grid grid-cols-2 gap-6">
-            {/* 左侧：论证结构（Step 1） */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Step 1：段落级观点结构整理</h3>
-                <Button onClick={handleGenerateReasoning} disabled={generating} size="sm">
-                  {generating ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-4 w-4 mr-2" />
-                  )}
-                  生成结构
+                <h3 className="text-lg font-semibold">段落级论证结构</h3>
+                <Button
+                  onClick={handleGenerateParagraphStructure}
+                  disabled={generatingStructure}
+                  size="sm"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {generatingStructure ? '生成中...' : '生成结构'}
                 </Button>
               </div>
 
-              <Card>
-                <CardContent className="pt-6 space-y-4">
-                  {/* 总论据 */}
+              {paragraphStructure ? (
+                <div className="space-y-4">
                   <div>
-                    <label className="text-sm font-semibold text-primary mb-2 block">
-                      总论据
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Input Assumption（承接前文的前提）
                     </label>
                     <Textarea
-                      value={mainArgument}
-                      onChange={(e) => setMainArgument(e.target.value)}
-                      placeholder="该段落的核心论点，一句话"
+                      value={paragraphStructure.input_assumption}
+                      onChange={(e) =>
+                        setParagraphStructure({ ...paragraphStructure, input_assumption: e.target.value })
+                      }
                       rows={2}
+                      className="mt-1"
                     />
                   </div>
 
-                  <Separator />
-
-                  {/* 分论据 */}
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-sm font-semibold text-primary">分论据</label>
-                      <Button onClick={handleAddSubArgument} size="sm" variant="outline">
-                        <Plus className="h-4 w-4 mr-1" />
-                        添加
-                      </Button>
-                    </div>
-                    <div className="space-y-3">
-                      {subArguments.map((arg, index) => (
-                        <div key={arg.id} className="flex gap-2">
-                          <span className="text-sm font-medium text-muted-foreground mt-2">
-                            {index + 1}.
-                          </span>
-                          <Textarea
-                            value={arg.content}
-                            onChange={(e) => handleUpdateSubArgument(arg.id, e.target.value)}
-                            placeholder="分论据内容"
-                            rows={2}
-                            className="flex-1"
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Core Claim（本段要证明的核心主张）
+                    </label>
+                    <Textarea
+                      value={paragraphStructure.core_claim}
+                      onChange={(e) =>
+                        setParagraphStructure({ ...paragraphStructure, core_claim: e.target.value })
+                      }
+                      rows={2}
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Sub Claims（分论据）
+                    </label>
+                    <div className="space-y-2 mt-1">
+                      {paragraphStructure.sub_claims.map((claim, index) => (
+                        <div key={index} className="flex gap-2">
+                          <Input
+                            value={claim}
+                            onChange={(e) => {
+                              const updated = [...paragraphStructure.sub_claims];
+                              updated[index] = e.target.value;
+                              setParagraphStructure({ ...paragraphStructure, sub_claims: updated });
+                              
+                              const updatedMaterials = [...subClaimsWithMaterials];
+                              updatedMaterials[index].sub_claim = e.target.value;
+                              setSubClaimsWithMaterials(updatedMaterials);
+                            }}
+                            placeholder={`分论据 ${index + 1}`}
                           />
                           <Button
-                            onClick={() => handleDeleteSubArgument(arg.id)}
-                            size="sm"
                             variant="ghost"
-                            className="mt-2"
+                            size="sm"
+                            onClick={() => {
+                              const updated = paragraphStructure.sub_claims.filter((_, i) => i !== index);
+                              setParagraphStructure({ ...paragraphStructure, sub_claims: updated });
+                              setSubClaimsWithMaterials(subClaimsWithMaterials.filter((_, i) => i !== index));
+                            }}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       ))}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setParagraphStructure({
+                            ...paragraphStructure,
+                            sub_claims: [...paragraphStructure.sub_claims, ''],
+                          });
+                          setSubClaimsWithMaterials([
+                            ...subClaimsWithMaterials,
+                            { sub_claim: '', materials: [], selected_materials: [] },
+                          ]);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        添加分论据
+                      </Button>
                     </div>
                   </div>
 
-                  <Separator />
-
-                  {/* 小总结 */}
                   <div>
-                    <label className="text-sm font-semibold text-primary mb-2 block">
-                      小总结
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Output State（为下一段铺垫的逻辑出口）
                     </label>
                     <Textarea
-                      value={conclusion}
-                      onChange={(e) => setConclusion(e.target.value)}
-                      placeholder="对该段落论证的总结"
+                      value={paragraphStructure.output_state}
+                      onChange={(e) =>
+                        setParagraphStructure({ ...paragraphStructure, output_state: e.target.value })
+                      }
                       rows={2}
+                      className="mt-1"
                     />
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <p>暂无论证结构</p>
+                  <p className="text-sm mt-2">点击"生成结构"开始</p>
+                </div>
+              )}
             </div>
 
-            {/* 右侧：论据池（Step 2） */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Step 2：论据 / 案例支撑池</h3>
-                <Button
-                  onClick={handleGenerateEvidence}
-                  disabled={generatingEvidence || subArguments.length === 0}
-                  size="sm"
-                >
-                  {generatingEvidence ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-4 w-4 mr-2" />
-                  )}
-                  生成支撑材料
-                </Button>
-              </div>
+              <h3 className="text-lg font-semibold">论据及支撑材料</h3>
 
-              <Card>
-                <CardContent className="pt-6">
-                  {evidencePool.length === 0 ? (
-                    <div className="text-center text-muted-foreground py-8">
-                      <p>暂无支撑材料</p>
-                      <p className="text-sm mt-2">请先完成分论据，然后点击"生成支撑材料"</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {subArguments.map((arg) => {
-                        const relatedEvidence = evidencePool.filter(
-                          (ev) => ev.sub_argument_id === arg.id
-                        );
-                        if (relatedEvidence.length === 0) return null;
+              {subClaimsWithMaterials.length > 0 ? (
+                <div className="space-y-4">
+                  {subClaimsWithMaterials.map((item, index) => (
+                    <Card key={index} className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium">
+                            分论据 {index + 1}：{item.sub_claim || '（未填写）'}
+                          </p>
+                          <Button
+                            onClick={() => handleGenerateEvidence(index)}
+                            disabled={generatingEvidence === index || !item.sub_claim}
+                            size="sm"
+                            variant="outline"
+                          >
+                            {generatingEvidence === index ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-4 w-4 mr-2" />
+                            )}
+                            生成材料
+                          </Button>
+                        </div>
 
-                        return (
-                          <div key={arg.id} className="space-y-2">
-                            <p className="text-sm font-semibold text-primary">
-                              分论据：{arg.content}
-                            </p>
-                            <div className="space-y-2 pl-4 border-l-2 border-primary/20">
-                              {relatedEvidence.map((evidence) => (
-                                <Card key={evidence.id} className="p-3">
-                                  <div className="flex items-start gap-3">
-                                    <Checkbox
-                                      checked={evidence.selected}
-                                      onCheckedChange={() => handleToggleEvidence(evidence.id)}
-                                    />
-                                    <div className="flex-1 space-y-1">
-                                      <div className="flex items-center gap-2">
-                                        <Badge variant="secondary">
-                                          {getEvidenceTypeLabel(evidence.type)}
-                                        </Badge>
-                                        {evidence.uncertainty && (
-                                          <Badge variant="outline" className="text-xs">
-                                            ⚠️ {evidence.uncertainty}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      <p className="text-sm">{evidence.content}</p>
-                                      {evidence.source && (
-                                        <p className="text-xs text-muted-foreground">
-                                          来源：{evidence.source}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                </Card>
-                              ))}
-                            </div>
+                        {item.materials.length > 0 ? (
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">可选支撑材料：</p>
+                            {item.materials.map((material, mIndex) => (
+                              <div
+                                key={mIndex}
+                                className="flex items-start gap-2 p-2 border border-border rounded-md"
+                              >
+                                <Checkbox
+                                  checked={item.selected_materials.includes(mIndex)}
+                                  onCheckedChange={() => toggleMaterialSelection(index, mIndex)}
+                                />
+                                <div className="flex-1">
+                                  <Badge variant="secondary" className="text-xs mb-1">
+                                    {material.type}
+                                  </Badge>
+                                  <p className="text-sm">{material.content}</p>
+                                  {material.uncertainty && (
+                                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                                      <AlertCircle className="h-3 w-3" />
+                                      {material.uncertainty}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                        ) : (
+                          <p className="text-sm text-muted-foreground text-center py-4">
+                            暂无支撑材料，点击"生成材料"
+                          </p>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <p>请先生成左侧的论证结构</p>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>

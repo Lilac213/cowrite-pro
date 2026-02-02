@@ -38,7 +38,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Trash2, GripVertical, Sparkles, Edit, Save, X } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Sparkles, Edit, Save, X, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
 import ParagraphSummaryEditor from './ParagraphSummaryEditor';
@@ -114,6 +114,8 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
   const [referenceArticles, setReferenceArticles] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
   const [knowledgeBase, setKnowledgeBase] = useState<any[]>([]);
+  const [verifyingCoherence, setVerifyingCoherence] = useState(false);
+  const [coherenceResult, setCoherenceResult] = useState<any>(null);
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -460,6 +462,57 @@ ${selectedKnowledge.map((k) => `- ${k.title}: ${k.content}`).join('\n')}
     }
   };
 
+  // 连贯性校验
+  const handleVerifyCoherence = async () => {
+    setVerifyingCoherence(true);
+    try {
+      const selectedOutlines = outlines.filter((o) => o.selected && o.paragraph_structure);
+      
+      if (selectedOutlines.length === 0) {
+        toast({
+          title: '请先完成段落论证结构',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('verify-coherence', {
+        body: {
+          coreThesis,
+          paragraphs: selectedOutlines.map((o) => o.paragraph_structure),
+        },
+      });
+
+      if (error) throw error;
+
+      setCoherenceResult(data);
+
+      // 检查是否有问题
+      const hasIssues = data.coherence_check.some((c: any) => c.coherence_status === '有问题');
+      
+      if (hasIssues) {
+        toast({
+          title: '发现连贯性问题',
+          description: '请查看详细报告并调整段落结构',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: '连贯性校验通过',
+          description: '可以进入下一阶段生成正文',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: '校验失败',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setVerifyingCoherence(false);
+    }
+  };
+
   const handleConfirm = async () => {
     const selectedCount = outlines.filter((o) => o.selected).length;
     if (selectedCount === 0) {
@@ -725,7 +778,67 @@ ${selectedKnowledge.map((k) => `- ${k.title}: ${k.content}`).join('\n')}
                 ))}
               </SortableContext>
             </DndContext>
-            <div className="flex justify-end pt-4">
+            
+            {/* 连贯性校验结果 */}
+            {coherenceResult && (
+              <Card className="mt-4 border-primary">
+                <CardHeader>
+                  <CardTitle className="text-base">连贯性校验结果</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {coherenceResult.coherence_check.map((check: any, index: number) => (
+                    <div key={index} className="p-3 border border-border rounded-md">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium">段落 {check.paragraph_index}</span>
+                        <Badge variant={check.coherence_status === '通过' ? 'default' : 'destructive'}>
+                          {check.coherence_status}
+                        </Badge>
+                      </div>
+                      <div className="text-sm space-y-1">
+                        <p>
+                          <span className="text-muted-foreground">论证角色：</span>
+                          {check.role}
+                        </p>
+                        {check.issues && (
+                          <p className="text-destructive">
+                            <span className="text-muted-foreground">问题：</span>
+                            {check.issues}
+                          </p>
+                        )}
+                        {check.needs_transition === '是' && (
+                          <p className="text-amber-600">
+                            <span className="text-muted-foreground">建议：</span>
+                            需要增加过渡 - {check.transition_reason}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="pt-2 border-t border-border">
+                    <p className="text-sm">
+                      <span className="font-medium">整体评价：</span>
+                      {coherenceResult.overall_assessment}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                onClick={handleVerifyCoherence}
+                disabled={verifyingCoherence || outlines.filter((o) => o.selected && o.paragraph_structure).length === 0}
+                variant="outline"
+              >
+                {verifyingCoherence ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    校验中...
+                  </>
+                ) : (
+                  '连贯性校验'
+                )}
+              </Button>
               <Button onClick={handleConfirm} disabled={confirming}>
                 {confirming ? '确认中...' : '确认结构'}
               </Button>
@@ -746,6 +859,9 @@ ${selectedKnowledge.map((k) => `- ${k.title}: ${k.content}`).join('\n')}
                   argument_blocks: argumentBlocks,
                 }
               : undefined
+          }
+          previousOutline={
+            outlines.find((o) => o.paragraph_order === editingOutline.paragraph_order - 1)
           }
           referenceArticles={referenceArticles}
           materials={materials}

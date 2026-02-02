@@ -103,6 +103,25 @@ export interface ReasoningStructure {
   conclusion: string;
 }
 
+export interface ParagraphStructure {
+  input_assumption: string;
+  core_claim: string;
+  sub_claims: string[];
+  output_state: string;
+}
+
+export interface SupportingMaterial {
+  type: string;
+  content: string;
+  uncertainty?: string;
+}
+
+export interface SubClaimWithMaterials {
+  sub_claim: string;
+  materials: SupportingMaterial[];
+  selected_materials: number[];
+}
+
 export interface Outline {
   id: string;
   project_id: string;
@@ -111,6 +130,10 @@ export interface Outline {
   selected: boolean;
   reasoning_structure?: ReasoningStructure;
   evidence_pool?: EvidenceItem[];
+  paragraph_structure?: ParagraphStructure;
+  sub_claims_materials?: SubClaimWithMaterials[];
+  coherence_check?: any;
+  final_text?: string;
   created_at: string;
   updated_at: string;
 }
