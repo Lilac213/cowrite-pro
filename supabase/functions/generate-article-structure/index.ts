@@ -20,98 +20,148 @@ serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get('LLM_API_KEY');
+    const apiKey = Deno.env.get('INTEGRATIONS_API_KEY');
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: 'LLM API密钥未配置' }),
+        JSON.stringify({ error: 'API密钥未配置' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // 构建上下文
-    let context = `主题：${topic}\n\n`;
+    let context = `【写作目标/主题】\n${topic}\n\n`;
     
     if (requirements) {
-      context += `要求：${JSON.stringify(requirements, null, 2)}\n\n`;
+      context += `【目标读者和要求】\n${JSON.stringify(requirements, null, 2)}\n\n`;
     }
 
     if (referenceArticles && referenceArticles.length > 0) {
-      context += `参考文章：\n`;
+      context += `【参考文章摘要】\n`;
       referenceArticles.forEach((article: any, index: number) => {
         context += `${index + 1}. ${article.title}\n${article.content.substring(0, 500)}...\n\n`;
       });
     }
 
     if (materials && materials.length > 0) {
-      context += `个人素材：\n`;
+      context += `【作者已有观点或素材】\n`;
       materials.forEach((material: any, index: number) => {
         context += `${index + 1}. ${material.title}\n${material.content.substring(0, 300)}...\n\n`;
       });
     }
 
-    const prompt = `你是一位专业的论证结构设计专家。请根据以下信息，设计一个文章级的论证结构。
+    const prompt = `你是写作系统中的「文章级论证架构模块」。
+
+请基于以下输入，构建文章的整体论证结构，而不是生成正文内容。
 
 ${context}
 
-请设计一个清晰的论证结构，包括：
-1. 核心论点（core_thesis）：一句话概括文章要证明什么
-2. 论证块（argument_blocks）：3-5个论证块，每个包含：
-   - title: 论证块标题
-   - description: 该论证块的作用和要证明的内容
-   - order: 顺序编号
+【你的任务】
+1. 提炼文章的「核心论点」（一句话）
+2. 拆分 3–5 个一级论证块（章节级）
+3. 说明每个论证块的作用（为什么需要这一块）
+4. 标注论证块之间的关系（并列 / 递进 / 因果 / 对比）
 
-要求：
-- 论证块之间要有逻辑递进关系
-- 每个论证块的作用要明确
-- 不涉及具体案例或数据，只关注论证方向
-- 确保整体结构完整（引入→展开→总结）
-
-请以JSON格式返回，格式如下：
+【输出格式要求】
+请严格按照以下JSON格式返回：
 {
-  "core_thesis": "核心论点",
+  "core_thesis": "核心论点（一句话）",
   "argument_blocks": [
     {
       "id": "block_1",
       "title": "论证块标题",
-      "description": "论证块描述",
-      "order": 1
+      "description": "该论证块的作用说明",
+      "order": 1,
+      "relation": "与前一块的关系（递进/并列/因果/对比）"
     }
   ]
-}`;
+}
 
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
+【约束】
+- 不生成具体段落
+- 不引用案例、数据或研究
+- 输出应稳定、抽象、可编辑
+- 论证块之间要有清晰的逻辑关系
+- 确保整体结构完整（引入→展开→总结）`;
+
+    const response = await fetch('https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        'X-Gateway-Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          {
-            role: 'system',
-            content: '你是一位专业的论证结构设计专家，擅长设计清晰的文章论证框架。',
-          },
+        contents: [
           {
             role: 'user',
-            content: prompt,
-          },
-        ],
-        temperature: 0.7,
-        response_format: { type: 'json_object' },
+            parts: [{ text: prompt }]
+          }
+        ]
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       return new Response(
-        JSON.stringify({ error: `LLM API请求失败: ${errorText}` }),
+        JSON.stringify({ error: `API请求失败: ${errorText}` }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const result = await response.json();
-    const structure = JSON.parse(result.choices[0].message.content);
+    // 读取流式响应
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const jsonData = JSON.parse(line.slice(6));
+              if (jsonData.candidates && jsonData.candidates[0]?.content?.parts) {
+                const text = jsonData.candidates[0].content.parts[0]?.text || '';
+                fullText += text;
+              }
+            } catch (e) {
+              // 忽略解析错误
+            }
+          }
+        }
+      }
+    }
+
+    // 提取JSON内容
+    let structure;
+    try {
+      // 尝试直接解析
+      structure = JSON.parse(fullText);
+    } catch (e) {
+      // 尝试从markdown代码块中提取
+      const jsonMatch = fullText.match(/```json\s*([\s\S]*?)\s*```/) || fullText.match(/```\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        structure = JSON.parse(jsonMatch[1]);
+      } else {
+        // 尝试查找JSON对象
+        const jsonStart = fullText.indexOf('{');
+        const jsonEnd = fullText.lastIndexOf('}');
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          structure = JSON.parse(fullText.substring(jsonStart, jsonEnd + 1));
+        } else {
+          throw new Error('无法解析返回的JSON结构');
+        }
+      }
+    }
+
+    // 确保返回的结构包含必要字段
+    if (!structure.core_thesis || !structure.argument_blocks) {
+      throw new Error('返回的结构缺少必要字段');
+    }
 
     return new Response(
       JSON.stringify(structure),
