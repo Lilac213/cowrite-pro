@@ -238,12 +238,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               <div>
                 <h4 className="text-sm font-semibold mb-2">学术关键词（Google Scholar）</h4>
                 <div className="flex flex-wrap gap-2">
-                  {workflowResult.academicKeywords.main_keywords.map((keyword: string) => (
-                    <Badge key={keyword} variant="default">{keyword}</Badge>
-                  ))}
-                  {workflowResult.academicKeywords.related_keywords.map((keyword: string) => (
-                    <Badge key={keyword} variant="outline">{keyword}</Badge>
-                  ))}
+                  {workflowResult.academicKeywords.main_keywords.map((keyword: any, index: number) => {
+                    const keywordText = typeof keyword === 'string' ? keyword : (keyword.key_point || keyword.citation || keyword.source || JSON.stringify(keyword));
+                    return <Badge key={`main-${index}`} variant="default">{keywordText}</Badge>;
+                  })}
+                  {workflowResult.academicKeywords.related_keywords.map((keyword: any, index: number) => {
+                    const keywordText = typeof keyword === 'string' ? keyword : (keyword.key_point || keyword.citation || keyword.source || JSON.stringify(keyword));
+                    return <Badge key={`related-${index}`} variant="outline">{keywordText}</Badge>;
+                  })}
                 </div>
               </div>
             )}
@@ -253,9 +255,10 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               <div>
                 <h4 className="text-sm font-semibold mb-2">网页搜索查询（TheNews + Smart Search）</h4>
                 <div className="flex flex-wrap gap-2">
-                  {workflowResult.webQueries.queries.map((query: string) => (
-                    <Badge key={query} variant="secondary">{query}</Badge>
-                  ))}
+                  {workflowResult.webQueries.queries.map((query: any, index: number) => {
+                    const queryText = typeof query === 'string' ? query : (query.key_point || query.citation || query.source || JSON.stringify(query));
+                    return <Badge key={`query-${index}`} variant="secondary">{queryText}</Badge>;
+                  })}
                 </div>
               </div>
             )}
