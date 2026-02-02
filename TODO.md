@@ -46,6 +46,17 @@
   - [x] Add P6 writing-level summary generation
   - [x] Add synthesis button and display in KnowledgeStage
   - [x] Require synthesis before proceeding to next stage
+- [x] Step 9: Search Engine Replacement
+  - [x] Replace OpenAlex and Tavily with Google Scholar, TheNews, and Smart Search
+  - [x] Deploy new Edge Functions for improved search results
+  - [x] Update documentation and UI labels
+- [x] Step 10: Integrate Professional Prompts
+  - [x] Create prompts.ts constants file with all professional prompts
+  - [x] Integrate Default Polish Prompt for content review (Step 1)
+  - [x] Integrate Default Enhance Prompt for style review and AI reduction tool (Step 2)
+  - [x] Integrate Rhythm Prompt for detail polishing (Step 3)
+  - [x] Update ReviewStage component to use imported prompts
+  - [x] Update AIReducerPage to use DEFAULT_ENHANCE_PROMPT
 
 ## Notes
 - Using Supabase for authentication, database, and storage
@@ -53,7 +64,11 @@
 - Minimal design aesthetic with ample whitespace
 - State machine workflow: init → confirm_brief → knowledge_selected → outline_confirmed → drafting → review_pass_1 → review_pass_2 → review_pass_3 → completed
 - File storage structure: _briefs/, _knowledge_base/, _reference/, _human_character/
-- Hybrid search system: OpenAlex (academic) + Tavily (real-time)
+- Hybrid search system: Google Scholar (academic) + TheNews (news) + Smart Search (web)
 - P1: Intent decomposition, P2: Academic keywords, P3: Web queries, P4: Cross-source alignment, P5: Structured summary, P6: Writing-level synthesis
+- Professional prompts integrated:
+  - DEFAULT_POLISH_PROMPT: Content review (Step 1) - Deep explanatory polishing
+  - DEFAULT_ENHANCE_PROMPT: Style review (Step 2) + AI reduction tool - De-AI-ification
+  - RHYTHM_PROMPT: Detail polishing (Step 3) - Sentence and paragraph optimization
 - All core features implemented successfully
 - Lint passed with no errors

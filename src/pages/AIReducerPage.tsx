@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { FileDown } from 'lucide-react';
+import { DEFAULT_ENHANCE_PROMPT } from '@/constants/prompts';
 
 export default function AIReducerPage() {
   const [input, setInput] = useState('');
@@ -23,21 +24,8 @@ export default function AIReducerPage() {
 
     setProcessing(true);
     try {
-      const prompt = `请对以下文章进行降 AI 率处理：
-
-${input}
-
-要求：
-1. 删除套话：在当今时代、综上所述、值得注意的是
-2. 拆解 AI 句式：不是...而是...连续出现
-3. 替换书面词汇：显著提升 → 具体数字，充分利用 → 用好
-4. 改成口语化：进行操作 → 直接用动词
-5. 加入真实细节：抽象表达 → 具体数字/案例
-6. 加入个人态度：中立客观 → 明确观点
-
-请返回处理后的文章。`;
-
-      const result = await callLLMGenerate(prompt);
+      // 使用默认增强提示词进行降AI率处理
+      const result = await callLLMGenerate(input, '', DEFAULT_ENHANCE_PROMPT);
       setOutput(result);
       toast({
         title: '处理成功',
