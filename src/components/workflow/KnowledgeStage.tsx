@@ -41,30 +41,52 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
     setSearching(true);
     try {
-      // 使用学术搜索工作流
+      // 使用混合搜索工作流
       const result = await academicSearchWorkflow(query);
       setWorkflowResult(result);
       
-      // 保存搜索结果到知识库
-      for (const paper of result.papers) {
-        await createKnowledgeBase({
-          project_id: projectId,
-          title: paper.title || '无标题',
-          content: paper.abstract || paper.content || '暂无摘要',
-          source: paper.source || 'Unknown',
-          source_url: paper.url || undefined,
-          published_at: paper.publishedAt || undefined,
-          collected_at: new Date().toISOString(),
-          next_update_suggestion: '建议 30 天后更新',
-          selected: false,
-          keywords: result.keywords?.main_keywords || [],
-        });
+      // 保存学术论文结果到知识库
+      if (result.academicPapers && result.academicPapers.length > 0) {
+        for (const paper of result.academicPapers) {
+          await createKnowledgeBase({
+            project_id: projectId,
+            title: paper.title || '无标题',
+            content: paper.abstract || paper.content || '暂无摘要',
+            source: paper.source || 'OpenAlex',
+            source_url: paper.url || undefined,
+            published_at: paper.publishedAt || undefined,
+            collected_at: new Date().toISOString(),
+            next_update_suggestion: '建议 30 天后更新',
+            selected: false,
+            keywords: result.academicKeywords?.main_keywords || [],
+          });
+        }
+      }
+
+      // 保存网页搜索结果到知识库
+      if (result.webPapers && result.webPapers.length > 0) {
+        for (const paper of result.webPapers) {
+          await createKnowledgeBase({
+            project_id: projectId,
+            title: paper.title || '无标题',
+            content: paper.abstract || paper.content || '暂无摘要',
+            source: paper.source || 'Tavily',
+            source_url: paper.url || undefined,
+            published_at: paper.publishedAt || undefined,
+            collected_at: new Date().toISOString(),
+            next_update_suggestion: '建议 7 天后更新',
+            selected: false,
+            keywords: result.webQueries?.queries || [],
+          });
+        }
       }
 
       await loadKnowledge();
+      
+      const totalResults = (result.academicPapers?.length || 0) + (result.webPapers?.length || 0);
       toast({
-        title: '学术搜索完成',
-        description: `找到 ${result.papers.length} 篇高质量论文`,
+        title: '混合搜索完成',
+        description: `找到 ${result.academicPapers?.length || 0} 篇学术论文，${result.webPapers?.length || 0} 条实时信息`,
       });
     } catch (error: any) {
       toast({
@@ -156,28 +178,51 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             <CardTitle>搜索分析</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* 搜索意图拆解 */}
+            {workflowResult.intentDecomposition && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">搜索意图拆解</h4>
+                <div className="space-y-2">
+                  {workflowResult.intentDecomposition.academic_intent && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                      <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">学术意图</p>
+                      <p className="text-sm">{workflowResult.intentDecomposition.academic_intent}</p>
+                    </div>
+                  )}
+                  {workflowResult.intentDecomposition.web_intent && (
+                    <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                      <p className="text-xs font-medium text-green-700 dark:text-green-300 mb-1">实时意图</p>
+                      <p className="text-sm">{workflowResult.intentDecomposition.web_intent}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <Separator />
+
             {/* 学术关键词 */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">学术关键词</h4>
-              <div className="flex flex-wrap gap-2">
-                {workflowResult.keywords.main_keywords.map((keyword: string) => (
-                  <Badge key={keyword} variant="default">{keyword}</Badge>
-                ))}
-                {workflowResult.keywords.related_keywords.map((keyword: string) => (
-                  <Badge key={keyword} variant="outline">{keyword}</Badge>
-                ))}
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* 研究关注重点 */}
-            {workflowResult.searchIntent && workflowResult.searchIntent.focus && (
+            {workflowResult.academicKeywords && workflowResult.academicKeywords.main_keywords.length > 0 && (
               <div>
-                <h4 className="text-sm font-semibold mb-2">研究关注重点</h4>
+                <h4 className="text-sm font-semibold mb-2">学术关键词（OpenAlex）</h4>
                 <div className="flex flex-wrap gap-2">
-                  {workflowResult.searchIntent.focus.map((focus: string) => (
-                    <Badge key={focus} variant="secondary">{focus}</Badge>
+                  {workflowResult.academicKeywords.main_keywords.map((keyword: string) => (
+                    <Badge key={keyword} variant="default">{keyword}</Badge>
+                  ))}
+                  {workflowResult.academicKeywords.related_keywords.map((keyword: string) => (
+                    <Badge key={keyword} variant="outline">{keyword}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 网页搜索查询 */}
+            {workflowResult.webQueries && workflowResult.webQueries.queries.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">网页搜索查询（Tavily）</h4>
+                <div className="flex flex-wrap gap-2">
+                  {workflowResult.webQueries.queries.map((query: string) => (
+                    <Badge key={query} variant="secondary">{query}</Badge>
                   ))}
                 </div>
               </div>
@@ -185,52 +230,55 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
             <Separator />
 
-            {/* 学术共识要点 */}
-            {workflowResult.consensusPoints && workflowResult.consensusPoints.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">学术共识要点</h4>
-                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                  {workflowResult.consensusPoints.map((point: string, index: number) => (
-                    <li key={index}>{point}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {/* 结构化摘要 */}
+            {workflowResult.structuredSummary && (
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold">结构化研究素材</h4>
+                
+                {/* 学术共识 */}
+                {workflowResult.structuredSummary.academic_consensus && workflowResult.structuredSummary.academic_consensus.length > 0 && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                    <h5 className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">学术共识</h5>
+                    <ul className="space-y-1 text-sm">
+                      {workflowResult.structuredSummary.academic_consensus.map((point: string, idx: number) => (
+                        <li key={idx} className="flex gap-2">
+                          <span className="text-blue-500">•</span>
+                          <span>{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
-            <Separator />
+                {/* 产业实践 */}
+                {workflowResult.structuredSummary.industry_practice && workflowResult.structuredSummary.industry_practice.length > 0 && (
+                  <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg">
+                    <h5 className="text-xs font-medium text-green-700 dark:text-green-300 mb-2">产业实践</h5>
+                    <ul className="space-y-1 text-sm">
+                      {workflowResult.structuredSummary.industry_practice.map((point: string, idx: number) => (
+                        <li key={idx} className="flex gap-2">
+                          <span className="text-green-500">•</span>
+                          <span>{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
-            {/* CoWrite 写作素材 */}
-            {workflowResult.cowriteInput && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">写作素材</h4>
-                <div className="space-y-3 text-sm">
-                  {workflowResult.cowriteInput.research_background && (
-                    <div>
-                      <p className="font-medium">研究背景</p>
-                      <p className="text-muted-foreground">{workflowResult.cowriteInput.research_background}</p>
-                    </div>
-                  )}
-                  {workflowResult.cowriteInput.technical_progress && workflowResult.cowriteInput.technical_progress.length > 0 && (
-                    <div>
-                      <p className="font-medium">技术进展</p>
-                      <ul className="list-disc list-inside text-muted-foreground">
-                        {workflowResult.cowriteInput.technical_progress.map((item: string, index: number) => (
-                          <li key={index}>{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {workflowResult.cowriteInput.open_challenges && workflowResult.cowriteInput.open_challenges.length > 0 && (
-                    <div>
-                      <p className="font-medium">开放挑战</p>
-                      <ul className="list-disc list-inside text-muted-foreground">
-                        {workflowResult.cowriteInput.open_challenges.map((item: string, index: number) => (
-                          <li key={index}>{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
+                {/* 最新趋势 */}
+                {workflowResult.structuredSummary.recent_trends && workflowResult.structuredSummary.recent_trends.length > 0 && (
+                  <div className="p-4 bg-purple-50 dark:bg-purple-950 rounded-lg">
+                    <h5 className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-2">最新趋势</h5>
+                    <ul className="space-y-1 text-sm">
+                      {workflowResult.structuredSummary.recent_trends.map((point: string, idx: number) => (
+                        <li key={idx} className="flex gap-2">
+                          <span className="text-purple-500">•</span>
+                          <span>{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

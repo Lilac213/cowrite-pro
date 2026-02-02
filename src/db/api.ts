@@ -923,73 +923,277 @@ ${JSON.stringify(consensusPoints, null, 2)}`;
   }
 }
 
-// 完整的学术搜索工作流
-export async function academicSearchWorkflow(userQueryZh: string) {
-  // P1: 转写为英文学术关键词
-  const keywords = await academicSearchRewriting(userQueryZh);
+// ============ 混合搜索工作流 ============
+
+// P1: 搜索意图拆解（学术 vs 实时）
+export async function searchIntentDecomposer(userQueryZh: string) {
+  const systemMessage = `你是一名研究型搜索专家。
+
+请分析以下【中文需求】，判断其中涉及的研究意图，
+并拆解为【学术搜索意图】与【实时网页搜索意图】。
+
+要求：
+1. 学术意图：偏向理论、方法、研究共识
+2. 网页意图：偏向行业动态、产品、政策、实践
+3. 两类都可能为空或同时存在
+4. 不要解释
+
+输出格式（JSON）：
+{
+  "academic_intent": "",
+  "web_intent": ""
+}`;
+
+  const prompt = `中文需求：
+${userQueryZh}`;
+
+  const result = await callLLMGenerate(prompt, '', systemMessage);
   
-  // 合并主关键词和相关关键词
-  const allKeywords = [...keywords.main_keywords, ...keywords.related_keywords];
-  const searchQuery = allKeywords.join(' ');
-  
-  // P2: 澄清搜索意图（可选）
-  const searchIntent = await searchScopeClarifier(allKeywords);
-  
-  // 并行搜索：OpenAlex（学术论文）+ Tavily（实时内容和观点）
-  const [openAlexResults, tavilyResults] = await Promise.allSettled([
-    searchOpenAlex(searchQuery),
-    searchTavily(userQueryZh),
-  ]);
-  
-  // 合并搜索结果
-  let allPapers: any[] = [];
-  
-  if (openAlexResults.status === 'fulfilled' && openAlexResults.value.papers) {
-    allPapers = [...allPapers, ...openAlexResults.value.papers];
-  }
-  
-  // Tavily 结果作为补充
-  let tavilySummary = '';
-  let tavilySources: any[] = [];
-  if (tavilyResults.status === 'fulfilled' && tavilyResults.value) {
-    tavilySummary = tavilyResults.value.summary || '';
-    tavilySources = tavilyResults.value.sources || [];
-    
-    // 将 Tavily 的论文也加入到列表
-    if (tavilyResults.value.papers) {
-      allPapers = [...allPapers, ...tavilyResults.value.papers];
+  try {
+    return JSON.parse(result);
+  } catch (e) {
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
     }
+    throw new Error('无法解析搜索意图');
+  }
+}
+
+// P2: 学术搜索转写（给 OpenAlex）
+export async function academicSearchRewritingV2(academicIntent: string) {
+  if (!academicIntent || academicIntent.trim() === '') {
+    return { main_keywords: [], related_keywords: [] };
+  }
+
+  const systemMessage = `你是一名学术搜索专家。
+
+请将以下【学术搜索意图】转写为
+【用于英文学术数据库（如 OpenAlex）检索的关键词】。
+
+要求：
+1. 使用学术界常见术语
+2. 覆盖研究对象 + 方法
+3. 关键词 3–6 个
+4. 英文输出
+5. 不要解释
+
+输出格式（JSON）：
+{
+  "main_keywords": [],
+  "related_keywords": []
+}`;
+
+  const prompt = `学术搜索意图：
+${academicIntent}`;
+
+  const result = await callLLMGenerate(prompt, '', systemMessage);
+  
+  try {
+    return JSON.parse(result);
+  } catch (e) {
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('无法解析学术关键词');
+  }
+}
+
+// P3: 实时网页搜索转写（给 Tavily）
+export async function webSearchRewriting(webIntent: string) {
+  if (!webIntent || webIntent.trim() === '') {
+    return { queries: [] };
+  }
+
+  const systemMessage = `你是一名实时信息检索专家。
+
+请将以下【网页搜索意图】转写为
+【适合实时网页搜索引擎（如 Tavily）使用的英文查询语句】。
+
+要求：
+1. 偏向自然语言，而非学术术语
+2. 可包含行业、产品、应用、趋势等词
+3. 不超过 2 条搜索 query
+4. 英文输出
+5. 不要解释
+
+输出格式（JSON）：
+{
+  "queries": []
+}`;
+
+  const prompt = `网页搜索意图：
+${webIntent}`;
+
+  const result = await callLLMGenerate(prompt, '', systemMessage);
+  
+  try {
+    return JSON.parse(result);
+  } catch (e) {
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('无法解析网页搜索查询');
+  }
+}
+
+// P4: 跨源搜索结果筛选与对齐
+export async function crossSourceAligner(academicResults: any[], webResults: any[]) {
+  const systemMessage = `你是一名研究整合助手。
+
+请基于以下两类搜索结果：
+1. 学术论文结果（OpenAlex）
+2. 实时网页搜索结果（Tavily）
+
+完成以下任务：
+- 识别两类内容中【主题一致的部分】
+- 标记哪些网页内容是对学术研究的现实补充
+- 剔除明显无关或噪声内容
+
+要求：
+1. 不合并写作
+2. 仅做筛选与分类
+3. 输出结构化结果
+
+输出格式（JSON）：
+{
+  "academic_core": [],
+  "web_supporting": [],
+  "discarded": []
+}`;
+
+  const prompt = `学术论文结果：
+${JSON.stringify(academicResults, null, 2)}
+
+网页搜索结果：
+${JSON.stringify(webResults, null, 2)}`;
+
+  const result = await callLLMGenerate(prompt, '', systemMessage);
+  
+  try {
+    return JSON.parse(result);
+  } catch (e) {
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('无法解析跨源对齐结果');
+  }
+}
+
+// P5: 跨源结构化摘要
+export async function crossSourceStructuredSummary(academicCore: any[], webSupporting: any[]) {
+  const systemMessage = `你是一名专业研究助手。
+
+请基于以下【学术核心内容】与【网页补充内容】，整理
+【可供专业写作使用的结构化研究素材】。
+
+要求：
+1. 学术内容与网页内容分开展示
+2. 不新增结论
+3. 不将网页内容表述为学术共识
+4. 中文输出
+
+输出格式（JSON）：
+{
+  "academic_consensus": [],
+  "industry_practice": [],
+  "recent_trends": []
+}`;
+
+  const prompt = `学术核心内容：
+${JSON.stringify(academicCore, null, 2)}
+
+网页补充内容：
+${JSON.stringify(webSupporting, null, 2)}`;
+
+  const result = await callLLMGenerate(prompt, '', systemMessage);
+  
+  try {
+    return JSON.parse(result);
+  } catch (e) {
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('无法解析跨源结构化摘要');
+  }
+}
+
+// 完整的混合搜索工作流
+export async function academicSearchWorkflow(userQueryZh: string) {
+  // P1: 搜索意图拆解
+  const intentDecomposition = await searchIntentDecomposer(userQueryZh);
+  const { academic_intent, web_intent } = intentDecomposition;
+  
+  // P2: 学术搜索转写
+  const academicKeywords = await academicSearchRewritingV2(academic_intent);
+  
+  // P3: 实时网页搜索转写
+  const webQueries = await webSearchRewriting(web_intent);
+  
+  // 执行搜索
+  const searchPromises: Promise<any>[] = [];
+  
+  // OpenAlex 搜索（如果有学术意图）
+  if (academicKeywords.main_keywords.length > 0) {
+    const allKeywords = [...academicKeywords.main_keywords, ...academicKeywords.related_keywords];
+    const searchQuery = allKeywords.join(' ');
+    searchPromises.push(
+      searchOpenAlex(searchQuery).catch(() => ({ papers: [] }))
+    );
+  } else {
+    searchPromises.push(Promise.resolve({ papers: [] }));
   }
   
-  // 如果没有结果，返回空
-  if (allPapers.length === 0) {
+  // Tavily 搜索（如果有网页意图）
+  if (webQueries.queries.length > 0) {
+    // 使用第一个查询
+    searchPromises.push(
+      searchTavily(webQueries.queries[0]).catch(() => ({ papers: [], summary: '', sources: [] }))
+    );
+  } else {
+    searchPromises.push(Promise.resolve({ papers: [], summary: '', sources: [] }));
+  }
+  
+  const [openAlexResults, tavilyResults] = await Promise.all(searchPromises);
+  
+  // 提取结果
+  const academicPapers = openAlexResults.papers || [];
+  const webPapers = tavilyResults.papers || [];
+  
+  // 如果两边都没有结果，直接返回
+  if (academicPapers.length === 0 && webPapers.length === 0) {
     return {
-      keywords,
-      searchIntent,
-      papers: [],
-      consensusPoints: [],
-      cowriteInput: null,
-      tavilySummary: '',
+      intentDecomposition,
+      academicKeywords,
+      webQueries,
+      academicPapers: [],
+      webPapers: [],
+      alignedResults: null,
+      structuredSummary: null,
     };
   }
   
-  // P3: 筛选 Top N 论文
-  const selection = await topPaperSelector(userQueryZh, allPapers);
-  const selectedPapers = selection.selected_indexes.map((idx: number) => allPapers[idx]);
+  // P4: 跨源结果筛选与对齐
+  const alignedResults = await crossSourceAligner(academicPapers, webPapers);
   
-  // P4: 提取学术共识要点
-  const consensusPoints = await academicConsensusExtractor(selectedPapers);
-  
-  // P5: 整理为 CoWrite 输入
-  const cowriteInput = await cowriteInputFormatter(consensusPoints);
+  // P5: 跨源结构化摘要
+  const structuredSummary = await crossSourceStructuredSummary(
+    alignedResults.academic_core,
+    alignedResults.web_supporting
+  );
   
   return {
-    keywords,
-    searchIntent,
-    papers: selectedPapers,
-    consensusPoints,
-    cowriteInput,
-    tavilySummary,
+    intentDecomposition,
+    academicKeywords,
+    webQueries,
+    academicPapers: alignedResults.academic_core,
+    webPapers: alignedResults.web_supporting,
+    alignedResults,
+    structuredSummary,
   };
 }
 
