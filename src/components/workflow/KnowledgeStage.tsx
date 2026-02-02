@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getKnowledgeBase, createKnowledgeBase, updateKnowledgeBase, updateProject, academicSearchWorkflow, generateWritingSummary } from '@/db/api';
+import { getKnowledgeBase, createKnowledgeBase, updateKnowledgeBase, updateProject, academicSearchWorkflow, generateWritingSummary, saveToReferenceLibrary } from '@/db/api';
 import type { KnowledgeBase } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Search, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Search, Sparkles, CheckCircle2, BookmarkPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/db/supabase';
 
 interface KnowledgeStageProps {
   projectId: string;
@@ -356,6 +357,45 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                       )}
                     </div>
                   </div>
+                  <Button
+                    onClick={async () => {
+                      try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (!user) {
+                          toast({
+                            title: '请先登录',
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
+
+                        await saveToReferenceLibrary(user.id, {
+                          title: item.title,
+                          content: item.content,
+                          source: item.source,
+                          source_url: item.source_url,
+                          keywords: item.keywords,
+                          published_at: item.published_at,
+                        });
+
+                        toast({
+                          title: '收藏成功',
+                          description: '已保存到参考文章库',
+                        });
+                      } catch (error: any) {
+                        toast({
+                          title: '收藏失败',
+                          description: error.message,
+                          variant: 'destructive',
+                        });
+                      }
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <BookmarkPlus className="h-4 w-4 mr-1" />
+                    收藏
+                  </Button>
                 </div>
               </Card>
             ))}

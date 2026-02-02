@@ -32,11 +32,24 @@ export interface SystemConfig {
   updated_at: string;
 }
 
+export interface ArgumentBlock {
+  id: string;
+  title: string;
+  description: string;
+  order: number;
+}
+
+export interface ArticleArgumentStructure {
+  core_thesis: string;
+  argument_blocks: ArgumentBlock[];
+}
+
 export interface Project {
   id: string;
   user_id: string;
   title: string;
   status: ProjectStatus;
+  article_argument_structure?: ArticleArgumentStructure;
   created_at: string;
   updated_at: string;
 }
@@ -68,12 +81,36 @@ export interface KnowledgeBase {
   created_at: string;
 }
 
+export interface SubArgument {
+  id: string;
+  content: string;
+  order: number;
+}
+
+export interface EvidenceItem {
+  id: string;
+  sub_argument_id: string;
+  type: 'case' | 'data' | 'analogy';
+  content: string;
+  source?: string;
+  uncertainty?: string;
+  selected: boolean;
+}
+
+export interface ReasoningStructure {
+  main_argument: string;
+  sub_arguments: SubArgument[];
+  conclusion: string;
+}
+
 export interface Outline {
   id: string;
   project_id: string;
   paragraph_order: number;
   summary: string;
   selected: boolean;
+  reasoning_structure?: ReasoningStructure;
+  evidence_pool?: EvidenceItem[];
   created_at: string;
   updated_at: string;
 }
@@ -178,4 +215,17 @@ export interface SearchResult {
   source: string;
   url: string;
   publishedAt?: string;
+}
+
+export interface ReferenceLibrary {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  source?: string;
+  source_url?: string;
+  keywords?: string[];
+  published_at?: string;
+  saved_at: string;
+  created_at: string;
 }

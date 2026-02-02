@@ -12,6 +12,7 @@ import type {
   Review,
   Template,
   SearchResult,
+  ReferenceLibrary,
 } from '@/types';
 
 // ============ System Config API ============
@@ -1386,5 +1387,135 @@ export async function searchTemplatesByTags(userId: string, tags: string[]) {
 
   if (error) throw error;
   return data as Template[];
+}
+
+// ============ Reference Library API ============
+export async function saveToReferenceLibrary(
+  userId: string,
+  item: {
+    title: string;
+    content: string;
+    source?: string;
+    source_url?: string;
+    keywords?: string[];
+    published_at?: string;
+  }
+) {
+  const { data, error } = await supabase
+    .from('reference_library')
+    .insert({
+      user_id: userId,
+      ...item,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getReferenceLibrary(userId: string) {
+  const { data, error } = await supabase
+    .from('reference_library')
+    .select('*')
+    .eq('user_id', userId)
+    .order('saved_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteFromReferenceLibrary(id: string) {
+  const { error } = await supabase
+    .from('reference_library')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+// ============ Article Argument Structure API ============
+export async function updateArticleArgumentStructure(
+  projectId: string,
+  structure: {
+    core_thesis: string;
+    argument_blocks: Array<{
+      id: string;
+      title: string;
+      description: string;
+      order: number;
+    }>;
+  }
+) {
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ article_argument_structure: structure })
+    .eq('id', projectId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ============ Outline Reasoning Structure API ============
+export async function updateOutlineReasoningStructure(
+  outlineId: string,
+  reasoning: {
+    main_argument: string;
+    sub_arguments: Array<{
+      id: string;
+      content: string;
+      order: number;
+    }>;
+    conclusion: string;
+  }
+) {
+  const { data, error } = await supabase
+    .from('outlines')
+    .update({ reasoning_structure: reasoning })
+    .eq('id', outlineId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateOutlineEvidencePool(
+  outlineId: string,
+  evidencePool: Array<{
+    id: string;
+    sub_argument_id: string;
+    type: 'case' | 'data' | 'analogy';
+    content: string;
+    source?: string;
+    uncertainty?: string;
+    selected: boolean;
+  }>
+) {
+  const { data, error } = await supabase
+    .from('outlines')
+    .update({ evidence_pool: evidencePool })
+    .eq('id', outlineId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function reorderOutlines(
+  projectId: string,
+  outlines: Array<{ id: string; paragraph_order: number }>
+) {
+  const updates = outlines.map((outline) =>
+    supabase
+      .from('outlines')
+      .update({ paragraph_order: outline.paragraph_order })
+      .eq('id', outline.id)
+  );
+
+  await Promise.all(updates);
 }
 
