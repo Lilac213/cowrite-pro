@@ -229,6 +229,49 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
             </div>
           </CardContent>
         </Card>
+      ) : completedSteps.length === 3 ? (
+        // 显示最终文案（三遍审校完成后）
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-2xl">最终文章</CardTitle>
+                  <CardDescription className="mt-2">
+                    三遍审校已完成，以下是最终精修稿
+                  </CardDescription>
+                </div>
+                <Badge variant="default" className="text-lg px-4 py-2">
+                  <CheckCircle2 className="h-5 w-5 mr-2" />
+                  审校完成
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="prose prose-sm max-w-none p-6 bg-background rounded-lg border">
+                <div className="whitespace-pre-wrap text-base leading-relaxed">
+                  {currentContent}
+                </div>
+              </div>
+              <div className="flex justify-end mt-6">
+                <Button
+                  onClick={handleConfirm}
+                  disabled={confirming}
+                  size="lg"
+                >
+                  {confirming ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      确认中...
+                    </>
+                  ) : (
+                    '确认完成'
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">{/* Rest of the content */}
         {/* 左侧：文章内容 */}

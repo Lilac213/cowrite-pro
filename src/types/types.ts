@@ -125,8 +125,22 @@ export interface Draft {
   project_id: string;
   content: string;
   version: number;
+  annotations?: ParagraphAnnotation[];
   created_at: string;
   updated_at: string;
+}
+
+export interface ParagraphAnnotation {
+  paragraph_id: string;
+  paragraph_type: '引言' | '文献综述' | '观点提出' | '对比分析' | '方法说明' | '结论' | '其他';
+  information_source: {
+    references?: string[];
+    data_sources?: string[];
+    is_direct_quote: boolean;
+  };
+  viewpoint_generation: '文献直接观点' | '多文献综合' | '基于数据的推导' | '模型逻辑推演';
+  development_logic: string;
+  editing_suggestions: string;
 }
 
 export interface Review {

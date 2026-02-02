@@ -66,10 +66,19 @@
   - [x] Update type definitions
   - [x] Add API functions for parsing, summarization, and tag search
   - [x] Update MaterialsPage with file upload, AI summarization, edit/delete, tag search
-  - [ ] Update ReferencesPage with similar features (file upload already exists, need AI summarization)
-  - [ ] Update TemplatesPage with similar features
-  - [ ] Add template dropdown in BriefStage
-  - [ ] Update brief generation to reference selected template
+- [x] Step 12: Draft Annotations and Content Filtering
+  - [x] Update draft generation prompt to include structured annotations
+  - [x] Create annotation display component for draft stage
+  - [x] Modify DraftingStage to show draft with side-by-side annotations
+  - [x] Update ReviewStage to hide instruction box and show only final content
+  - [x] Filter search results to exclude cases, only use viewpoints
+  - [x] Add paragraph ID mapping between draft and annotations
+  - [x] Implement hover highlighting and click-to-navigate between draft and annotations
+  - [x] Add database column for annotations in drafts table
+  - [x] Update Draft type to include annotations and ParagraphAnnotation interface
+  - [x] Create DRAFT_WITH_ANNOTATIONS_PROMPT and FINAL_ACADEMIC_REFINEMENT_PROMPT
+  - [x] Implement two-view mode: annotated view and plain text view
+  - [x] Add material type filtering to exclude cases from draft generation
 
 ## Notes
 - Using Supabase for authentication, database, and storage
