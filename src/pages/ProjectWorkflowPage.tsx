@@ -40,6 +40,13 @@ export default function ProjectWorkflowPage() {
     loadProject();
   }, [projectId, user]);
 
+  // 当项目状态变为 layout_export 时，导航到导出页面
+  useEffect(() => {
+    if (project?.status === 'layout_export' && projectId) {
+      navigate(`/project/${projectId}/export`);
+    }
+  }, [project?.status, projectId, navigate]);
+
   const loadProject = async () => {
     if (!projectId || !user) return;
     try {

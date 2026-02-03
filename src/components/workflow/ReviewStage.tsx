@@ -150,8 +150,10 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
         onComplete();
       }
     } catch (error) {
+      console.error('审校确认失败:', error);
       toast({
         title: '确认失败',
+        description: error instanceof Error ? error.message : '请稍后重试',
         variant: 'destructive',
       });
       setConfirming(false);
