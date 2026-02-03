@@ -245,7 +245,7 @@ export default function TemplatesPageEnhanced() {
                   <Label htmlFor="ai-description">格式描述</Label>
                   <Textarea
                     id="ai-description"
-                    placeholder="例如：本科毕业论文，理工科&#10;封面包含：学校、学院、姓名、学号&#10;正文小四宋体，1.5 倍行距&#10;一级标题三号黑体居中"
+                    placeholder="例如：本科毕业论文格式：标题三号黑体居中，摘要四号宋体，正文小四号宋体1.5倍行距，一级标题三号黑体，二级标题四号黑体，三级标题小四号黑体，参考文献五号宋体，页边距上下2.54cm左右3.17cm"
                     value={aiDescription}
                     onChange={(e) => setAiDescription(e.target.value)}
                     rows={8}

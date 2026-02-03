@@ -41,7 +41,6 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
 #### 阶段 2：明确需求
 - 用户输入文章选题/写作目标
 - 选择格式模板/要求：支持下拉已有模板选项，或新增模板
-- 指定输出格式（如公众号、报告等）
 - AI 将输入结构化为需求文档，生成时参考所选格式模板中的相关内容
 - 需求文档保存至 _briefs/ 文件夹，文件名格式：项目名-brief.md
 - 用户必须确认需求后才能进入下一步
@@ -426,7 +425,7 @@ sub_claim：
 - 改成口语化：进行操作 → 直接用动词
 - 加入真实细节：抽象表达 → 具体数字/案例
 - 加入个人态度：中立客观 → 明确观点
-- 审校过程中保持原文语种不变
+- **审校前先判断全文中英文字数占比，确定文章主体语言，再选择对应策略进行改写**
 - 使用默认增强提示词（Default Enhance Prompt）进行去AI化处理
 
 **第三遍：细节打磨（使用细节打磨提示词）**
@@ -442,38 +441,29 @@ sub_claim：
 
 **页面布局**
 - 顶部：文件名输入框
-- 左侧：选择模板区域
+- 中部：选择模板区域（下拉框形式）
   - 推荐风格模板（系统预设）
   - 用户自定义模板（从用户模板库中选择）
-- 右侧：选择格式区域
-  - PDF 格式
-  - Word 格式
-  - Markdown 格式
 - 底部：导出按钮
 
 **功能说明**
 - 用户在顶部输入文件名
-- 用户在左侧选择模板：
+- 用户在中部通过下拉框选择模板：
   - 可选择系统推荐的风格模板（如学术论文、简洁风格、现代风格等）
   - 可选择用户模板库中自定义的模板
-- 用户在右侧选择输出格式：
-  - PDF：便于分享和打印，保持格式不变
-  - Word (HTML)：可编辑格式，支持进一步修改
-  - Markdown：纯文本格式，适合版本控制和在线发布
+- 导出格式固定为 Markdown
 - 系统检查：是否缺摘要、标题层级是否完整
 - AI/引擎执行：
-  - 先将文章输出为 Markdown 格式
-  - 再根据用户选择的格式导出为 PDF 或 Word 文档
+  - 将文章输出为 Markdown 格式
   - 自动套用格式、自动生成目录
 - 提供导出按钮，直接导出最终文章
 
 **导出流程**
 1. 用户输入文件名
-2. 用户选择模板（推荐风格或自定义模板）
-3. 用户选择输出格式（PDF/Word/Markdown）
-4. 系统将文章转换为 Markdown 格式
-5. 系统根据选择的格式导出文档
-6. 用户下载最终文件
+2. 用户通过下拉框选择模板（推荐风格或自定义模板）
+3. 系统将文章转换为 Markdown 格式
+4. 系统根据选择的模板导出文档
+5. 用户下载最终文件
 
 #### 阶段 10：终稿完成与资产沉淀
 - 沉淀完整写作过程资产
@@ -487,6 +477,7 @@ sub_claim：
 - 新建项目
 - 项目状态管理
 - 进度条保存历史内容，支持点击进度条中的节点，跳回到任意节点进行修改
+- 排版导出与其他页面使用同一进度条，状态显示为排版导出
 
 ### 3.2 需求输入与需求文档生成
 - 结构化需求输入
@@ -678,6 +669,9 @@ sub_claim：
 **Step 1：用户输入自然语言**
 用户输入格式描述，例如：本科毕业论文，理工科，封面包含：学校、学院、姓名、学号，正文小四宋体，1.5 倍行距，一级标题三号黑体居中
 
+**用户输入示例**
+本科毕业论文格式：标题三号黑体居中，摘要四号宋体，正文小四号宋体1.5倍行距，一级标题三号黑体，二级标题四号黑体，三级标题小四号黑体，参考文献五号宋体，页边距上下2.54cm左右3.17cm
+
 **Step 2：AI 解析为结构化格式规则**
 系统内部生成：
 - 页面结构 schema
@@ -686,6 +680,402 @@ sub_claim：
 
 AI 的角色是：把人话转成排版规则
 
+使用以下 Prompt 将自然语言转换为 JSON 格式：
+```
+Prompt：排版规范解析器（Natural Language → JSON）
+你是一个【文档排版规范解析器】。
+
+你的任务是：
+将用户提供的【自然语言排版要求】解析为【结构化排版样式 JSON】。
+
+请严格遵守以下规则：
+
+【一、整体要求】
+1. 只输出 JSON，不要输出任何解释性文字
+2. JSON 必须是一个完整、可机器执行的排版规范
+3. JSON 作为样式唯一真相源（Single Source of Truth）"
+4. 内容与样式必须彻底解耦
+
+【二、JSON 结构要求】
+JSON 顶层必须包含以下字段：
+- meta
+- page
+- styles
+- structure
+- forbidden_direct_formatting
+
+【三、单位与标准化规则】
+1. 所有字号必须转换为 pt
+   - 三号 = 16pt
+   - 四号 = 14pt
+   - 小四 = 12pt
+   - 五号 = 10.5pt
+2. 所有长度单位必须转换为 mm
+   - 1 cm = 10 mm
+3. 中文字体使用 Word 标准字体名：
+   - 宋体 → SimSun
+   - 黑体 → SimHei
+4. 西文字体默认使用 Times New Roman
+
+【四、styles 规则】
+每一个样式必须包含：
+- style_id
+- name
+- is_heading
+- run
+- paragraph
+
+其中：
+- run 只描述字体级属性（字体、字号、加粗等）
+- paragraph 只描述段落级属性（行距、对齐、缩进、段前段后）
+- 不允许在正文内容中直接控制字体或字号
+
+【五、标题规则】
+- 一级、二级、三级标题必须分别定义为独立样式
+- is_heading = true
+- 不得直接使用 Markdown 样式语义
+
+【六、禁止项】
+在 forbidden_direct_formatting 中显式禁止：
+- font
+- size
+- bold
+- italic
+- underline
+- color
+
+【七、兼容性】
+JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
+
+【自然语言排版要求】：
+{{用户输入的排版说明}}
+```
+
+**示例最后生成的 JSON 串**
+```json
+{
+  \"meta\": {
+    \"name\": \"本科毕业论文格式规范\",
+    \"version\": \"1.0\",
+    \"notes\": \"根据用户要求生成的本科毕业论文排版规范，包括标题、摘要、正文、各级标题、参考文献和页边距等。\"
+  },
+  \"page\": {
+    \"size\": \"A4\",
+    \"margins_mm\": {
+      \"top\": 25.4,
+      \"bottom\": 25.4,
+      \"left\": 31.7,
+      \"right\": 31.7,
+      \"binding\": 0
+    },
+    \"header_mm\": 15,
+    \"footer_mm\": 15
+  },
+  \"styles\": {
+    \"TitleCN\": {
+      \"style_id\": \"TitleCN\",
+      \"name\": \"中文标题\",
+      \"is_heading\": false,
+      \"run\": {
+        \"bold\": true,
+        \"italic\": false,
+        \"underline\": false,
+        \"size_pt\": 16,
+        \"font\": {
+          \"eastAsia\": \"SimHei\",
+          \"ascii\": \"Times New Roman\",
+          \"hAnsi\": \"Times New Roman\"
+        }
+      },
+      \"paragraph\": {
+        \"alignment\": \"center\",
+        \"line_spacing_rule\": \"1.5\",
+        \"space_before_pt\": 18,
+        \"space_after_pt\": 18,
+        \"first_line_indent_chars\": 0,
+        \"hanging_indent_chars\": 0,
+        \"keep_with_next\": false,
+        \"keep_lines\": false,
+        \"page_break_before\": false,
+        \"widows_control\": true
+      }
+    },
+    \"Body\": {
+      \"style_id\": \"Body\",
+      \"name\": \"正文\",
+      \"is_heading\": false,
+      \"run\": {
+        \"bold\": false,
+        \"italic\": false,
+        \"underline\": false,
+        \"size_pt\": 12,
+        \"font\": {
+          \"eastAsia\": \"SimSun\",
+          \"ascii\": \"Times New Roman\",
+          \"hAnsi\": \"Times New Roman\"
+        }
+      },
+      \"paragraph\": {
+        \"alignment\": \"justify\",
+        \"line_spacing_rule\": \"1.5\",
+        \"space_before_pt\": 0,
+        \"space_after_pt\": 0,
+        \"first_line_indent_chars\": 2,
+        \"hanging_indent_chars\": 0,
+        \"keep_with_next\": false,
+        \"keep_lines\": false,
+        \"page_break_before\": false,
+        \"widows_control\": true
+      }
+    },
+    \"H1\": {
+      \"style_id\": \"H1\",
+      \"name\": \"一级标题\",
+      \"is_heading\": true,
+      \"run\": {
+        \"bold\": true,
+        \"italic\": false,
+        \"underline\": false,
+        \"size_pt\": 16,
+        \"font\": {
+          \"eastAsia\": \"SimHei\",
+          \"ascii\": \"Times New Roman\",
+          \"hAnsi\": \"Times New Roman\"
+        }
+      },
+      \"paragraph\": {
+        \"alignment\": \"left\",
+        \"line_spacing_rule\": \"1.5\",
+        \"space_before_pt\": 18,
+        \"space_after_pt\": 12,
+        \"first_line_indent_chars\": 0,
+        \"hanging_indent_chars\": 0,
+        \"keep_with_next\": false,
+        \"keep_lines\": false,
+        \"page_break_before\": false,
+        \"widows_control\": true
+      }
+    },
+    \"H2\": {
+      \"style_id\": \"H2\",
+      \"name\": \"二级标题\",
+      \"is_heading\": true,
+      \"run\": {
+        \"bold\": true,
+        \"italic\": false,
+        \"underline\": false,
+        \"size_pt\": 14,
+        \"font\": {
+          \"eastAsia\": \"SimHei\",
+          \"ascii\": \"Times New Roman\",
+          \"hAnsi\": \"Times New Roman\"
+        }
+      },
+      \"paragraph\": {
+        \"alignment\": \"left\",
+        \"line_spacing_rule\": \"1.5\",
+        \"space_before_pt\": 12,
+        \"space_after_pt\": 6,
+        \"first_line_indent_chars\": 0,
+        \"hanging_indent_chars\": 0,
+        \"keep_with_next\": false,
+        \"keep_lines\": false,
+        \"page_break_before\": false,
+        \"widows_control\": true
+      }
+    },
+    \"H3\": {
+      \"style_id\": \"H3\",
+      \"name\": \"三级标题\",
+      \"is_heading\": true,
+      \"run\": {
+        \"bold\": true,
+        \"italic\": false,
+        \"underline\": false,
+        \"size_pt\": 12,
+        \"font\": {
+          \"eastAsia\": \"SimHei\",
+          \"ascii\": \"Times New Roman\",
+          \"hAnsi\": \"Times New Roman\"
+        }
+      },
+      \"paragraph\": {
+        \"alignment\": \"left\",
+        \"line_spacing_rule\": \"1.5\",
+        \"space_before_pt\": 6,
+        \"space_after_pt\": 6,
+        \"first_line_indent_chars\": 0,
+        \"hanging_indent_chars\": 0,
+        \"keep_with_next\": false,
+        \"keep_lines\": false,
+        \"page_break_before\": false,
+        \"widows_control\": true
+      }
+    },
+    \"AbstractBody\": {
+      \"style_id\": \"AbstractBody\",
+      \"name\": \"摘要正文\",
+      \"is_heading\": false,
+      \"run\": {
+        \"bold\": false,
+        \"italic\": false,
+        \"underline\": false,
+        \"size_pt\": 14,
+        \"font\": {
+          \"eastAsia\": \"SimSun\",
+          \"ascii\": \"Times New Roman\",
+          \"hAnsi\": \"Times New Roman\"
+        }
+      },
+      \"paragraph\": {
+        \"alignment\": \"justify\",
+        \"line_spacing_rule\": \"1.5\",
+        \"space_before_pt\": 0,
+        \"space_after_pt\": 0,
+        \"first_line_indent_chars\": 2,
+        \"hanging_indent_chars\": 0,
+        \"keep_with_next\": false,
+        \"keep_lines\": false,
+        \"page_break_before\": false,
+        \"widows_control\": true
+      }
+    },
+    \"KeywordsBody\": {
+      \"style_id\": \"KeywordsBody\",
+      \"name\": \"关键词正文\",
+      \"is_heading\": false,
+      \"run\": {
+        \"bold\": false,
+        \"italic\": false,
+        \"underline\": false,
+        \"size_pt\": 14,
+        \"font\": {
+          \"eastAsia\": \"SimSun\",
+          \"ascii\": \"Times New Roman\",
+          \"hAnsi\": \"Times New Roman\"
+        }
+      },
+      \"paragraph\": {
+        \"alignment\": \"justify\",
+        \"line_spacing_rule\": \"1.5\",
+        \"space_before_pt\": 0,
+        \"space_after_pt\": 0,
+        \"first_line_indent_chars\": 0,
+        \"hanging_indent_chars\": 0,
+        \"keep_with_next\": false,
+        \"keep_lines\": false,
+        \"page_break_before\": false,
+        \"widows_control\": true
+      }
+    },
+    \"Reference\": {
+      \"style_id\": \"Reference\",
+      \"name\": \"参考文献\",
+      \"is_heading\": false,
+      \"run\": {
+        \"bold\": false,
+        \"italic\": false,
+        \"underline\": false,
+        \"size_pt\": 10.5,
+        \"font\": {
+          \"eastAsia\": \"SimSun\",
+          \"ascii\": \"Times New Roman\",
+          \"hAnsi\": \"Times New Roman\"
+        }
+      },
+      \"paragraph\": {
+        \"alignment\": \"left\",
+        \"line_spacing_rule\": \"single\",
+        \"space_before_pt\": 0,
+        \"space_after_pt\": 0,
+        \"first_line_indent_chars\": 0,
+        \"hanging_indent_chars\": 0,
+        \"keep_with_next\": false,
+        \"keep_lines\": false,
+        \"page_break_before\": false,
+        \"widows_control\": true
+      }
+    },
+    \"FigureCaption\": {
+      \"style_id\": \"FigureCaption\",
+      \"name\": \"图标题\",
+      \"is_heading\": false,
+      \"run\": {
+        \"bold\": false,
+        \"italic\": false,
+        \"underline\": false,
+        \"size_pt\": 10.5,
+        \"font\": {
+          \"eastAsia\": \"SimSun\",
+          \"ascii\": \"Times New Roman\",
+          \"hAnsi\": \"Times New Roman\"
+        }
+      },
+      \"paragraph\": {
+        \"alignment\": \"center\",
+        \"line_spacing_rule\": \"single\",
+        \"space_before_pt\": 6,
+        \"space_after_pt\": 6,
+        \"first_line_indent_chars\": 0,
+        \"hanging_indent_chars\": 0,
+        \"keep_with_next\": false,
+        \"keep_lines\": false,
+        \"page_break_before\": false,
+        \"widows_control\": true
+      }
+    },
+    \"TableTitle\": {
+      \"style_id\": \"TableTitle\",
+      \"name\": \"表标题\",
+      \"is_heading\": false,
+      \"run\": {
+        \"bold\": false,
+        \"italic\": false,
+        \"underline\": false,
+        \"size_pt\": 10.5,
+        \"font\": {
+          \"eastAsia\": \"SimSun\",
+          \"ascii\": \"Times New Roman\",
+          \"hAnsi\": \"Times New Roman\"
+        }
+      },
+      \"paragraph\": {
+        \"alignment\": \"center\",
+        \"line_spacing_rule\": \"single\",
+        \"space_before_pt\": 6,
+        \"space_after_pt\": 6,
+        \"first_line_indent_chars\": 0,
+        \"hanging_indent_chars\": 0,
+        \"keep_with_next\": false,
+        \"keep_lines\": false,
+        \"page_break_before\": false,
+        \"widows_control\": true
+      }
+    }
+  },
+  \"structure\": {
+    \"required_h1_titles\": [
+      \"摘要\",
+      \"Abstract\",
+      \"引言\",
+      \"致谢\",
+      \"参考文献\"
+    ],
+    \"toc_max_level\": 3
+  },
+  \"forbidden_direct_formatting\": {
+    \"font\": true,
+    \"size\": true,
+    \"bold\": true,
+    \"italic\": true,
+    \"underline\": true,
+    \"color\": true
+  },
+  \"auto_prefix_abstract_keywords\": false,
+  \"auto_number_figures_tables\": false
+}
+```
+
 **Step 3：用户预览 & 微调**
 - 模板预览（假文内容）
 - 可调整字号/行距
@@ -693,18 +1083,18 @@ AI 的角色是：把人话转成排版规则
 
 **生成后操作**
 - **支持修改和删除**
+- **点击模板管理后，支持查看原先填写内容，并支持修改**
 
 #### 3.7.2 模板的使用方式
 - 模板不影响写作过程，只在终稿输出生效
 - 使用时机：
   - **明确需求阶段：支持下拉已有模板选项，或新增模板**
-  - **排版导出阶段：选择输出模板**
-- 用户操作：选择输出模板
-- 用户选择输出方式：Word/PDF/Markdown
+  - **排版导出阶段：通过下拉框选择输出模板**
+- 用户操作：通过下拉框选择输出模板
+- 导出格式固定为 Markdown
 - 系统检查：是否缺摘要、标题层级是否完整
 - AI/引擎执行：
-  - 先将文章输出为 Markdown 格式
-  - 再根据用户选择的格式导出为 PDF 或 Word 文档
+  - 将文章输出为 Markdown 格式
   - 自动套用格式、自动生成目录
 - 提供导出按钮，直接导出文章
 
@@ -719,7 +1109,10 @@ AI 的角色是：把人话转成排版规则
 - 按步骤依次审校，点击后左侧直接更新为审校结果并标注修改位置
 - 每一步审校过程中实时展示完成百分比
 - 第一遍内容审校：使用默认润色提示词（Default Polish Prompt）
-- 第二遍风格审校：使用默认增强提示词（Default Enhance Prompt）
+- 第二遍风格审校：
+  - **审校前先判断全文中英文字数占比，确定文章主体语言**
+  - **根据文章主体语言选择对应策略进行改写**
+  - 使用默认增强提示词（Default Enhance Prompt）
 - 第三遍细节打磨：使用细节打磨提示词（Rhythm Prompt）
 - 审校过程中保持原文语种不变
 - 审校状态管理
@@ -728,17 +1121,16 @@ AI 的角色是：把人话转成排版规则
 ### 3.10 排版导出
 - 页面布局：
   - 顶部：文件名输入框
-  - 左侧：选择模板区域（推荐风格模板 + 用户自定义模板）
-  - 右侧：选择格式区域（PDF/Word/Markdown）
+  - 中部：选择模板区域（下拉框形式）
   - 底部：导出按钮
 - 功能：
   - 用户输入文件名
-  - 用户选择模板（系统推荐或用户自定义）
-  - 用户选择输出格式
-  - 系统先将文章输出为 Markdown 格式
-  - 系统根据选择的格式导出为 PDF 或 Word 文档
+  - 用户通过下拉框选择模板（系统推荐或用户自定义）
+  - 导出格式固定为 Markdown
+  - 系统将文章输出为 Markdown 格式
   - 自动套用格式、自动生成目录
   - 提供导出按钮，直接导出文章
+- **排版导出与其他页面使用同一进度条，状态显示为排版导出**
 
 ### 3.11 降 AI 率工具
 - 页面布局：
@@ -746,8 +1138,10 @@ AI 的角色是：把人话转成排版规则
   - 右侧：降 AI 率后的文章输出框
 - 功能：
   - 支持上传文件导入文字
-  - 点击降 AI 率按钮后，使用默认增强提示词（Default Enhance Prompt），根据网上内容信息以及个人素材库，在右侧文本框输出降 AI 率之后的文章
-  - 支持按照已有模板输出文章（pdf、word 或 md 格式）
+  - **点击降 AI 率按钮后，先判断全文中英文字数占比，确定文章主体语言**
+  - **根据文章主体语言选择对应策略，使用默认增强提示词（Default Enhance Prompt）进行改写**
+  - 根据网上内容信息以及个人素材库，在右侧文本框输出降 AI 率之后的文章
+  - 支持按照已有模板输出文章（Markdown 格式）
 
 ### 3.12 资产沉淀
 - 写作过程记录
@@ -786,7 +1180,7 @@ AI 的角色是：把人话转成排版规则
 
 输出格式（JSON）：
 {
-  \\"academic_intent\": \"\\",
+  \"academic_intent\": \"\",
   \"web_intent\": \"\"
 }
 ```
@@ -834,7 +1228,7 @@ AI 的角色是：把人话转成排版规则
 
 输出格式（JSON）：
 {
-  \\"queries\": []
+  \"queries\": []
 }
 ```
 
@@ -886,11 +1280,11 @@ AI 的角色是：把人话转成排版规则
 输出结构必须包含：
 
 {
-  \"background_summary\": \\"\",
-  \\"academic_insights\": [
+  \"background_summary\": \"\",
+  \"academic_insights\": [
     {
       \"point\": \"\",
-      \"evidence_source\": \\"academic\"
+      \"evidence_source\": \"academic\"
     }
   ],
   \"industry_insights\": [
@@ -900,7 +1294,7 @@ AI 的角色是：把人话转成排版规则
     }
   ],
   \"open_questions_or_debates\": [
-    \\"\"
+    \"\"
   ],
   \"suggested_writing_angles\": [
     \"\"
@@ -1391,9 +1785,13 @@ sub_claim：
 - 连贯性校验：使用连贯性校验 Prompt（不可修改）
 - 生成初稿：使用生成初稿 Prompt（不可修改）
 - 第一遍内容审校：使用默认润色提示词（Default Polish Prompt）
-- 第二遍风格审校：使用默认增强提示词（Default Enhance Prompt）
+- 第二遍风格审校：
+  - **审校前先判断全文中英文字数占比，确定文章主体语言**
+  - **根据文章主体语言选择对应策略，使用默认增强提示词（Default Enhance Prompt）**
 - 第三遍细节打磨：使用细节打磨提示词（Rhythm Prompt）
-- 降AI率工具：使用默认增强提示词（Default Enhance Prompt）
+- 降AI率工具：
+  - **先判断全文中英文字数占比，确定文章主体语言**
+  - **根据文章主体语言选择对应策略，使用默认增强提示词（Default Enhance Prompt）**
 - 所有提示词内容必须原封不动地保留到应用代码中，不得修改
 
 ### 6.6 案例使用规则

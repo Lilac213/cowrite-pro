@@ -17,7 +17,6 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
   const [brief, setBrief] = useState<Brief | null>(null);
   const [topic, setTopic] = useState('');
   const [formatTemplate, setFormatTemplate] = useState('');
-  const [outputFormat, setOutputFormat] = useState('');
   const [generating, setGenerating] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [generatedRequirements, setGeneratedRequirements] = useState('');
@@ -34,7 +33,6 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
         setBrief(data);
         setTopic(data.topic);
         setFormatTemplate(data.format_template || '');
-        setOutputFormat(data.output_format || '');
         if (data.requirements) {
           setGeneratedRequirements(JSON.stringify(data.requirements, null, 2));
         }
@@ -59,7 +57,6 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
 
 选题：${topic}
 格式模板：${formatTemplate || '无'}
-输出格式：${outputFormat || '无'}
 
 请生成一个结构化的需求文档，包括：
 1. 文章主题
@@ -103,7 +100,6 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
           project_id: projectId,
           topic,
           format_template: formatTemplate || undefined,
-          output_format: outputFormat || undefined,
           requirements: parsedResult,
           confirmed: false,
         });
@@ -113,7 +109,6 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
         const updated = await updateBrief(brief.id, {
           topic,
           format_template: formatTemplate || undefined,
-          output_format: outputFormat || undefined,
           requirements: parsedResult,
           confirmed: false,
         });
@@ -193,25 +188,14 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
               rows={3}
             />
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="format">格式模板</Label>
-              <Input
-                id="format"
-                placeholder="例如：技术博客"
-                value={formatTemplate}
-                onChange={(e) => setFormatTemplate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="output">输出格式</Label>
-              <Input
-                id="output"
-                placeholder="例如：Markdown"
-                value={outputFormat}
-                onChange={(e) => setOutputFormat(e.target.value)}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="format">格式模板</Label>
+            <Input
+              id="format"
+              placeholder="例如：技术博客"
+              value={formatTemplate}
+              onChange={(e) => setFormatTemplate(e.target.value)}
+            />
           </div>
           <Button onClick={handleGenerate} disabled={generating || !topic.trim()}>
             {generating ? '生成中...' : '生成需求文档'}

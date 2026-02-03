@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { TEMPLATE_GENERATION_PROMPT } from '@/constants/prompts';
 import type {
   Profile,
   SystemConfig,
@@ -585,28 +586,7 @@ export async function callWebSearch(query: string) {
 
 // AI 生成模板规则
 export async function generateTemplateRules(description: string) {
-  const systemMessage = `你是一个"文档排版规则解析器"，而不是写作助手。
-
-你的唯一任务是：
-- 将用户提供的【文档格式 / 排版 / 规范说明】
-- 转换为【结构化的排版规则数据】
-
-严格禁止：
-- 生成任何正文内容
-- 补充用户未提及的格式要求
-- 推测学校或期刊的默认规范
-
-如果用户的描述不完整：
-- 使用 null
-- 或在 issues 字段中明确指出缺失项
-
-请以 JSON 格式返回，包含以下字段：
-{
-  "page_structure": {}, // 页面结构
-  "style_rules": {}, // 样式规则
-  "validation_rules": {}, // 校验规则
-  "issues": [] // 缺失或不明确的项
-}`;
+  const systemMessage = TEMPLATE_GENERATION_PROMPT.replace('{{USER_INPUT}}', description);
 
   const result = await callLLMGenerate(description, '', systemMessage);
   return JSON.parse(result);

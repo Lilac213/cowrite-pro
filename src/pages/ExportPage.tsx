@@ -7,19 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, Download, FileText, FileDown, FileCode } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ArrowLeft, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-
-type ExportFormat = 'pdf' | 'word' | 'markdown';
+import WorkflowProgress from '@/components/workflow/WorkflowProgress';
 
 export default function ExportPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [project, setProject] = useState<Project | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [format, setFormat] = useState<ExportFormat>('pdf');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('academic');
   const [filename, setFilename] = useState('');
   const [loading, setLoading] = useState(true);
@@ -195,68 +192,26 @@ ${html}
 
     setExporting(true);
     try {
-      // 第一步：转换为 Markdown
+      // 转换为 Markdown
       const markdown = convertToMarkdown(draft.content);
       
-      // 获取选中的模板样式
-      const template = recommendedTemplates.find(t => t.id === selectedTemplate) || recommendedTemplates[0];
+      // 导出 Markdown 文件
+      const blob = new Blob([markdown], { type: 'text/markdown' });
+      const finalFilename = filename + '.md';
       
-      let finalFilename = filename;
-
-      if (format === 'markdown') {
-        // 直接导出 Markdown
-        const blob = new Blob([markdown], { type: 'text/markdown' });
-        finalFilename += '.md';
-        
-        // 下载文件
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = finalFilename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      } else {
-        // 转换为 HTML
-        const html = markdownToHtml(markdown, template.styles);
-        
-        if (format === 'pdf') {
-          // PDF 格式 - 使用浏览器打印功能
-          const printWindow = window.open('', '_blank');
-          if (printWindow) {
-            printWindow.document.write(html);
-            printWindow.document.close();
-            setTimeout(() => {
-              printWindow.print();
-            }, 250);
-            setExporting(false);
-            toast({
-              title: '导出成功',
-              description: '请在打印对话框中选择"另存为 PDF"',
-            });
-            return;
-          }
-        } else {
-          // Word 格式 - 导出为 HTML (可以用 Word 打开)
-          const blob = new Blob([html], { type: 'application/msword' });
-          finalFilename += '.doc';
-          
-          // 下载文件
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = finalFilename;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }
-      }
+      // 下载文件
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = finalFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
       toast({
         title: '导出成功',
-        description: `文章已导出为 ${format.toUpperCase()} 格式`,
+        description: `文章已导出为 Markdown 格式`,
       });
 
       // 更新项目状态为已完成
@@ -301,69 +256,33 @@ ${html}
       </div>
 
       {/* 进度条 */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium">进度</span>
-          <span className="text-sm font-medium">90%</span>
-        </div>
-        <Progress value={90} className="h-2" />
-        <div className="flex justify-between mt-4 text-xs">
-          <div className="flex flex-col items-center">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
-            <span className="text-center">开始</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
-            <span className="text-center">明确需求</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
-            <span className="text-center">资料查询</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
-            <span className="text-center">文章结构</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
-            <span className="text-center">段落结构</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
-            <span className="text-center">文章生成</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
-            <span className="text-center">内容审校</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">●</div>
-            <span className="text-center font-medium">排版导出</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-1">○</div>
-            <span className="text-center text-muted-foreground">完成</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 文件名输入 */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>文件名</CardTitle>
-          <CardDescription>输入导出文件的名称</CardDescription>
+          <CardTitle>项目进度</CardTitle>
+          <CardDescription>当前阶段：排版导出</CardDescription>
         </CardHeader>
         <CardContent>
-          <Input
-            value={filename}
-            onChange={(e) => setFilename(e.target.value)}
-            placeholder="请输入文件名"
-            className="max-w-md"
-          />
+          <WorkflowProgress currentStage="layout_export" />
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* 文件名和模板选择 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        {/* 文件名输入 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>文件名</CardTitle>
+            <CardDescription>输入导出文件的名称</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Input
+              value={filename}
+              onChange={(e) => setFilename(e.target.value)}
+              placeholder="请输入文件名"
+            />
+          </CardContent>
+        </Card>
+
         {/* 模板选择 */}
         <Card>
           <CardHeader>
@@ -371,113 +290,34 @@ ${html}
             <CardDescription>选择文章的排版样式</CardDescription>
           </CardHeader>
           <CardContent>
-            <RadioGroup value={selectedTemplate} onValueChange={setSelectedTemplate}>
-              <div className="space-y-4">
-                {/* 推荐风格 */}
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium mb-3">推荐风格</h4>
-                  <div className="space-y-3">
-                    {recommendedTemplates.map((template) => (
-                      <div
-                        key={template.id}
-                        className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent cursor-pointer"
-                      >
-                        <RadioGroupItem value={template.id} id={template.id} />
-                        <Label htmlFor={template.id} className="cursor-pointer flex-1">
-                          <div className="font-medium">{template.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {template.description}
-                          </div>
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 用户自定义模板 */}
-                {templates.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-3">我的模板</h4>
-                    <div className="space-y-3">
-                      {templates.map((template) => (
-                        <div
-                          key={template.id}
-                          className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent cursor-pointer"
-                        >
-                          <RadioGroupItem value={template.id} id={template.id} />
-                          <Label htmlFor={template.id} className="cursor-pointer flex-1">
-                            <div className="font-medium">{template.name}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {template.description || '自定义模板'}
-                            </div>
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </RadioGroup>
-          </CardContent>
-        </Card>
-
-        {/* 格式选择 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>选择格式</CardTitle>
-            <CardDescription>选择文章的导出格式</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RadioGroup value={format} onValueChange={(value) => setFormat(value as ExportFormat)}>
-              <div className="space-y-4">
-                <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent cursor-pointer">
-                  <RadioGroupItem value="pdf" id="pdf" />
-                  <Label htmlFor="pdf" className="cursor-pointer flex-1">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      <div className="font-medium">PDF</div>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      便于分享和打印，保持格式不变
-                    </div>
-                  </Label>
-                </div>
-                <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent cursor-pointer">
-                  <RadioGroupItem value="word" id="word" />
-                  <Label htmlFor="word" className="cursor-pointer flex-1">
-                    <div className="flex items-center gap-2">
-                      <FileDown className="h-4 w-4" />
-                      <div className="font-medium">Word (HTML)</div>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      可编辑格式，支持进一步修改
-                    </div>
-                  </Label>
-                </div>
-                <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent cursor-pointer">
-                  <RadioGroupItem value="markdown" id="markdown" />
-                  <Label htmlFor="markdown" className="cursor-pointer flex-1">
-                    <div className="flex items-center gap-2">
-                      <FileCode className="h-4 w-4" />
-                      <div className="font-medium">Markdown</div>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      纯文本格式，适合版本控制和在线发布
-                    </div>
-                  </Label>
-                </div>
-              </div>
-            </RadioGroup>
+            <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+              <SelectTrigger>
+                <SelectValue placeholder="选择模板" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="academic">学术论文</SelectItem>
+                <SelectItem value="simple">简洁风格</SelectItem>
+                <SelectItem value="modern">现代风格</SelectItem>
+                {templates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-2">
+              导出格式：Markdown (.md)
+            </p>
           </CardContent>
         </Card>
       </div>
 
       {/* 预览和导出 */}
-      <Card className="mt-6">
+      <Card>
         <CardHeader>
           <CardTitle>文章预览</CardTitle>
           <CardDescription>
-            {filename || '未命名'} · {format.toUpperCase()}
+            {filename || '未命名'} · Markdown
           </CardDescription>
         </CardHeader>
         <CardContent>
