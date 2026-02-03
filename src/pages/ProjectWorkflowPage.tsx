@@ -24,6 +24,7 @@ const stages = [
   { key: 'paragraph_structure_confirmed', label: '段落结构', progress: 48 },
   { key: 'drafting', label: '文章生成', progress: 60 },
   { key: 'review_pass_1', label: '内容审校', progress: 75 },
+  { key: 'layout_export', label: '排版导出', progress: 90 },
   { key: 'completed', label: '完成', progress: 100 },
 ];
 
@@ -114,6 +115,10 @@ export default function ProjectWorkflowPage() {
         return <MaterialsStage projectId={projectId} onComplete={loadProject} />;
       case 'review_pass_1':
         return <ReviewStage projectId={projectId} onComplete={loadProject} />;
+      case 'layout_export':
+        // 导航到导出页面
+        navigate(`/project/${projectId}/export`);
+        return null;
       case 'completed':
         return <DraftStage projectId={projectId} readonly />;
       default:

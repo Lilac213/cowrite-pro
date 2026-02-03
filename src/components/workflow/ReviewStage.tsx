@@ -139,16 +139,16 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
 
     setConfirming(true);
     try {
-      await updateProject(projectId, { status: 'completed' });
+      await updateProject(projectId, { status: 'layout_export' });
       toast({
         title: '审校完成',
-        description: '文章已完成所有审校，即将进入导出页面',
+        description: '即将进入排版导出页面',
       });
       
-      // 导航到导出页面
-      setTimeout(() => {
-        navigate(`/project/${projectId}/export`);
-      }, 1000);
+      // 刷新项目状态
+      if (onComplete) {
+        onComplete();
+      }
     } catch (error) {
       toast({
         title: '确认失败',

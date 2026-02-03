@@ -10,6 +10,7 @@ export type ProjectStatus =
   | 'review_pass_1'
   | 'review_pass_2'
   | 'review_pass_3'
+  | 'layout_export'
   | 'completed';
 
 export type MaterialType = 'experience' | 'opinion' | 'case';
