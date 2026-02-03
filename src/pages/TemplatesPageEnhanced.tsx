@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getTemplates, createTemplate, deleteTemplate, generateTemplateRules } from '@/db/api';
+import { getTemplates, createTemplate, deleteTemplate, updateTemplate, generateTemplateRules } from '@/db/api';
 import type { Template } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,14 +10,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Trash2, Sparkles, FileText, Eye } from 'lucide-react';
+import { Plus, Trash2, Sparkles, FileText, Eye, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function TemplatesPageEnhanced() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [createMode, setCreateMode] = useState<'manual' | 'ai'>('ai');
   const [newTemplate, setNewTemplate] = useState({
     name: '',
@@ -30,6 +32,7 @@ export default function TemplatesPageEnhanced() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -158,6 +161,42 @@ export default function TemplatesPageEnhanced() {
         title: '删除失败',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleEdit = (template: Template) => {
+    setEditingTemplate({ ...template });
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingTemplate || !editingTemplate.name.trim()) {
+      toast({
+        title: '请填写模板名称',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      await updateTemplate(editingTemplate.id, {
+        name: editingTemplate.name,
+        description: editingTemplate.description,
+        content: editingTemplate.content,
+      });
+      setEditDialogOpen(false);
+      await loadTemplates();
+      toast({
+        title: '更新成功',
+      });
+    } catch (error) {
+      toast({
+        title: '更新失败',
+        variant: 'destructive',
+      });
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -339,6 +378,14 @@ export default function TemplatesPageEnhanced() {
                   <Eye className="h-3 w-3 mr-1" />
                   预览
                 </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleEdit(template)}
+                >
+                  <Edit className="h-3 w-3 mr-1" />
+                  编辑
+                </Button>
               </div>
 
               <p className="text-xs text-muted-foreground mt-3">
@@ -395,6 +442,54 @@ export default function TemplatesPageEnhanced() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 编辑对话框 */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>编辑模板</DialogTitle>
+            <DialogDescription>修改模板的内容</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-name">模板名称</Label>
+              <Input
+                id="edit-name"
+                value={editingTemplate?.name || ''}
+                onChange={(e) => setEditingTemplate(editingTemplate ? { ...editingTemplate, name: e.target.value } : null)}
+                placeholder="请输入模板名称"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-description">描述</Label>
+              <Input
+                id="edit-description"
+                value={editingTemplate?.description || ''}
+                onChange={(e) => setEditingTemplate(editingTemplate ? { ...editingTemplate, description: e.target.value } : null)}
+                placeholder="请输入描述"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-content">模板内容</Label>
+              <Textarea
+                id="edit-content"
+                value={editingTemplate?.content || ''}
+                onChange={(e) => setEditingTemplate(editingTemplate ? { ...editingTemplate, content: e.target.value } : null)}
+                placeholder="请输入模板内容"
+                rows={15}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                取消
+              </Button>
+              <Button onClick={handleUpdate} disabled={updating}>
+                {updating ? '保存中...' : '保存'}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

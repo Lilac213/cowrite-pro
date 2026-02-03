@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Progress } from '@/components/ui/progress';
 import { ArrowLeft, Download, FileText, FileDown, FileCode } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -297,6 +298,53 @@ ${html}
         </Button>
         <h1 className="text-3xl font-bold">排版导出</h1>
         <p className="text-muted-foreground mt-2">选择模板和格式，导出您的文章</p>
+      </div>
+
+      {/* 进度条 */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium">进度</span>
+          <span className="text-sm font-medium">90%</span>
+        </div>
+        <Progress value={90} className="h-2" />
+        <div className="flex justify-between mt-4 text-xs">
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
+            <span className="text-center">开始</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
+            <span className="text-center">明确需求</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
+            <span className="text-center">资料查询</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
+            <span className="text-center">文章结构</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
+            <span className="text-center">段落结构</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
+            <span className="text-center">文章生成</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">✓</div>
+            <span className="text-center">内容审校</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground mb-1">●</div>
+            <span className="text-center font-medium">排版导出</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-1">○</div>
+            <span className="text-center text-muted-foreground">完成</span>
+          </div>
+        </div>
       </div>
 
       {/* 文件名输入 */}

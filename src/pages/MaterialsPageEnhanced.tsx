@@ -4,6 +4,7 @@ import {
   getMaterials, 
   createMaterial, 
   deleteMaterial, 
+  updateMaterial,
   searchMaterials,
   linkMaterialToProjects,
   updateMaterialTags,
@@ -20,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Search, Trash2, Brain, Link as LinkIcon, Tag } from 'lucide-react';
+import { Plus, Search, Trash2, Brain, Link as LinkIcon, Tag, Eye, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const materialTypeLabels = {
@@ -44,7 +45,10 @@ export default function MaterialsPageEnhanced() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
+  const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
   const [newTags, setNewTags] = useState('');
   const [newMaterial, setNewMaterial] = useState({
@@ -55,6 +59,7 @@ export default function MaterialsPageEnhanced() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [organizing, setOrganizing] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -151,6 +156,48 @@ export default function MaterialsPageEnhanced() {
         title: '删除失败',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleView = (material: Material) => {
+    setSelectedMaterial(material);
+    setViewDialogOpen(true);
+  };
+
+  const handleEdit = (material: Material) => {
+    setEditingMaterial({ ...material });
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingMaterial || !editingMaterial.title.trim() || !editingMaterial.content.trim()) {
+      toast({
+        title: '请填写完整信息',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      await updateMaterial(editingMaterial.id, {
+        title: editingMaterial.title,
+        content: editingMaterial.content,
+        material_type: editingMaterial.material_type,
+        source: editingMaterial.source,
+      });
+      setEditDialogOpen(false);
+      await loadData();
+      toast({
+        title: '更新成功',
+      });
+    } catch (error) {
+      toast({
+        title: '更新失败',
+        variant: 'destructive',
+      });
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -400,7 +447,23 @@ export default function MaterialsPageEnhanced() {
               )}
 
               {/* 操作按钮 */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleView(material)}
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  查看
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleEdit(material)}
+                >
+                  <Edit className="h-3 w-3 mr-1" />
+                  编辑
+                </Button>
                 <Button 
                   variant="outline" 
                   size="sm"
@@ -508,6 +571,127 @@ export default function MaterialsPageEnhanced() {
             <Button onClick={handleUpdateTags}>
               保存
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 查看对话框 */}
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedMaterial?.title}</DialogTitle>
+            <DialogDescription>
+              {selectedMaterial && `类型：${materialTypeLabels[selectedMaterial.material_type]} | 状态：${materialStatusLabels[selectedMaterial.status || 'unused']}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>内容</Label>
+              <div className="mt-2 p-4 bg-muted rounded-md whitespace-pre-wrap text-sm">
+                {selectedMaterial?.content}
+              </div>
+            </div>
+            {selectedMaterial?.source && (
+              <div>
+                <Label>来源</Label>
+                <p className="text-sm mt-1">
+                  {selectedMaterial.source === 'manual' && '手动添加'}
+                  {selectedMaterial.source === 'ai_generated' && 'AI 生成'}
+                  {selectedMaterial.source === 'imported' && '导入'}
+                </p>
+              </div>
+            )}
+            {selectedMaterial?.tags && selectedMaterial.tags.length > 0 && (
+              <div>
+                <Label>标签</Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedMaterial.tags.map(tag => (
+                    <Badge key={tag} variant="outline">{tag}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {selectedMaterial?.keywords && selectedMaterial.keywords.length > 0 && (
+              <div>
+                <Label>关键词</Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedMaterial.keywords.map(keyword => (
+                    <Badge key={keyword} variant="secondary">{keyword}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 编辑对话框 */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>编辑素材</DialogTitle>
+            <DialogDescription>修改素材的内容</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-title">标题</Label>
+              <Input
+                id="edit-title"
+                value={editingMaterial?.title || ''}
+                onChange={(e) => setEditingMaterial(editingMaterial ? { ...editingMaterial, title: e.target.value } : null)}
+                placeholder="请输入标题"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-type">类型</Label>
+              <Select
+                value={editingMaterial?.material_type || 'opinion'}
+                onValueChange={(value: any) => setEditingMaterial(editingMaterial ? { ...editingMaterial, material_type: value } : null)}
+              >
+                <SelectTrigger id="edit-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="experience">个人经历</SelectItem>
+                  <SelectItem value="opinion">观点</SelectItem>
+                  <SelectItem value="case">案例/实验</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="edit-content">内容</Label>
+              <Textarea
+                id="edit-content"
+                value={editingMaterial?.content || ''}
+                onChange={(e) => setEditingMaterial(editingMaterial ? { ...editingMaterial, content: e.target.value } : null)}
+                placeholder="请输入内容"
+                rows={15}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-source">来源</Label>
+              <Select
+                value={editingMaterial?.source || 'manual'}
+                onValueChange={(value: any) => setEditingMaterial(editingMaterial ? { ...editingMaterial, source: value } : null)}
+              >
+                <SelectTrigger id="edit-source">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">手动添加</SelectItem>
+                  <SelectItem value="ai_generated">AI 生成</SelectItem>
+                  <SelectItem value="imported">导入</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                取消
+              </Button>
+              <Button onClick={handleUpdate} disabled={updating}>
+                {updating ? '保存中...' : '保存'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -7,6 +7,7 @@ import {
   searchReferenceArticles,
   analyzeReferenceArticle,
   updateReferenceAnalysis,
+  updateReferenceArticle,
   createMaterial
 } from '@/db/api';
 import type { ReferenceArticle } from '@/types';
@@ -18,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Search, Trash2, Brain, FileText, Sparkles } from 'lucide-react';
+import { Plus, Search, Trash2, Brain, FileText, Sparkles, Eye, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function ReferencesPageEnhanced() {
@@ -26,7 +27,10 @@ export default function ReferencesPageEnhanced() {
   const [searchQuery, setSearchQuery] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedReference, setSelectedReference] = useState<ReferenceArticle | null>(null);
+  const [editingReference, setEditingReference] = useState<ReferenceArticle | null>(null);
   const [newReference, setNewReference] = useState({
     title: '',
     content: '',
@@ -36,6 +40,7 @@ export default function ReferencesPageEnhanced() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -123,6 +128,48 @@ export default function ReferencesPageEnhanced() {
         title: '删除失败',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleView = (reference: ReferenceArticle) => {
+    setSelectedReference(reference);
+    setViewDialogOpen(true);
+  };
+
+  const handleEdit = (reference: ReferenceArticle) => {
+    setEditingReference({ ...reference });
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingReference || !editingReference.title.trim() || !editingReference.content.trim()) {
+      toast({
+        title: '请填写完整信息',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      await updateReferenceArticle(editingReference.id, {
+        title: editingReference.title,
+        content: editingReference.content,
+        source_type: editingReference.source_type,
+        source_url: editingReference.source_url,
+      });
+      setEditDialogOpen(false);
+      await loadReferences();
+      toast({
+        title: '更新成功',
+      });
+    } catch (error) {
+      toast({
+        title: '更新失败',
+        variant: 'destructive',
+      });
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -333,6 +380,22 @@ export default function ReferencesPageEnhanced() {
                 <Button 
                   variant="outline" 
                   size="sm"
+                  onClick={() => handleView(reference)}
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  查看
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleEdit(reference)}
+                >
+                  <Edit className="h-3 w-3 mr-1" />
+                  编辑
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
                   onClick={() => handleAnalyze(reference)}
                   disabled={analyzing}
                 >
@@ -483,6 +546,106 @@ export default function ReferencesPageEnhanced() {
               暂无分析结果
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 查看对话框 */}
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedReference?.title}</DialogTitle>
+            <DialogDescription>
+              {selectedReference?.source_type && `来源：${selectedReference.source_type}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedReference?.source_url && (
+              <div>
+                <Label>原文链接</Label>
+                <a 
+                  href={selectedReference.source_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary hover:underline block mt-1"
+                >
+                  {selectedReference.source_url}
+                </a>
+              </div>
+            )}
+            <div>
+              <Label>内容</Label>
+              <div className="mt-2 p-4 bg-muted rounded-md whitespace-pre-wrap text-sm">
+                {selectedReference?.content}
+              </div>
+            </div>
+            {selectedReference?.tags && selectedReference.tags.length > 0 && (
+              <div>
+                <Label>标签</Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedReference.tags.map(tag => (
+                    <Badge key={tag} variant="outline">{tag}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 编辑对话框 */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>编辑文章</DialogTitle>
+            <DialogDescription>修改参考文章的内容</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-title">标题</Label>
+              <Input
+                id="edit-title"
+                value={editingReference?.title || ''}
+                onChange={(e) => setEditingReference(editingReference ? { ...editingReference, title: e.target.value } : null)}
+                placeholder="请输入标题"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-content">内容</Label>
+              <Textarea
+                id="edit-content"
+                value={editingReference?.content || ''}
+                onChange={(e) => setEditingReference(editingReference ? { ...editingReference, content: e.target.value } : null)}
+                placeholder="请输入内容"
+                rows={15}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-source-type">来源类型</Label>
+              <Input
+                id="edit-source-type"
+                value={editingReference?.source_type || ''}
+                onChange={(e) => setEditingReference(editingReference ? { ...editingReference, source_type: e.target.value } : null)}
+                placeholder="例如：学术论文、博客文章等"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-source-url">来源链接</Label>
+              <Input
+                id="edit-source-url"
+                value={editingReference?.source_url || ''}
+                onChange={(e) => setEditingReference(editingReference ? { ...editingReference, source_url: e.target.value } : null)}
+                placeholder="请输入原文链接"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                取消
+              </Button>
+              <Button onClick={handleUpdate} disabled={updating}>
+                {updating ? '保存中...' : '保存'}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
