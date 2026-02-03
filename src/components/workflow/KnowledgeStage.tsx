@@ -274,12 +274,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 {/* 学术共识 */}
                 {workflowResult.structuredSummary.academic_consensus && workflowResult.structuredSummary.academic_consensus.length > 0 && (
                   <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                    <h5 className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">学术共识</h5>
+                    <h5 className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">Academic Consensus</h5>
                     <ul className="space-y-1 text-sm">
-                      {workflowResult.structuredSummary.academic_consensus.map((point: string, idx: number) => (
+                      {workflowResult.structuredSummary.academic_consensus.map((point: any, idx: number) => (
                         <li key={idx} className="flex gap-2">
                           <span className="text-blue-500">•</span>
-                          <span>{point}</span>
+                          <span>{typeof point === 'string' ? point : point.title || point.key_points || JSON.stringify(point)}</span>
                         </li>
                       ))}
                     </ul>
@@ -289,12 +289,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 {/* 产业实践 */}
                 {workflowResult.structuredSummary.industry_practice && workflowResult.structuredSummary.industry_practice.length > 0 && (
                   <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg">
-                    <h5 className="text-xs font-medium text-green-700 dark:text-green-300 mb-2">产业实践</h5>
+                    <h5 className="text-xs font-medium text-green-700 dark:text-green-300 mb-2">Industry Practice</h5>
                     <ul className="space-y-1 text-sm">
-                      {workflowResult.structuredSummary.industry_practice.map((point: string, idx: number) => (
+                      {workflowResult.structuredSummary.industry_practice.map((point: any, idx: number) => (
                         <li key={idx} className="flex gap-2">
                           <span className="text-green-500">•</span>
-                          <span>{point}</span>
+                          <span>{typeof point === 'string' ? point : point.title || point.key_points || JSON.stringify(point)}</span>
                         </li>
                       ))}
                     </ul>
@@ -304,12 +304,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 {/* 最新趋势 */}
                 {workflowResult.structuredSummary.recent_trends && workflowResult.structuredSummary.recent_trends.length > 0 && (
                   <div className="p-4 bg-purple-50 dark:bg-purple-950 rounded-lg">
-                    <h5 className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-2">最新趋势</h5>
+                    <h5 className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-2">Recent Trends</h5>
                     <ul className="space-y-1 text-sm">
-                      {workflowResult.structuredSummary.recent_trends.map((point: string, idx: number) => (
+                      {workflowResult.structuredSummary.recent_trends.map((point: any, idx: number) => (
                         <li key={idx} className="flex gap-2">
                           <span className="text-purple-500">•</span>
-                          <span>{point}</span>
+                          <span>{typeof point === 'string' ? point : point.trend || JSON.stringify(point)}</span>
                         </li>
                       ))}
                     </ul>
