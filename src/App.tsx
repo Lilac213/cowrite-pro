@@ -8,6 +8,7 @@ import { AppLayout } from '@/components/layouts/AppLayout';
 import LoginPage from './pages/LoginPage';
 import ProjectListPage from './pages/ProjectListPage';
 import ProjectWorkflowPage from './pages/ProjectWorkflowPage';
+import ExportPage from './pages/ExportPage';
 import AIReducerPage from './pages/AIReducerPage';
 import MaterialsPage from './pages/MaterialsPage';
 import ReferencesPage from './pages/ReferencesPage';
@@ -28,6 +29,7 @@ const App: React.FC = () => {
             <Route path="/" element={<AppLayout />}>
               <Route index element={<ProjectListPage />} />
               <Route path="project/:projectId" element={<ProjectWorkflowPage />} />
+              <Route path="project/:projectId/export" element={<ExportPage />} />
               <Route path="ai-reducer" element={<AIReducerPage />} />
               <Route path="materials" element={<MaterialsPage />} />
               <Route path="references" element={<ReferencesPage />} />
