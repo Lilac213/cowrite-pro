@@ -56,7 +56,7 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
       const prompt = `请将以下写作需求结构化为需求文档：
 
 选题：${topic}
-格式模板：${formatTemplate || '无'}
+文章类型：${formatTemplate || '无'}
 
 请生成一个结构化的需求文档，包括：
 1. 文章主题
@@ -189,10 +189,10 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="format">格式模板</Label>
+            <Label htmlFor="format">文章类型</Label>
             <Input
               id="format"
-              placeholder="例如：技术博客"
+              placeholder="例如：技术博客、学术论文、产品介绍"
               value={formatTemplate}
               onChange={(e) => setFormatTemplate(e.target.value)}
             />

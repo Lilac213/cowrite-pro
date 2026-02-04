@@ -1,5 +1,19 @@
 import { useState, useEffect } from 'react';
-import { getKnowledgeBase, createKnowledgeBase, updateKnowledgeBase, updateProject, academicSearchWorkflow, generateWritingSummary, saveToReferenceLibrary } from '@/db/api';
+import { 
+  getKnowledgeBase, 
+  createKnowledgeBase, 
+  updateKnowledgeBase, 
+  updateProject, 
+  academicSearchWorkflow, 
+  generateWritingSummary, 
+  saveToReferenceLibrary,
+  getBrief,
+  getMaterials,
+  getReferenceArticles,
+  searchMaterials,
+  searchReferenceArticles,
+  callLLMGenerate
+} from '@/db/api';
 import type { KnowledgeBase } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,11 +38,43 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [synthesizing, setSynthesizing] = useState(false);
   const [workflowResult, setWorkflowResult] = useState<any>(null);
   const [writingSummary, setWritingSummary] = useState<any>(null);
+  const [autoSearched, setAutoSearched] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     loadKnowledge();
+    autoSearchFromBrief();
   }, [projectId]);
+
+  // 根据需求文档自动搜索
+  const autoSearchFromBrief = async () => {
+    if (autoSearched) return;
+    
+    try {
+      const brief = await getBrief(projectId);
+      if (!brief || !brief.requirements) return;
+
+      const requirements = typeof brief.requirements === 'string' 
+        ? JSON.parse(brief.requirements) 
+        : brief.requirements;
+
+      // 构建搜索查询
+      const searchQuery = [
+        requirements.主题 || brief.topic,
+        ...(requirements.核心观点 || []),
+        ...(requirements.关键要点 || [])
+      ].filter(Boolean).join(' ');
+
+      if (searchQuery.trim()) {
+        setQuery(searchQuery);
+        setAutoSearched(true);
+        // 自动执行搜索
+        await handleSearch(searchQuery);
+      }
+    } catch (error) {
+      console.error('自动搜索失败:', error);
+    }
+  };
 
   const loadKnowledge = async () => {
     try {
@@ -39,22 +85,114 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     }
   };
 
-  const handleSearch = async () => {
-    if (!query.trim()) return;
+  const handleSearch = async (searchQuery?: string) => {
+    const queryToUse = searchQuery || query;
+    if (!queryToUse.trim()) return;
 
     setSearching(true);
     try {
-      // 使用混合搜索工作流
-      const result = await academicSearchWorkflow(query);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('未登录');
+
+      // 1. 搜索个人素材库
+      const materials = await searchMaterials(user.id, queryToUse);
+      
+      // 2. 搜索参考文章库
+      const references = await searchReferenceArticles(user.id, queryToUse);
+
+      // 3. 使用混合搜索工作流搜索外部资源
+      const result = await academicSearchWorkflow(queryToUse);
       setWorkflowResult(result);
       
-      // 保存学术论文结果到知识库
-      if (result.academicPapers && result.academicPapers.length > 0) {
-        for (const paper of result.academicPapers) {
+      // 保存个人素材到知识库（标记来源）
+      if (materials && materials.length > 0) {
+        for (const material of materials) {
           await createKnowledgeBase({
             project_id: projectId,
-            title: paper.title || '无标题',
-            content: paper.abstract || paper.content || '暂无摘要',
+            title: material.title || '无标题',
+            content: material.content || '暂无内容',
+            source: '个人素材库',
+            source_url: undefined,
+            collected_at: new Date().toISOString(),
+            next_update_suggestion: '个人素材无需更新',
+            selected: false,
+            keywords: material.keywords || [],
+          });
+        }
+      }
+
+      // 保存参考文章到知识库（标记来源）
+      if (references && references.length > 0) {
+        for (const reference of references) {
+          await createKnowledgeBase({
+            project_id: projectId,
+            title: reference.title || '无标题',
+            content: reference.content || '暂无内容',
+            source: '参考文章库',
+            source_url: reference.source_url || undefined,
+            collected_at: new Date().toISOString(),
+            next_update_suggestion: '参考文章无需更新',
+            selected: false,
+            keywords: reference.keywords || [],
+          });
+        }
+      }
+
+      // 保存学术论文结果到知识库（处理英文内容）
+      if (result.academicPapers && result.academicPapers.length > 0) {
+        for (const paper of result.academicPapers) {
+          // 检测并翻译英文内容
+          let processedTitle = paper.title || '无标题';
+          let processedContent = paper.abstract || paper.content || '暂无摘要';
+          let additionalInfo = '';
+
+          try {
+            // 检测是否为英文内容（简单判断：包含较多英文字符）
+            const englishRatio = (processedContent.match(/[a-zA-Z]/g) || []).length / processedContent.length;
+            if (englishRatio > 0.5) {
+              const { data: translationData, error: translationError } = await supabase.functions.invoke('translate-extract-content', {
+                body: { 
+                  content: processedContent,
+                  title: processedTitle
+                },
+              });
+
+              if (!translationError && translationData) {
+                processedTitle = translationData.translated_title || processedTitle;
+                
+                // 构建包含数据和观点的内容
+                let enhancedContent = translationData.summary || processedContent;
+                
+                if (translationData.data_points && translationData.data_points.length > 0) {
+                  enhancedContent += '\n\n【关键数据】\n';
+                  translationData.data_points.forEach((dp: any) => {
+                    enhancedContent += `• ${dp.translated}`;
+                    if (dp.context) enhancedContent += ` (${dp.context})`;
+                    enhancedContent += '\n';
+                  });
+                }
+
+                if (translationData.viewpoints && translationData.viewpoints.length > 0) {
+                  enhancedContent += '\n【核心观点】\n';
+                  translationData.viewpoints.forEach((vp: any) => {
+                    enhancedContent += `• ${vp.translated}`;
+                    if (vp.supporting_evidence) enhancedContent += ` - ${vp.supporting_evidence}`;
+                    enhancedContent += '\n';
+                  });
+                }
+
+                processedContent = enhancedContent;
+                additionalInfo = ' (已翻译并提取数据观点)';
+              }
+            }
+          } catch (translationError) {
+            console.warn('翻译失败，使用原始内容:', translationError);
+          }
+
+          await createKnowledgeBase({
+            project_id: projectId,
+            title: processedTitle + additionalInfo,
+            content: processedContent,
             source: paper.source || 'Google Scholar',
             source_url: paper.url || undefined,
             published_at: paper.publishedAt || undefined,
@@ -66,13 +204,61 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         }
       }
 
-      // 保存网页搜索结果到知识库
+      // 保存网页搜索结果到知识库（处理英文内容）
       if (result.webPapers && result.webPapers.length > 0) {
         for (const paper of result.webPapers) {
+          // 检测并翻译英文内容
+          let processedTitle = paper.title || '无标题';
+          let processedContent = paper.abstract || paper.content || '暂无摘要';
+          let additionalInfo = '';
+
+          try {
+            // 检测是否为英文内容
+            const englishRatio = (processedContent.match(/[a-zA-Z]/g) || []).length / processedContent.length;
+            if (englishRatio > 0.5) {
+              const { data: translationData, error: translationError } = await supabase.functions.invoke('translate-extract-content', {
+                body: { 
+                  content: processedContent,
+                  title: processedTitle
+                },
+              });
+
+              if (!translationError && translationData) {
+                processedTitle = translationData.translated_title || processedTitle;
+                
+                // 构建包含数据和观点的内容
+                let enhancedContent = translationData.summary || processedContent;
+                
+                if (translationData.data_points && translationData.data_points.length > 0) {
+                  enhancedContent += '\n\n【关键数据】\n';
+                  translationData.data_points.forEach((dp: any) => {
+                    enhancedContent += `• ${dp.translated}`;
+                    if (dp.context) enhancedContent += ` (${dp.context})`;
+                    enhancedContent += '\n';
+                  });
+                }
+
+                if (translationData.viewpoints && translationData.viewpoints.length > 0) {
+                  enhancedContent += '\n【核心观点】\n';
+                  translationData.viewpoints.forEach((vp: any) => {
+                    enhancedContent += `• ${vp.translated}`;
+                    if (vp.supporting_evidence) enhancedContent += ` - ${vp.supporting_evidence}`;
+                    enhancedContent += '\n';
+                  });
+                }
+
+                processedContent = enhancedContent;
+                additionalInfo = ' (已翻译并提取数据观点)';
+              }
+            }
+          } catch (translationError) {
+            console.warn('翻译失败，使用原始内容:', translationError);
+          }
+
           await createKnowledgeBase({
             project_id: projectId,
-            title: paper.title || '无标题',
-            content: paper.abstract || paper.content || '暂无摘要',
+            title: processedTitle + additionalInfo,
+            content: processedContent,
             source: paper.source || 'Web Search',
             source_url: paper.url || undefined,
             published_at: paper.publishedAt || undefined,
@@ -86,10 +272,10 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
       await loadKnowledge();
       
-      const totalResults = (result.academicPapers?.length || 0) + (result.webPapers?.length || 0);
+      const totalResults = (materials?.length || 0) + (references?.length || 0) + (result.academicPapers?.length || 0) + (result.webPapers?.length || 0);
       toast({
-        title: '混合搜索完成',
-        description: `找到 ${result.academicPapers?.length || 0} 篇学术论文，${result.webPapers?.length || 0} 条实时信息`,
+        title: '智能搜索完成',
+        description: `找到 ${materials?.length || 0} 条个人素材，${references?.length || 0} 篇参考文章，${result.academicPapers?.length || 0} 篇学术论文，${result.webPapers?.length || 0} 条实时信息`,
       });
     } catch (error: any) {
       toast({
@@ -126,12 +312,19 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
     setSynthesizing(true);
     try {
-      const summary = await generateWritingSummary(selectedKnowledge);
+      // 获取需求文档
+      const brief = await getBrief(projectId);
+      const requirements = brief?.requirements 
+        ? (typeof brief.requirements === 'string' ? JSON.parse(brief.requirements) : brief.requirements)
+        : null;
+
+      // 调用增强的综合摘要生成
+      const summary = await generateWritingSummaryWithRequirements(selectedKnowledge, requirements);
       setWritingSummary(summary);
       
       toast({
         title: '综合完成',
-        description: '已生成写作级研究摘要',
+        description: '已生成写作级研究摘要，并结合需求文档进行补充论证',
       });
     } catch (error: any) {
       toast({
@@ -141,6 +334,85 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       });
     } finally {
       setSynthesizing(false);
+    }
+  };
+
+  // 增强的综合摘要生成函数（结合需求文档）
+  const generateWritingSummaryWithRequirements = async (selectedKnowledge: any[], requirements: any) => {
+    const systemMessage = `你是 CoWrite 的"研究摘要生成模块"。
+
+基于已筛选的高质量来源和需求文档，请完成以下任务：
+
+1️⃣ 用 **中立、专业、可引用的语言** 总结核心观点  
+2️⃣ 明确区分：
+   - 学术共识
+   - 行业实践 / 现实应用
+3️⃣ **重点关注需求文档中的主题、核心观点和关键要点**
+4️⃣ 罗列出与需求文档相关的数据和观点，对需求文档进行补充和论证
+5️⃣ 避免编造结论，不确定的地方需标注
+6️⃣ 生成一份后续生成文章结构时能直接引用的版本
+
+输出结构必须包含：
+
+{
+  "requirement_alignment": {
+    "topic": "需求文档主题",
+    "core_viewpoints": ["需求文档核心观点"],
+    "key_points": ["需求文档关键要点"]
+  },
+  "background_summary": "背景总结（结合需求文档）",
+  "supporting_data": [
+    {
+      "data_point": "具体数据",
+      "source": "来源",
+      "relevance_to_requirement": "与需求文档的关联性"
+    }
+  ],
+  "supporting_viewpoints": [
+    {
+      "viewpoint": "观点",
+      "evidence": "证据",
+      "source": "来源",
+      "supports_requirement": "支持需求文档的哪个部分"
+    }
+  ],
+  "academic_insights": [
+    {
+      "point": "学术观点",
+      "evidence_source": "academic",
+      "relevance": "与需求的相关性"
+    }
+  ],
+  "industry_insights": [
+    {
+      "point": "行业实践",
+      "evidence_source": "industry",
+      "relevance": "与需求的相关性"
+    }
+  ],
+  "open_questions_or_debates": ["待探讨的问题"],
+  "suggested_writing_angles": ["建议的写作角度（基于需求文档）"],
+  "ready_to_cite": "可直接引用的综合版本（整合需求文档和研究资料）"
+}`;
+
+    const prompt = `需求文档：
+${requirements ? JSON.stringify(requirements, null, 2) : '无需求文档'}
+
+已筛选的高质量来源：
+${JSON.stringify(selectedKnowledge, null, 2)}
+
+请根据需求文档，从已筛选的来源中提炼相关数据和观点，生成可直接用于文章结构生成的综合摘要。`;
+
+    const result = await callLLMGenerate(prompt, '', systemMessage);
+    
+    try {
+      return JSON.parse(result);
+    } catch (e) {
+      const jsonMatch = result.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      throw new Error('无法解析写作摘要');
     }
   };
 
@@ -196,7 +468,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 }
               }}
             />
-            <Button onClick={handleSearch} disabled={searching || !query.trim()}>
+            <Button onClick={() => handleSearch()} disabled={searching || !query.trim()}>
               <Search className="h-4 w-4 mr-2" />
               {searching ? '搜索中...' : '智能搜索'}
             </Button>
@@ -341,7 +613,20 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                     <h4 className="font-semibold">{item.title}</h4>
                     <p className="text-sm text-muted-foreground">{item.content}</p>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Badge variant="outline">{item.source}</Badge>
+                      <Badge 
+                        variant={
+                          item.source === '个人素材库' ? 'default' :
+                          item.source === '参考文章库' ? 'secondary' :
+                          'outline'
+                        }
+                        className={
+                          item.source === '个人素材库' ? 'bg-blue-500 text-white' :
+                          item.source === '参考文章库' ? 'bg-green-500 text-white' :
+                          ''
+                        }
+                      >
+                        {item.source}
+                      </Badge>
                       {item.published_at && (
                         <span>{new Date(item.published_at).toLocaleDateString('zh-CN')}</span>
                       )}
@@ -426,10 +711,43 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           <CardHeader>
             <CardTitle>写作级研究摘要</CardTitle>
             <CardDescription>
-              基于已选择的高质量来源生成的结构化写作素材
+              基于需求文档和已选择的高质量来源生成的结构化写作素材
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* 需求文档对齐 */}
+            {writingSummary.requirement_alignment && (
+              <div className="p-4 bg-primary/10 rounded-lg border-2 border-primary/20">
+                <h4 className="text-sm font-semibold text-primary mb-3">需求文档对齐</h4>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <span className="font-medium">主题：</span>
+                    <span className="ml-2">{writingSummary.requirement_alignment.topic}</span>
+                  </div>
+                  {writingSummary.requirement_alignment.core_viewpoints && writingSummary.requirement_alignment.core_viewpoints.length > 0 && (
+                    <div>
+                      <span className="font-medium">核心观点：</span>
+                      <ul className="ml-4 mt-1 space-y-1">
+                        {writingSummary.requirement_alignment.core_viewpoints.map((vp: string, idx: number) => (
+                          <li key={idx}>• {vp}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {writingSummary.requirement_alignment.key_points && writingSummary.requirement_alignment.key_points.length > 0 && (
+                    <div>
+                      <span className="font-medium">关键要点：</span>
+                      <ul className="ml-4 mt-1 space-y-1">
+                        {writingSummary.requirement_alignment.key_points.map((kp: string, idx: number) => (
+                          <li key={idx}>• {kp}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* 背景总结 */}
             {writingSummary.background_summary && (
               <div className="p-4 bg-muted rounded-lg">
@@ -439,6 +757,55 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             )}
 
             <Separator />
+
+            {/* 支持数据 */}
+            {writingSummary.supporting_data && writingSummary.supporting_data.length > 0 && (
+              <div className="p-4 bg-cyan-50 dark:bg-cyan-950 rounded-lg">
+                <h4 className="text-sm font-semibold text-cyan-700 dark:text-cyan-300 mb-3">支持数据</h4>
+                <div className="space-y-3">
+                  {writingSummary.supporting_data.map((data: any, idx: number) => (
+                    <div key={idx} className="border-l-2 border-cyan-500 pl-3">
+                      <p className="text-sm font-medium">{data.data_point}</p>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        <Badge variant="outline" className="text-xs">
+                          来源：{data.source}
+                        </Badge>
+                        {data.relevance_to_requirement && (
+                          <Badge variant="secondary" className="text-xs">
+                            关联：{data.relevance_to_requirement}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 支持观点 */}
+            {writingSummary.supporting_viewpoints && writingSummary.supporting_viewpoints.length > 0 && (
+              <div className="p-4 bg-indigo-50 dark:bg-indigo-950 rounded-lg">
+                <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-300 mb-3">支持观点</h4>
+                <div className="space-y-3">
+                  {writingSummary.supporting_viewpoints.map((vp: any, idx: number) => (
+                    <div key={idx} className="border-l-2 border-indigo-500 pl-3">
+                      <p className="text-sm font-medium">{vp.viewpoint}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{vp.evidence}</p>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        <Badge variant="outline" className="text-xs">
+                          来源：{vp.source}
+                        </Badge>
+                        {vp.supports_requirement && (
+                          <Badge variant="secondary" className="text-xs">
+                            支持：{vp.supports_requirement}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* 学术洞察 */}
             {writingSummary.academic_insights && writingSummary.academic_insights.length > 0 && (
@@ -450,9 +817,16 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                       <span className="text-blue-500 mt-1">•</span>
                       <div className="flex-1">
                         <p className="text-sm">{insight.point}</p>
-                        <Badge variant="outline" className="mt-1 text-xs">
-                          来源：{insight.evidence_source}
-                        </Badge>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            来源：{insight.evidence_source}
+                          </Badge>
+                          {insight.relevance && (
+                            <Badge variant="secondary" className="text-xs">
+                              {insight.relevance}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -470,9 +844,16 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                       <span className="text-green-500 mt-1">•</span>
                       <div className="flex-1">
                         <p className="text-sm">{insight.point}</p>
-                        <Badge variant="outline" className="mt-1 text-xs">
-                          来源：{insight.evidence_source}
-                        </Badge>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            来源：{insight.evidence_source}
+                          </Badge>
+                          {insight.relevance && (
+                            <Badge variant="secondary" className="text-xs">
+                              {insight.relevance}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -498,7 +879,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             {/* 建议写作角度 */}
             {writingSummary.suggested_writing_angles && writingSummary.suggested_writing_angles.length > 0 && (
               <div className="p-4 bg-purple-50 dark:bg-purple-950 rounded-lg">
-                <h4 className="text-sm font-semibold text-purple-700 dark:text-purple-300 mb-3">建议写作角度</h4>
+                <h4 className="text-sm font-semibold text-purple-700 dark:text-purple-300 mb-3">建议写作角度（基于需求文档）</h4>
                 <ul className="space-y-1 text-sm">
                   {writingSummary.suggested_writing_angles.map((angle: string, idx: number) => (
                     <li key={idx} className="flex gap-2">
@@ -507,6 +888,16 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* 可直接引用版本 */}
+            {writingSummary.ready_to_cite && (
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950 rounded-lg border-2 border-emerald-500/20">
+                <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-3">
+                  可直接引用版本（用于文章结构生成）
+                </h4>
+                <p className="text-sm whitespace-pre-wrap">{writingSummary.ready_to_cite}</p>
               </div>
             )}
           </CardContent>
