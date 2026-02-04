@@ -138,61 +138,83 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         }
       }
 
+      // 辅助函数：翻译并提取英文内容
+      const translateIfNeeded = async (title: string, content: string) => {
+        try {
+          // 检测是否为英文内容（简单判断：包含较多英文字符）
+          const englishRatio = (content.match(/[a-zA-Z]/g) || []).length / content.length;
+          if (englishRatio > 0.5 && content.length > 50) {
+            const { data: translationData, error: translationError } = await supabase.functions.invoke('translate-extract-content', {
+              body: { 
+                content: content,
+                title: title
+              },
+            });
+
+            if (translationError) {
+              console.error('翻译错误:', translationError);
+              return { title, content, translated: false, error: translationError.message };
+            }
+
+            if (translationData && translationData.translated_title) {
+              // 构建包含数据和观点的内容
+              let enhancedContent = translationData.summary || content;
+              
+              if (translationData.data_points && translationData.data_points.length > 0) {
+                enhancedContent += '\n\n【关键数据】\n';
+                translationData.data_points.forEach((dp: any) => {
+                  enhancedContent += `• ${dp.translated}`;
+                  if (dp.context) enhancedContent += ` (${dp.context})`;
+                  enhancedContent += '\n';
+                });
+              }
+
+              if (translationData.viewpoints && translationData.viewpoints.length > 0) {
+                enhancedContent += '\n【核心观点】\n';
+                translationData.viewpoints.forEach((vp: any) => {
+                  enhancedContent += `• ${vp.translated}`;
+                  if (vp.supporting_evidence) enhancedContent += ` - ${vp.supporting_evidence}`;
+                  enhancedContent += '\n';
+                });
+              }
+
+              return {
+                title: translationData.translated_title,
+                content: enhancedContent,
+                translated: true,
+                error: null
+              };
+            }
+          }
+          return { title, content, translated: false, error: null };
+        } catch (error: any) {
+          console.error('翻译异常:', error);
+          return { title, content, translated: false, error: error.message };
+        }
+      };
+
       // 保存学术论文结果到知识库（处理英文内容）
       if (result.academicPapers && result.academicPapers.length > 0) {
+        let translatedCount = 0;
+        let failedCount = 0;
+        
         for (const paper of result.academicPapers) {
-          // 检测并翻译英文内容
-          let processedTitle = paper.title || '无标题';
-          let processedContent = paper.abstract || paper.content || '暂无摘要';
-          let additionalInfo = '';
-
-          try {
-            // 检测是否为英文内容（简单判断：包含较多英文字符）
-            const englishRatio = (processedContent.match(/[a-zA-Z]/g) || []).length / processedContent.length;
-            if (englishRatio > 0.5) {
-              const { data: translationData, error: translationError } = await supabase.functions.invoke('translate-extract-content', {
-                body: { 
-                  content: processedContent,
-                  title: processedTitle
-                },
-              });
-
-              if (!translationError && translationData) {
-                processedTitle = translationData.translated_title || processedTitle;
-                
-                // 构建包含数据和观点的内容
-                let enhancedContent = translationData.summary || processedContent;
-                
-                if (translationData.data_points && translationData.data_points.length > 0) {
-                  enhancedContent += '\n\n【关键数据】\n';
-                  translationData.data_points.forEach((dp: any) => {
-                    enhancedContent += `• ${dp.translated}`;
-                    if (dp.context) enhancedContent += ` (${dp.context})`;
-                    enhancedContent += '\n';
-                  });
-                }
-
-                if (translationData.viewpoints && translationData.viewpoints.length > 0) {
-                  enhancedContent += '\n【核心观点】\n';
-                  translationData.viewpoints.forEach((vp: any) => {
-                    enhancedContent += `• ${vp.translated}`;
-                    if (vp.supporting_evidence) enhancedContent += ` - ${vp.supporting_evidence}`;
-                    enhancedContent += '\n';
-                  });
-                }
-
-                processedContent = enhancedContent;
-                additionalInfo = ' (已翻译并提取数据观点)';
-              }
-            }
-          } catch (translationError) {
-            console.warn('翻译失败，使用原始内容:', translationError);
+          const originalTitle = paper.title || '无标题';
+          const originalContent = paper.abstract || paper.content || '暂无摘要';
+          
+          const { title, content, translated, error } = await translateIfNeeded(originalTitle, originalContent);
+          
+          if (translated) {
+            translatedCount++;
+          } else if (error) {
+            failedCount++;
+            console.warn(`论文 "${originalTitle}" 翻译失败:`, error);
           }
 
           await createKnowledgeBase({
             project_id: projectId,
-            title: processedTitle + additionalInfo,
-            content: processedContent,
+            title: title + (translated ? ' (已翻译并提取数据观点)' : ''),
+            content: content,
             source: paper.source || 'Google Scholar',
             source_url: paper.url || undefined,
             published_at: paper.publishedAt || undefined,
@@ -202,63 +224,37 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             keywords: result.academicKeywords?.main_keywords || [],
           });
         }
+        
+        if (translatedCount > 0) {
+          console.log(`成功翻译 ${translatedCount} 篇学术论文`);
+        }
+        if (failedCount > 0) {
+          console.warn(`${failedCount} 篇论文翻译失败`);
+        }
       }
 
       // 保存网页搜索结果到知识库（处理英文内容）
       if (result.webPapers && result.webPapers.length > 0) {
+        let translatedCount = 0;
+        let failedCount = 0;
+        
         for (const paper of result.webPapers) {
-          // 检测并翻译英文内容
-          let processedTitle = paper.title || '无标题';
-          let processedContent = paper.abstract || paper.content || '暂无摘要';
-          let additionalInfo = '';
-
-          try {
-            // 检测是否为英文内容
-            const englishRatio = (processedContent.match(/[a-zA-Z]/g) || []).length / processedContent.length;
-            if (englishRatio > 0.5) {
-              const { data: translationData, error: translationError } = await supabase.functions.invoke('translate-extract-content', {
-                body: { 
-                  content: processedContent,
-                  title: processedTitle
-                },
-              });
-
-              if (!translationError && translationData) {
-                processedTitle = translationData.translated_title || processedTitle;
-                
-                // 构建包含数据和观点的内容
-                let enhancedContent = translationData.summary || processedContent;
-                
-                if (translationData.data_points && translationData.data_points.length > 0) {
-                  enhancedContent += '\n\n【关键数据】\n';
-                  translationData.data_points.forEach((dp: any) => {
-                    enhancedContent += `• ${dp.translated}`;
-                    if (dp.context) enhancedContent += ` (${dp.context})`;
-                    enhancedContent += '\n';
-                  });
-                }
-
-                if (translationData.viewpoints && translationData.viewpoints.length > 0) {
-                  enhancedContent += '\n【核心观点】\n';
-                  translationData.viewpoints.forEach((vp: any) => {
-                    enhancedContent += `• ${vp.translated}`;
-                    if (vp.supporting_evidence) enhancedContent += ` - ${vp.supporting_evidence}`;
-                    enhancedContent += '\n';
-                  });
-                }
-
-                processedContent = enhancedContent;
-                additionalInfo = ' (已翻译并提取数据观点)';
-              }
-            }
-          } catch (translationError) {
-            console.warn('翻译失败，使用原始内容:', translationError);
+          const originalTitle = paper.title || '无标题';
+          const originalContent = paper.abstract || paper.content || '暂无摘要';
+          
+          const { title, content, translated, error } = await translateIfNeeded(originalTitle, originalContent);
+          
+          if (translated) {
+            translatedCount++;
+          } else if (error) {
+            failedCount++;
+            console.warn(`网页 "${originalTitle}" 翻译失败:`, error);
           }
 
           await createKnowledgeBase({
             project_id: projectId,
-            title: processedTitle + additionalInfo,
-            content: processedContent,
+            title: title + (translated ? ' (已翻译并提取数据观点)' : ''),
+            content: content,
             source: paper.source || 'Web Search',
             source_url: paper.url || undefined,
             published_at: paper.publishedAt || undefined,
@@ -267,6 +263,13 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             selected: false,
             keywords: result.webQueries?.queries || [],
           });
+        }
+        
+        if (translatedCount > 0) {
+          console.log(`成功翻译 ${translatedCount} 条网页内容`);
+        }
+        if (failedCount > 0) {
+          console.warn(`${failedCount} 条网页翻译失败`);
         }
       }
 

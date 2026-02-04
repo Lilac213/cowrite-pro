@@ -126,13 +126,24 @@ export default function MaterialsPage() {
     setParsing(true);
 
     try {
+      // 清理文件名，移除特殊字符
+      const cleanFileName = file.name
+        .replace(/[^\w\s.-]/g, '_')  // 替换特殊字符为下划线
+        .replace(/\s+/g, '_');        // 替换空格为下划线
+      
       // 上传文件到 Supabase Storage
-      const fileName = `${user!.id}/${Date.now()}_${file.name}`;
+      const fileName = `${user!.id}/${Date.now()}_${cleanFileName}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('cowrite-files')
-        .upload(fileName, file);
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw new Error(`文件上传失败: ${uploadError.message}`);
+      }
 
       const { data: { publicUrl } } = supabase.storage
         .from('cowrite-files')
