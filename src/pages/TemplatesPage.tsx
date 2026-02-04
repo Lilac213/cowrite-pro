@@ -15,6 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [viewingTemplate, setViewingTemplate] = useState<Template | null>(null);
   const [newTemplate, setNewTemplate] = useState({
     name: '',
     content: '',
@@ -165,18 +167,89 @@ export default function TemplatesPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* 查看模板对话框 */}
+        <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>查看模板</DialogTitle>
+              <DialogDescription>模板详情</DialogDescription>
+            </DialogHeader>
+            {viewingTemplate && (
+              <div className="space-y-4">
+                <div>
+                  <Label>模板名称</Label>
+                  <div className="mt-1 p-3 bg-muted rounded-md">
+                    {viewingTemplate.name}
+                  </div>
+                </div>
+                <div>
+                  <Label>格式</Label>
+                  <div className="mt-1 p-3 bg-muted rounded-md">
+                    {viewingTemplate.format}
+                  </div>
+                </div>
+                <div>
+                  <Label>模板内容</Label>
+                  <div className="mt-1 p-3 bg-muted rounded-md">
+                    <pre className="whitespace-pre-wrap text-sm max-h-96 overflow-y-auto">
+                      {viewingTemplate.content}
+                    </pre>
+                  </div>
+                </div>
+                {viewingTemplate.tags && viewingTemplate.tags.length > 0 && (
+                  <div>
+                    <Label>标签</Label>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {viewingTemplate.tags.map((tag, index) => (
+                        <span key={index} className="px-2 py-1 bg-primary/10 text-primary rounded-md text-sm">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <Label>创建时间</Label>
+                  <div className="mt-1 p-3 bg-muted rounded-md">
+                    {new Date(viewingTemplate.created_at).toLocaleString('zh-CN')}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button onClick={() => setViewDialogOpen(false)}>
+                关闭
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {templates.map((template) => (
-          <Card key={template.id}>
+          <Card 
+            key={template.id}
+            className="cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => {
+              setViewingTemplate(template);
+              setViewDialogOpen(true);
+            }}
+          >
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <CardTitle className="text-lg">{template.name}</CardTitle>
                   <CardDescription className="mt-1">{template.format}</CardDescription>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => handleDelete(template.id)}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(template.id);
+                  }}
+                >
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>

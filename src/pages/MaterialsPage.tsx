@@ -180,8 +180,20 @@ export default function MaterialsPage() {
     setSummarizing(true);
 
     try {
-      // 先调用 AI 生成摘要和标签
-      const { summary, tags } = await summarizeContent(newMaterial.content);
+      // 尝试调用 AI 生成摘要和标签
+      let summary = '';
+      let tags: string[] = [];
+      
+      try {
+        const result = await summarizeContent(newMaterial.content);
+        summary = result.summary;
+        tags = result.tags;
+      } catch (summaryError: any) {
+        console.warn('摘要生成失败，使用默认值:', summaryError);
+        // 如果摘要生成失败，使用内容的前200个字符作为摘要
+        summary = newMaterial.content.substring(0, 200);
+        tags = [];
+      }
 
       // 创建素材
       await createMaterial({
@@ -200,7 +212,7 @@ export default function MaterialsPage() {
       
       toast({
         title: '创建成功',
-        description: `已提取 ${tags.length} 个标签`,
+        description: tags.length > 0 ? `已提取 ${tags.length} 个标签` : '素材已保存',
       });
     } catch (error: any) {
       toast({
@@ -226,8 +238,21 @@ export default function MaterialsPage() {
     setSummarizing(true);
 
     try {
-      // 重新生成摘要和标签
-      const { summary, tags } = await summarizeContent(editingMaterial.content);
+      // 尝试重新生成摘要和标签
+      let summary = editingMaterial.summary || '';
+      let tags = editingMaterial.keywords || [];
+      
+      try {
+        const result = await summarizeContent(editingMaterial.content);
+        summary = result.summary;
+        tags = result.tags;
+      } catch (summaryError: any) {
+        console.warn('摘要生成失败，保留原有值:', summaryError);
+        // 如果摘要生成失败，使用内容的前200个字符作为摘要
+        if (!summary) {
+          summary = editingMaterial.content.substring(0, 200);
+        }
+      }
 
       await updateMaterial(editingMaterial.id, {
         title: editingMaterial.title,
@@ -243,7 +268,7 @@ export default function MaterialsPage() {
       
       toast({
         title: '更新成功',
-        description: `已更新标签`,
+        description: tags.length > 0 ? `已更新标签` : '素材已更新',
       });
     } catch (error: any) {
       toast({

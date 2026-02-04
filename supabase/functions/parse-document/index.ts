@@ -23,10 +23,26 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // 从 fileUrl 中提取文件路径
+    // fileUrl 可能是完整的 URL 或者只是路径
+    let filePath = fileUrl;
+    
+    // 如果是完整 URL，提取路径部分
+    if (fileUrl.includes('/storage/v1/object/public/cowrite-files/')) {
+      filePath = fileUrl.split('/storage/v1/object/public/cowrite-files/')[1];
+    } else if (fileUrl.startsWith('http')) {
+      // 尝试从 URL 中提取路径
+      const urlObj = new URL(fileUrl);
+      const pathParts = urlObj.pathname.split('/cowrite-files/');
+      if (pathParts.length > 1) {
+        filePath = pathParts[1];
+      }
+    }
+
     // 下载文件
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('cowrite-files')
-      .download(fileUrl.replace(`${supabaseUrl}/storage/v1/object/public/cowrite-files/`, ''));
+      .download(filePath);
 
     if (downloadError) {
       throw new Error(`文件下载失败: ${downloadError.message}`);

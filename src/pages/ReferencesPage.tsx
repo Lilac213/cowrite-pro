@@ -19,6 +19,8 @@ export default function ReferencesPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [viewingReference, setViewingReference] = useState<ReferenceArticle | null>(null);
   const [inputMethod, setInputMethod] = useState<'url' | 'file' | 'text'>('text');
   const [newReference, setNewReference] = useState({
     title: '',
@@ -32,6 +34,7 @@ export default function ReferencesPage() {
   const [creating, setCreating] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
+
 
   useEffect(() => {
     loadReferences();
@@ -357,6 +360,63 @@ export default function ReferencesPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* 查看参考文章对话框 */}
+        <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>查看参考文章</DialogTitle>
+              <DialogDescription>参考文章详情</DialogDescription>
+            </DialogHeader>
+            {viewingReference && (
+              <div className="space-y-4">
+                <div>
+                  <Label>标题</Label>
+                  <div className="mt-1 p-3 bg-muted rounded-md">
+                    {viewingReference.title}
+                  </div>
+                </div>
+                {viewingReference.source_type && (
+                  <div>
+                    <Label>来源类型</Label>
+                    <div className="mt-1 p-3 bg-muted rounded-md">
+                      {viewingReference.source_type}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <Label>内容</Label>
+                  <div className="mt-1 p-3 bg-muted rounded-md whitespace-pre-wrap max-h-96 overflow-y-auto">
+                    {viewingReference.content}
+                  </div>
+                </div>
+                {viewingReference.keywords && viewingReference.keywords.length > 0 && (
+                  <div>
+                    <Label>关键词</Label>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {viewingReference.keywords.map((keyword, index) => (
+                        <span key={index} className="px-2 py-1 bg-primary/10 text-primary rounded-md text-sm">
+                          {keyword}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <Label>创建时间</Label>
+                  <div className="mt-1 p-3 bg-muted rounded-md">
+                    {new Date(viewingReference.created_at).toLocaleString('zh-CN')}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button onClick={() => setViewDialogOpen(false)}>
+                关闭
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card className="mb-6">
@@ -382,7 +442,14 @@ export default function ReferencesPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {references.map((reference) => (
-          <Card key={reference.id}>
+          <Card 
+            key={reference.id} 
+            className="cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => {
+              setViewingReference(reference);
+              setViewDialogOpen(true);
+            }}
+          >
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -391,7 +458,14 @@ export default function ReferencesPage() {
                     <CardDescription className="mt-1">{reference.source_type}</CardDescription>
                   )}
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => handleDelete(reference.id)}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(reference.id);
+                  }}
+                >
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
