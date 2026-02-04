@@ -5,7 +5,6 @@ import { getProject, updateProject, saveProjectHistory, getProjectHistoryByStage
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import BriefStage from '@/components/workflow/BriefStage';
@@ -15,6 +14,7 @@ import ParagraphStructureStage from '@/components/workflow/ParagraphStructureSta
 import MaterialsStage from '@/components/workflow/MaterialsStage';
 import DraftStage from '@/components/workflow/DraftStage';
 import ReviewStage from '@/components/workflow/ReviewStage';
+import WorkflowProgress from '@/components/workflow/WorkflowProgress';
 
 const stages = [
   { key: 'init', label: '开始', progress: 0 },
@@ -162,43 +162,11 @@ export default function ProjectWorkflowPage() {
           <CardDescription>当前阶段：{currentStage.label}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>进度</span>
-              <span>{currentStage.progress}%</span>
-            </div>
-            <Progress value={currentStage.progress} />
-            <div className="flex justify-between text-xs text-muted-foreground mt-4">
-              {stages.map((stage, index) => {
-                const isCompleted = index < stages.findIndex((s) => s.key === project.status);
-                const isCurrent = stage.key === project.status;
-                const isClickable = isCompleted || isCurrent;
-                
-                return (
-                  <div
-                    key={stage.key}
-                    className={`flex flex-col items-center ${
-                      isClickable ? 'cursor-pointer hover:text-primary transition-colors' : ''
-                    } ${
-                      index <= stages.findIndex((s) => s.key === project.status)
-                        ? 'text-foreground'
-                        : ''
-                    }`}
-                    onClick={() => isClickable && handleStageClick(stage.key)}
-                  >
-                    <div
-                      className={`w-2 h-2 rounded-full mb-1 ${
-                        index <= stages.findIndex((s) => s.key === project.status)
-                          ? 'bg-primary'
-                          : 'bg-muted'
-                      } ${isClickable ? 'hover:scale-125 transition-transform' : ''}`}
-                    />
-                    <span className="hidden md:block">{stage.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <WorkflowProgress 
+            currentStage={project.status} 
+            onStageClick={handleStageClick}
+            clickable={true}
+          />
         </CardContent>
       </Card>
 

@@ -120,13 +120,31 @@ export default function TemplatesPageEnhanced() {
 
     setCreating(true);
     try {
+      let finalRules = generatedRules;
+      
+      // 如果是手动模式，检查内容是否为自然语言，如果是则转换为JSON
+      if (createMode === 'manual' && newTemplate.content.trim()) {
+        // 尝试解析为JSON，如果失败则认为是自然语言
+        try {
+          JSON.parse(newTemplate.content);
+          // 如果能解析，说明已经是JSON格式，直接使用
+        } catch {
+          // 无法解析为JSON，说明是自然语言，需要转换
+          toast({
+            title: '正在转换格式...',
+            description: '使用AI将自然语言转换为结构化格式',
+          });
+          finalRules = await generateTemplateRules(newTemplate.content);
+        }
+      }
+      
       await createTemplate({
         user_id: user.id,
         name: newTemplate.name,
         description: newTemplate.description || undefined,
         content: newTemplate.content || '# 模板内容\n\n此模板由 AI 生成',
         format: newTemplate.format,
-        rules: createMode === 'ai' ? generatedRules : undefined,
+        rules: finalRules,
         preview_content: '预览内容',
       });
       
@@ -142,6 +160,7 @@ export default function TemplatesPageEnhanced() {
     } catch (error) {
       toast({
         title: '创建失败',
+        description: error instanceof Error ? error.message : '未知错误',
         variant: 'destructive',
       });
     } finally {
@@ -180,10 +199,28 @@ export default function TemplatesPageEnhanced() {
 
     setUpdating(true);
     try {
+      let finalRules = editingTemplate.rules;
+      
+      // 检查内容是否为自然语言，如果是则转换为JSON
+      if (editingTemplate.content && editingTemplate.content.trim()) {
+        try {
+          JSON.parse(editingTemplate.content);
+          // 如果能解析，说明已经是JSON格式
+        } catch {
+          // 无法解析为JSON，说明是自然语言，需要转换
+          toast({
+            title: '正在转换格式...',
+            description: '使用AI将自然语言转换为结构化格式',
+          });
+          finalRules = await generateTemplateRules(editingTemplate.content);
+        }
+      }
+      
       await updateTemplate(editingTemplate.id, {
         name: editingTemplate.name,
         description: editingTemplate.description,
         content: editingTemplate.content,
+        rules: finalRules,
       });
       setEditDialogOpen(false);
       await loadTemplates();
@@ -193,6 +230,7 @@ export default function TemplatesPageEnhanced() {
     } catch (error) {
       toast({
         title: '更新失败',
+        description: error instanceof Error ? error.message : '未知错误',
         variant: 'destructive',
       });
     } finally {
@@ -321,8 +359,11 @@ export default function TemplatesPageEnhanced() {
                     value={newTemplate.content}
                     onChange={(e) => setNewTemplate({ ...newTemplate, content: e.target.value })}
                     rows={12}
-                    placeholder="输入模板内容..."
+                    placeholder="可以输入自然语言描述（如：本科毕业论文格式：标题三号黑体居中...）或JSON格式"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    支持自然语言描述，创建时将自动转换为结构化格式
+                  </p>
                 </div>
               </TabsContent>
             </Tabs>
@@ -477,9 +518,12 @@ export default function TemplatesPageEnhanced() {
                 id="edit-content"
                 value={editingTemplate?.content || ''}
                 onChange={(e) => setEditingTemplate(editingTemplate ? { ...editingTemplate, content: e.target.value } : null)}
-                placeholder="请输入模板内容"
+                placeholder="可以输入自然语言描述（如：本科毕业论文格式：标题三号黑体居中...）或JSON格式"
                 rows={15}
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                支持自然语言描述，保存时将自动转换为结构化格式
+              </p>
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setEditDialogOpen(false)}>

@@ -44,7 +44,7 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
 - AI 将输入结构化为需求文档，生成时参考所选格式模板中的相关内容
 - 需求文档保存至 _briefs/ 文件夹，文件名格式：项目名-brief.md
 - 用户必须确认需求后才能进入下一步
-- **重新点击生成需求文档后，确认按钮需重置为待确认状态**
+- 重新点击生成需求文档后，确认按钮需重置为待确认状态
 
 #### 阶段 3：AI 混合信息搜索与知识库沉淀
 
@@ -91,15 +91,15 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
   - 行业洞察（观点 + 证据来源）
   - 开放性问题或争议
   - 建议的写作角度
-- **此步骤完成后，用户可点击进入下一步（文章结构）**
+- 此步骤完成后，用户可点击进入下一步（文章结构）
 
 **知识库沉淀**
 - 搜索结果以卡片形式展示，包含来源、发布时间、摘要
 - 用户可勾选认可的信息
 - 信息保存至 _knowledge_base/ 文件夹，文件名格式：主题-时间.md
 - 必须包含：信息收集时间、信息来源、下次更新建议
-- **资料查询中整理观点、论据或案例**
-- **资料查询增加按钮一键收藏到参考文章库**
+- 资料查询中整理观点、论据或案例
+- 资料查询增加按钮一键收藏到参考文章库
 
 #### 阶段 4：文章结构生成
 
@@ -310,18 +310,18 @@ sub_claim：
   - 直接复制到文本框
 - 参考文章支持关联到项目
 - 参考文章保存至 _reference/ 文件夹，文件名格式：（提取名称）-时间.md
-- **参考文章生成后支持修改和删除，生成后不直接保存文字**
-- **AI 总结提炼相关观点，并打相应标签（如师幼互动、竹子实验等关键词）**
-- **参考文章中整理观点、论据或案例**
-- **后续写新文章时可根据标签搜索到相关参考内容**
+- 参考文章生成后支持修改和删除，生成后不直接保存文字
+- AI 总结提炼相关观点，并打相应标签（如师幼互动、竹子实验等关键词）
+- 参考文章中整理观点、论据或案例
+- 后续写新文章时可根据标签搜索到相关参考内容
 - 个人素材提供三个输入框：
   - 个人经历
   - 观点
   - 案例/实验
 - 个人素材保存至 _human_character/ 文件夹，文件名格式：（提取名称）-时间.md
-- **个人素材生成后支持修改和删除，生成后不直接保存文字**
-- **AI 总结提炼相关观点和案例，并打相应标签（如师幼互动、竹子实验等关键词）**
-- **后续写新文章时可根据标签搜索到相关参考内容**
+- 个人素材生成后支持修改和删除，生成后不直接保存文字
+- AI 总结提炼相关观点和案例，并打相应标签（如师幼互动、竹子实验等关键词）
+- 后续写新文章时可根据标签搜索到相关参考内容
 - 所有素材长期保存
 - 系统自动打关键词，后续项目可复用
 
@@ -355,7 +355,7 @@ sub_claim：
 - AI 根据需求、知识库、文章级论证结构、段落结构、个人素材生成完整文章
 - 采用协作文档形式，用户可直接修改
 - AI 修改有标记，不覆盖用户内容
-- **初稿生成时，右侧显示 Word 注释区，展示每段的信息来源与生成逻辑**
+- 初稿生成时，右侧显示 Word 注释区，展示每段的信息来源与生成逻辑
 
 **初稿生成规范**
 - 正文与注释区分开输出
@@ -407,7 +407,7 @@ sub_claim：
 - 右侧：三步审校流程，需按步骤依次进行
 - 点击每一步审校后，左侧文本框直接更新为该步骤的审校结果，并标注修改位置
 - 每一步审校过程中实时展示完成百分比，让用户对完成时间有所预期
-- **审校完成后，直接显示最终文案，不显示学术化精修稿等中间标题**
+- 审校完成后，直接显示最终文案，不显示学术化精修稿等中间标题
 
 **第一遍：内容审校（使用润色提示词）**
 - 检查事实准确性（数据、时间、产品名称）
@@ -425,7 +425,7 @@ sub_claim：
 - 改成口语化：进行操作 → 直接用动词
 - 加入真实细节：抽象表达 → 具体数字/案例
 - 加入个人态度：中立客观 → 明确观点
-- **审校前先判断全文中英文字数占比，确定文章主体语言，再选择对应策略进行改写**
+- 审校前先判断全文中英文字数占比，确定文章主体语言，再选择对应策略进行改写
 - 使用默认增强提示词（Default Enhance Prompt）进行去AI化处理
 
 **第三遍：细节打磨（使用细节打磨提示词）**
@@ -457,6 +457,7 @@ sub_claim：
   - 将文章输出为 Markdown 格式
   - 自动套用格式、自动生成目录
 - 提供导出按钮，直接导出最终文章
+- 排版导出与其他页面使用同一进度条，状态显示为排版导出
 
 **导出流程**
 1. 用户输入文件名
@@ -520,8 +521,8 @@ sub_claim：
 - 分来源卡片展示
 - 信息勾选与保存
 - 知识库长期存储
-- **整理观点、论据或案例**
-- **资料查询增加按钮一键收藏到参考文章库**
+- 整理观点、论据或案例
+- 资料查询增加按钮一键收藏到参考文章库
 
 ### 3.4 文章结构生成
 
@@ -617,10 +618,10 @@ sub_claim：
 - AI 输出交互：卡片形式观点，每条都能加入某项目、插入当前文档、存为素材
 
 **生成后操作**
-- **支持修改和删除**
-- **生成后不直接保存文字**
-- **AI 总结提炼相关观点和案例，并打相应标签（如师幼互动、竹子实验等关键词）**
-- **后续写新文章时可根据标签搜索到相关参考内容**
+- 支持修改和删除
+- 生成后不直接保存文字
+- AI 总结提炼相关观点和案例，并打相应标签（如师幼互动、竹子实验等关键词）
+- 后续写新文章时可根据标签搜索到相关参考内容
 
 #### 3.6.2 参考文章库（Reference Library）
 
@@ -632,7 +633,7 @@ sub_claim：
 - AI解析结果：
   - 核心观点
   - 结构大纲
-  - **整理观点、论据或案例**
+  - 整理观点、论据或案例
 
 **新建参考文章方式**
 - 写入链接，从 URL 中提取原文
@@ -647,20 +648,20 @@ sub_claim：
   - 可迁移写作角度
   - 适合放入哪些项目（推荐）
 - 每一条观点都支持：加入个人素材库、加入项目草稿
-- **整理观点、论据或案例**
+- 整理观点、论据或案例
 
 **AI 能力**
 - 拆解文章结构
 - 抽取可迁移观点
 - 转化为可写作素材
-- **整理观点、论据或案例**
+- 整理观点、论据或案例
 
 **生成后操作**
-- **支持修改和删除**
-- **生成后不直接保存文字**
-- **AI 总结提炼相关观点，并打相应标签（如师幼互动、竹子实验等关键词）**
-- **整理观点、论据或案例**
-- **后续写新文章时可根据标签搜索到相关参考内容**
+- 支持修改和删除
+- 生成后不直接保存文字
+- AI 总结提炼相关观点，并打相应标签（如师幼互动、竹子实验等关键词）
+- 整理观点、论据或案例
+- 后续写新文章时可根据标签搜索到相关参考内容
 
 ### 3.7 格式模板管理
 
@@ -693,7 +694,7 @@ Prompt：排版规范解析器（Natural Language → JSON）
 【一、整体要求】
 1. 只输出 JSON，不要输出任何解释性文字
 2. JSON 必须是一个完整、可机器执行的排版规范
-3. JSON 作为样式唯一真相源（Single Source of Truth）"
+3. JSON 作为样式唯一真相源（Single Source of Truth）
 4. 内容与样式必须彻底解耦
 
 【二、JSON 结构要求】
@@ -751,345 +752,21 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 {{用户输入的排版说明}}
 ```
 
-**示例最后生成的 JSON 串**
-```json
-{
-  \"meta\": {
-    \"name\": \"本科毕业论文格式规范\",
-    \"version\": \"1.0\",
-    \"notes\": \"根据用户要求生成的本科毕业论文排版规范，包括标题、摘要、正文、各级标题、参考文献和页边距等。\"
-  },
-  \"page\": {
-    \"size\": \"A4\",
-    \"margins_mm\": {
-      \"top\": 25.4,
-      \"bottom\": 25.4,
-      \"left\": 31.7,
-      \"right\": 31.7,
-      \"binding\": 0
-    },
-    \"header_mm\": 15,
-    \"footer_mm\": 15
-  },
-  \"styles\": {
-    \"TitleCN\": {
-      \"style_id\": \"TitleCN\",
-      \"name\": \"中文标题\",
-      \"is_heading\": false,
-      \"run\": {
-        \"bold\": true,
-        \"italic\": false,
-        \"underline\": false,
-        \"size_pt\": 16,
-        \"font\": {
-          \"eastAsia\": \"SimHei\",
-          \"ascii\": \"Times New Roman\",
-          \"hAnsi\": \"Times New Roman\"
-        }
-      },
-      \"paragraph\": {
-        \"alignment\": \"center\",
-        \"line_spacing_rule\": \"1.5\",
-        \"space_before_pt\": 18,
-        \"space_after_pt\": 18,
-        \"first_line_indent_chars\": 0,
-        \"hanging_indent_chars\": 0,
-        \"keep_with_next\": false,
-        \"keep_lines\": false,
-        \"page_break_before\": false,
-        \"widows_control\": true
-      }
-    },
-    \"Body\": {
-      \"style_id\": \"Body\",
-      \"name\": \"正文\",
-      \"is_heading\": false,
-      \"run\": {
-        \"bold\": false,
-        \"italic\": false,
-        \"underline\": false,
-        \"size_pt\": 12,
-        \"font\": {
-          \"eastAsia\": \"SimSun\",
-          \"ascii\": \"Times New Roman\",
-          \"hAnsi\": \"Times New Roman\"
-        }
-      },
-      \"paragraph\": {
-        \"alignment\": \"justify\",
-        \"line_spacing_rule\": \"1.5\",
-        \"space_before_pt\": 0,
-        \"space_after_pt\": 0,
-        \"first_line_indent_chars\": 2,
-        \"hanging_indent_chars\": 0,
-        \"keep_with_next\": false,
-        \"keep_lines\": false,
-        \"page_break_before\": false,
-        \"widows_control\": true
-      }
-    },
-    \"H1\": {
-      \"style_id\": \"H1\",
-      \"name\": \"一级标题\",
-      \"is_heading\": true,
-      \"run\": {
-        \"bold\": true,
-        \"italic\": false,
-        \"underline\": false,
-        \"size_pt\": 16,
-        \"font\": {
-          \"eastAsia\": \"SimHei\",
-          \"ascii\": \"Times New Roman\",
-          \"hAnsi\": \"Times New Roman\"
-        }
-      },
-      \"paragraph\": {
-        \"alignment\": \"left\",
-        \"line_spacing_rule\": \"1.5\",
-        \"space_before_pt\": 18,
-        \"space_after_pt\": 12,
-        \"first_line_indent_chars\": 0,
-        \"hanging_indent_chars\": 0,
-        \"keep_with_next\": false,
-        \"keep_lines\": false,
-        \"page_break_before\": false,
-        \"widows_control\": true
-      }
-    },
-    \"H2\": {
-      \"style_id\": \"H2\",
-      \"name\": \"二级标题\",
-      \"is_heading\": true,
-      \"run\": {
-        \"bold\": true,
-        \"italic\": false,
-        \"underline\": false,
-        \"size_pt\": 14,
-        \"font\": {
-          \"eastAsia\": \"SimHei\",
-          \"ascii\": \"Times New Roman\",
-          \"hAnsi\": \"Times New Roman\"
-        }
-      },
-      \"paragraph\": {
-        \"alignment\": \"left\",
-        \"line_spacing_rule\": \"1.5\",
-        \"space_before_pt\": 12,
-        \"space_after_pt\": 6,
-        \"first_line_indent_chars\": 0,
-        \"hanging_indent_chars\": 0,
-        \"keep_with_next\": false,
-        \"keep_lines\": false,
-        \"page_break_before\": false,
-        \"widows_control\": true
-      }
-    },
-    \"H3\": {
-      \"style_id\": \"H3\",
-      \"name\": \"三级标题\",
-      \"is_heading\": true,
-      \"run\": {
-        \"bold\": true,
-        \"italic\": false,
-        \"underline\": false,
-        \"size_pt\": 12,
-        \"font\": {
-          \"eastAsia\": \"SimHei\",
-          \"ascii\": \"Times New Roman\",
-          \"hAnsi\": \"Times New Roman\"
-        }
-      },
-      \"paragraph\": {
-        \"alignment\": \"left\",
-        \"line_spacing_rule\": \"1.5\",
-        \"space_before_pt\": 6,
-        \"space_after_pt\": 6,
-        \"first_line_indent_chars\": 0,
-        \"hanging_indent_chars\": 0,
-        \"keep_with_next\": false,
-        \"keep_lines\": false,
-        \"page_break_before\": false,
-        \"widows_control\": true
-      }
-    },
-    \"AbstractBody\": {
-      \"style_id\": \"AbstractBody\",
-      \"name\": \"摘要正文\",
-      \"is_heading\": false,
-      \"run\": {
-        \"bold\": false,
-        \"italic\": false,
-        \"underline\": false,
-        \"size_pt\": 14,
-        \"font\": {
-          \"eastAsia\": \"SimSun\",
-          \"ascii\": \"Times New Roman\",
-          \"hAnsi\": \"Times New Roman\"
-        }
-      },
-      \"paragraph\": {
-        \"alignment\": \"justify\",
-        \"line_spacing_rule\": \"1.5\",
-        \"space_before_pt\": 0,
-        \"space_after_pt\": 0,
-        \"first_line_indent_chars\": 2,
-        \"hanging_indent_chars\": 0,
-        \"keep_with_next\": false,
-        \"keep_lines\": false,
-        \"page_break_before\": false,
-        \"widows_control\": true
-      }
-    },
-    \"KeywordsBody\": {
-      \"style_id\": \"KeywordsBody\",
-      \"name\": \"关键词正文\",
-      \"is_heading\": false,
-      \"run\": {
-        \"bold\": false,
-        \"italic\": false,
-        \"underline\": false,
-        \"size_pt\": 14,
-        \"font\": {
-          \"eastAsia\": \"SimSun\",
-          \"ascii\": \"Times New Roman\",
-          \"hAnsi\": \"Times New Roman\"
-        }
-      },
-      \"paragraph\": {
-        \"alignment\": \"justify\",
-        \"line_spacing_rule\": \"1.5\",
-        \"space_before_pt\": 0,
-        \"space_after_pt\": 0,
-        \"first_line_indent_chars\": 0,
-        \"hanging_indent_chars\": 0,
-        \"keep_with_next\": false,
-        \"keep_lines\": false,
-        \"page_break_before\": false,
-        \"widows_control\": true
-      }
-    },
-    \"Reference\": {
-      \"style_id\": \"Reference\",
-      \"name\": \"参考文献\",
-      \"is_heading\": false,
-      \"run\": {
-        \"bold\": false,
-        \"italic\": false,
-        \"underline\": false,
-        \"size_pt\": 10.5,
-        \"font\": {
-          \"eastAsia\": \"SimSun\",
-          \"ascii\": \"Times New Roman\",
-          \"hAnsi\": \"Times New Roman\"
-        }
-      },
-      \"paragraph\": {
-        \"alignment\": \"left\",
-        \"line_spacing_rule\": \"single\",
-        \"space_before_pt\": 0,
-        \"space_after_pt\": 0,
-        \"first_line_indent_chars\": 0,
-        \"hanging_indent_chars\": 0,
-        \"keep_with_next\": false,
-        \"keep_lines\": false,
-        \"page_break_before\": false,
-        \"widows_control\": true
-      }
-    },
-    \"FigureCaption\": {
-      \"style_id\": \"FigureCaption\",
-      \"name\": \"图标题\",
-      \"is_heading\": false,
-      \"run\": {
-        \"bold\": false,
-        \"italic\": false,
-        \"underline\": false,
-        \"size_pt\": 10.5,
-        \"font\": {
-          \"eastAsia\": \"SimSun\",
-          \"ascii\": \"Times New Roman\",
-          \"hAnsi\": \"Times New Roman\"
-        }
-      },
-      \"paragraph\": {
-        \"alignment\": \"center\",
-        \"line_spacing_rule\": \"single\",
-        \"space_before_pt\": 6,
-        \"space_after_pt\": 6,
-        \"first_line_indent_chars\": 0,
-        \"hanging_indent_chars\": 0,
-        \"keep_with_next\": false,
-        \"keep_lines\": false,
-        \"page_break_before\": false,
-        \"widows_control\": true
-      }
-    },
-    \"TableTitle\": {
-      \"style_id\": \"TableTitle\",
-      \"name\": \"表标题\",
-      \"is_heading\": false,
-      \"run\": {
-        \"bold\": false,
-        \"italic\": false,
-        \"underline\": false,
-        \"size_pt\": 10.5,
-        \"font\": {
-          \"eastAsia\": \"SimSun\",
-          \"ascii\": \"Times New Roman\",
-          \"hAnsi\": \"Times New Roman\"
-        }
-      },
-      \"paragraph\": {
-        \"alignment\": \"center\",
-        \"line_spacing_rule\": \"single\",
-        \"space_before_pt\": 6,
-        \"space_after_pt\": 6,
-        \"first_line_indent_chars\": 0,
-        \"hanging_indent_chars\": 0,
-        \"keep_with_next\": false,
-        \"keep_lines\": false,
-        \"page_break_before\": false,
-        \"widows_control\": true
-      }
-    }
-  },
-  \"structure\": {
-    \"required_h1_titles\": [
-      \"摘要\",
-      \"Abstract\",
-      \"引言\",
-      \"致谢\",
-      \"参考文献\"
-    ],
-    \"toc_max_level\": 3
-  },
-  \"forbidden_direct_formatting\": {
-    \"font\": true,
-    \"size\": true,
-    \"bold\": true,
-    \"italic\": true,
-    \"underline\": true,
-    \"color\": true
-  },
-  \"auto_prefix_abstract_keywords\": false,
-  \"auto_number_figures_tables\": false
-}
-```
-
 **Step 3：用户预览 & 微调**
 - 模板预览（假文内容）
 - 可调整字号/行距
 - 保存为模板
 
 **生成后操作**
-- **支持修改和删除**
-- **点击模板管理后，支持查看原先填写内容，并支持修改**
+- 支持修改和删除
+- 点击模板管理后，支持查看原先填写内容，并支持修改
+- 新建模板或修改模板后点击确认，不保存自然语言，需要 LLM 使用上述 Prompt 将其生成为 JSON 格式后再保存至数据库
 
 #### 3.7.2 模板的使用方式
 - 模板不影响写作过程，只在终稿输出生效
 - 使用时机：
-  - **明确需求阶段：支持下拉已有模板选项，或新增模板**
-  - **排版导出阶段：通过下拉框选择输出模板**
+  - 明确需求阶段：支持下拉已有模板选项，或新增模板
+  - 排版导出阶段：通过下拉框选择输出模板
 - 用户操作：通过下拉框选择输出模板
 - 导出格式固定为 Markdown
 - 系统检查：是否缺摘要、标题层级是否完整
@@ -1102,7 +779,7 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 - AI 生成全文
 - 用户实时编辑
 - 修改痕迹标记
-- **右侧显示 Word 注释区，展示每段的信息来源与生成逻辑**
+- 右侧显示 Word 注释区，展示每段的信息来源与生成逻辑
 
 ### 3.9 三遍审校系统（合并为内容审校节点）
 - 页面布局：左侧展示文章，右侧三步审校流程
@@ -1110,13 +787,13 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 - 每一步审校过程中实时展示完成百分比
 - 第一遍内容审校：使用默认润色提示词（Default Polish Prompt）
 - 第二遍风格审校：
-  - **审校前先判断全文中英文字数占比，确定文章主体语言**
-  - **根据文章主体语言选择对应策略进行改写**
+  - 审校前先判断全文中英文字数占比，确定文章主体语言
+  - 根据文章主体语言选择对应策略进行改写
   - 使用默认增强提示词（Default Enhance Prompt）
 - 第三遍细节打磨：使用细节打磨提示词（Rhythm Prompt）
 - 审校过程中保持原文语种不变
 - 审校状态管理
-- **审校完成后，直接显示最终文案，不显示学术化精修稿等中间标题**
+- 审校完成后，直接显示最终文案，不显示学术化精修稿等中间标题
 
 ### 3.10 排版导出
 - 页面布局：
@@ -1130,7 +807,7 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
   - 系统将文章输出为 Markdown 格式
   - 自动套用格式、自动生成目录
   - 提供导出按钮，直接导出文章
-- **排版导出与其他页面使用同一进度条，状态显示为排版导出**
+- 排版导出与其他页面使用同一进度条，状态显示为排版导出
 
 ### 3.11 降 AI 率工具
 - 页面布局：
@@ -1138,8 +815,8 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
   - 右侧：降 AI 率后的文章输出框
 - 功能：
   - 支持上传文件导入文字
-  - **点击降 AI 率按钮后，先判断全文中英文字数占比，确定文章主体语言**
-  - **根据文章主体语言选择对应策略，使用默认增强提示词（Default Enhance Prompt）进行改写**
+  - 点击降 AI 率按钮后，先判断全文中英文字数占比，确定文章主体语言
+  - 根据文章主体语言选择对应策略，使用默认增强提示词（Default Enhance Prompt）进行改写
   - 根据网上内容信息以及个人素材库，在右侧文本框输出降 AI 率之后的文章
   - 支持按照已有模板输出文章（Markdown 格式）
 
@@ -1180,7 +857,7 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 
 输出格式（JSON）：
 {
-  \"academic_intent\": \"\",
+  \\"academic_intent\": \"\\",
   \"web_intent\": \"\"
 }
 ```
@@ -1228,7 +905,7 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 
 输出格式（JSON）：
 {
-  \"queries\": []
+  \\"queries\": []
 }
 ```
 
@@ -1284,7 +961,7 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
   \"academic_insights\": [
     {
       \"point\": \"\",
-      \"evidence_source\": \"academic\"
+      \"evidence_source\": \\"academic\"
     }
   ],
   \"industry_insights\": [
@@ -1294,7 +971,7 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
     }
   ],
   \"open_questions_or_debates\": [
-    \"\"
+    \\"\"
   ],
   \"suggested_writing_angles\": [
     \"\"
@@ -1728,7 +1405,7 @@ sub_claim：
 - 存储路径：_knowledge_base/
 - 文件名格式：主题-时间.md
 - 必须包含：信息收集时间、信息来源、下次更新建议
-- **整理观点、论据或案例**
+- 整理观点、论据或案例
 
 ### 5.3 参考文章
 - 存储路径：_reference/
@@ -1736,7 +1413,7 @@ sub_claim：
 - 长期保存
 - 支持关键词检索
 - 跨项目复用
-- **整理观点、论据或案例**
+- 整理观点、论据或案例
 
 ### 5.4 个人素材
 - 存储路径：_human_character/
@@ -1744,7 +1421,7 @@ sub_claim：
 - 长期保存
 - 支持关键词检索
 - 跨项目复用
-- **包含观点和案例**
+- 包含观点和案例
 
 ## 6. 强制规则
 
@@ -1776,7 +1453,7 @@ sub_claim：
 - Tavily 提供现实进展/产业/最新动态
 - AI 的职责是对齐，而不是混写
 - 学术内容与网页内容必须分开展示
-- **资料查询中整理观点、论据或案例**
+- 资料查询中整理观点、论据或案例
 
 ### 6.5 提示词使用规则
 - 文章结构生成：使用文章结构生成 Prompt
@@ -1786,19 +1463,19 @@ sub_claim：
 - 生成初稿：使用生成初稿 Prompt（不可修改）
 - 第一遍内容审校：使用默认润色提示词（Default Polish Prompt）
 - 第二遍风格审校：
-  - **审校前先判断全文中英文字数占比，确定文章主体语言**
-  - **根据文章主体语言选择对应策略，使用默认增强提示词（Default Enhance Prompt）**
+  - 审校前先判断全文中英文字数占比，确定文章主体语言
+  - 根据文章主体语言选择对应策略，使用默认增强提示词（Default Enhance Prompt）
 - 第三遍细节打磨：使用细节打磨提示词（Rhythm Prompt）
 - 降AI率工具：
-  - **先判断全文中英文字数占比，确定文章主体语言**
-  - **根据文章主体语言选择对应策略，使用默认增强提示词（Default Enhance Prompt）**
+  - 先判断全文中英文字数占比，确定文章主体语言
+  - 根据文章主体语言选择对应策略，使用默认增强提示词（Default Enhance Prompt）
 - 所有提示词内容必须原封不动地保留到应用代码中，不得修改
 
 ### 6.6 案例使用规则
-- **资料查询中整理观点、论据或案例**
-- **参考文章中整理观点、论据或案例**
-- **案例必须来自用户个人素材库**
-- **文章生成时，禁止使用外部文章中的案例**
+- 资料查询中整理观点、论据或案例
+- 参考文章中整理观点、论据或案例
+- 案例必须来自用户个人素材库
+- 文章生成时，禁止使用外部文章中的案例
 
 ## 7. 状态机
 init → confirm_brief → knowledge_selected → article_structure_confirmed → paragraph_structure_completed → drafting → content_review → layout_export → completed
