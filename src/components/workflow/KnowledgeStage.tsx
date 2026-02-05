@@ -207,9 +207,30 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       });
     } catch (error: any) {
       console.error('搜索失败:', error);
+      
+      // 提取详细错误信息
+      let errorMessage = '请稍后重试';
+      
+      if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      // 如果是 Supabase Edge Function 错误，尝试提取更详细的信息
+      if (error?.context) {
+        try {
+          const contextText = await error.context.text();
+          if (contextText) {
+            const contextJson = JSON.parse(contextText);
+            errorMessage = contextJson.error || contextText;
+          }
+        } catch (e) {
+          // 忽略解析错误
+        }
+      }
+      
       toast({
-        title: '❌ 搜索失败',
-        description: error.message || '请稍后重试',
+        title: '❌ 资料检索失败',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {

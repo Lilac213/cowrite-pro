@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getReferenceArticles, createReferenceArticle, deleteReferenceArticle, searchReferenceArticles, getProjects } from '@/db/api';
+import { getReferenceArticles, createReferenceArticle, updateReferenceArticle, deleteReferenceArticle, searchReferenceArticles, getProjects } from '@/db/api';
 import { supabase } from '@/db/supabase';
 import type { ReferenceArticle, Project } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Trash2, Link as LinkIcon, Upload, FileText } from 'lucide-react';
+import { Plus, Search, Trash2, Link as LinkIcon, Upload, FileText, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function ReferencesPage() {
@@ -19,8 +19,10 @@ export default function ReferencesPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [viewingReference, setViewingReference] = useState<ReferenceArticle | null>(null);
+  const [editingReference, setEditingReference] = useState<ReferenceArticle | null>(null);
   const [inputMethod, setInputMethod] = useState<'url' | 'file' | 'text'>('text');
   const [newReference, setNewReference] = useState({
     title: '',
@@ -32,6 +34,7 @@ export default function ReferencesPage() {
   const [extracting, setExtracting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -212,6 +215,49 @@ export default function ReferencesPage() {
         title: '删除失败',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleEdit = (reference: ReferenceArticle) => {
+    setEditingReference(reference);
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingReference) return;
+
+    if (!editingReference.title.trim() || !editingReference.content.trim()) {
+      toast({
+        title: '请填写标题和内容',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      await updateReferenceArticle(editingReference.id, {
+        title: editingReference.title,
+        content: editingReference.content,
+        source_type: editingReference.source_type || undefined,
+        source_url: editingReference.source_url || undefined,
+        keywords: editingReference.keywords || [],
+      });
+
+      await loadReferences();
+      setEditDialogOpen(false);
+      setEditingReference(null);
+
+      toast({
+        title: '更新成功',
+      });
+    } catch (error) {
+      toast({
+        title: '更新失败',
+        variant: 'destructive',
+      });
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -417,6 +463,82 @@ export default function ReferencesPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* 编辑参考文章对话框 */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>编辑参考文章</DialogTitle>
+              <DialogDescription>修改参考文章内容</DialogDescription>
+            </DialogHeader>
+            {editingReference && (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-title">标题 *</Label>
+                  <Input
+                    id="edit-title"
+                    placeholder="文章标题"
+                    value={editingReference.title}
+                    onChange={(e) => setEditingReference({ ...editingReference, title: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-source-type">来源类型</Label>
+                  <Input
+                    id="edit-source-type"
+                    placeholder="例如：论文、博客、报告"
+                    value={editingReference.source_type || ''}
+                    onChange={(e) => setEditingReference({ ...editingReference, source_type: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-source-url">来源链接</Label>
+                  <Input
+                    id="edit-source-url"
+                    placeholder="https://example.com"
+                    value={editingReference.source_url || ''}
+                    onChange={(e) => setEditingReference({ ...editingReference, source_url: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-content">内容 *</Label>
+                  <Textarea
+                    id="edit-content"
+                    placeholder="文章内容"
+                    value={editingReference.content}
+                    onChange={(e) => setEditingReference({ ...editingReference, content: e.target.value })}
+                    rows={15}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-keywords">关键词（用逗号分隔）</Label>
+                  <Input
+                    id="edit-keywords"
+                    placeholder="关键词1, 关键词2, 关键词3"
+                    value={editingReference.keywords?.join(', ') || ''}
+                    onChange={(e) => {
+                      const keywords = e.target.value.split(',').map((k) => k.trim()).filter(Boolean);
+                      setEditingReference({ ...editingReference, keywords });
+                    }}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                    取消
+                  </Button>
+                  <Button onClick={handleUpdate} disabled={updating}>
+                    {updating ? '更新中...' : '保存'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card className="mb-6">
@@ -458,16 +580,28 @@ export default function ReferencesPage() {
                     <CardDescription className="mt-1">{reference.source_type}</CardDescription>
                   )}
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(reference.id);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex gap-1">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEdit(reference);
+                    }}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(reference.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
