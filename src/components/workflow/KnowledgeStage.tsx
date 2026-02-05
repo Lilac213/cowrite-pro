@@ -4,7 +4,8 @@ import {
   createKnowledgeBase, 
   updateKnowledgeBase, 
   updateProject, 
-  academicSearchWorkflow, 
+  academicSearchWorkflow,
+  agentDrivenResearchWorkflow,
   generateWritingSummary, 
   saveToReferenceLibrary,
   getBrief,
@@ -99,419 +100,120 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('未登录');
 
-      // 1. 搜索个人素材库
-      const materials = await searchMaterials(user.id, queryToUse);
-      
-      // 2. 搜索参考文章库
-      const references = await searchReferenceArticles(user.id, queryToUse);
+      // 获取需求文档
+      const brief = await getBrief(projectId);
+      if (!brief) throw new Error('未找到需求文档');
 
-      // 3. 使用混合搜索工作流搜索外部资源
-      const result = await academicSearchWorkflow(queryToUse);
-      setWorkflowResult(result);
-      
-      // 辅助函数：计算相关性和时效性得分
-      const calculateScore = (item: any) => {
-        let score = 0;
-        
-        // 相关性得分（基于标题和内容匹配）
-        const titleMatch = (item.title || '').toLowerCase().includes(queryToUse.toLowerCase());
-        const contentMatch = (item.abstract || item.content || '').toLowerCase().includes(queryToUse.toLowerCase());
-        if (titleMatch) score += 50;
-        if (contentMatch) score += 30;
-        
-        // 时效性得分（基于发布时间）
-        if (item.publishedAt) {
-          const publishDate = new Date(item.publishedAt);
-          const now = new Date();
-          const daysDiff = Math.floor((now.getTime() - publishDate.getTime()) / (1000 * 60 * 60 * 24));
-          
-          if (daysDiff <= 30) score += 20;        // 最近30天
-          else if (daysDiff <= 90) score += 15;   // 最近3个月
-          else if (daysDiff <= 180) score += 10;  // 最近6个月
-          else if (daysDiff <= 365) score += 5;   // 最近1年
-        }
-        
-        return score;
-      };
-      
-      // 保存个人素材到知识库（标记来源）
-      if (materials && materials.length > 0) {
-        for (const material of materials) {
-          await createKnowledgeBase({
-            project_id: projectId,
-            title: material.title || '无标题',
-            content: material.content || '暂无内容',
-            source: '个人素材库',
-            source_url: undefined,
-            collected_at: new Date().toISOString(),
-            next_update_suggestion: '个人素材无需更新',
-            selected: false,
-            keywords: material.keywords || [],
-          });
-        }
-      }
+      const requirements = typeof brief.requirements === 'string' 
+        ? JSON.parse(brief.requirements) 
+        : brief.requirements;
 
-      // 保存参考文章到知识库（标记来源）
-      if (references && references.length > 0) {
-        for (const reference of references) {
-          await createKnowledgeBase({
-            project_id: projectId,
-            title: reference.title || '无标题',
-            content: reference.content || '暂无内容',
-            source: '参考文章库',
-            source_url: reference.source_url || undefined,
-            collected_at: new Date().toISOString(),
-            next_update_suggestion: '参考文章无需更新',
-            selected: false,
-            keywords: reference.keywords || [],
-          });
-        }
-      }
-
-      // 辅助函数：翻译并提取英文内容
-      const translateIfNeeded = async (title: string, content: string) => {
-        try {
-          // 检测是否为英文内容（简单判断：包含较多英文字符）
-          const englishRatio = (content.match(/[a-zA-Z]/g) || []).length / content.length;
-          if (englishRatio > 0.5 && content.length > 50) {
-            const { data: translationData, error: translationError } = await supabase.functions.invoke('translate-extract-content', {
-              body: { 
-                content: content,
-                title: title
-              },
-            });
-
-            if (translationError) {
-              console.error('翻译错误:', translationError);
-              return { title, content, translated: false, error: translationError.message };
-            }
-
-            if (translationData && translationData.translated_title) {
-              // 构建包含数据和观点的内容
-              let enhancedContent = translationData.summary || content;
-              
-              if (translationData.data_points && translationData.data_points.length > 0) {
-                enhancedContent += '\n\n【关键数据】\n';
-                translationData.data_points.forEach((dp: any) => {
-                  enhancedContent += `• ${dp.translated}`;
-                  if (dp.context) enhancedContent += ` (${dp.context})`;
-                  enhancedContent += '\n';
-                });
-              }
-
-              if (translationData.viewpoints && translationData.viewpoints.length > 0) {
-                enhancedContent += '\n【核心观点】\n';
-                translationData.viewpoints.forEach((vp: any) => {
-                  enhancedContent += `• ${vp.translated}`;
-                  if (vp.supporting_evidence) enhancedContent += ` - ${vp.supporting_evidence}`;
-                  enhancedContent += '\n';
-                });
-              }
-
-              return {
-                title: translationData.translated_title,
-                content: enhancedContent,
-                translated: true,
-                error: null
-              };
-            }
-          }
-          return { title, content, translated: false, error: null };
-        } catch (error: any) {
-          console.error('翻译异常:', error);
-          return { title, content, translated: false, error: error.message };
-        }
+      // 构建需求文档 JSON
+      const requirementsDoc = {
+        主题: requirements.主题 || brief.topic || queryToUse,
+        关键要点: requirements.关键要点 || [],
+        核心观点: requirements.核心观点 || [],
+        目标读者: requirements.目标读者 || '通用读者',
+        写作风格: requirements.写作风格 || '专业',
+        预期长度: requirements.预期长度 || '中等',
       };
 
-      // 保存学术论文结果到知识库（处理英文内容）
-      if (result.academicPapers && result.academicPapers.length > 0) {
-        // 按相关性和时效性排序，取前10条
-        const sortedPapers = result.academicPapers
-          .map((paper: any) => ({ ...paper, score: calculateScore(paper) }))
-          .sort((a: any, b: any) => b.score - a.score)
-          .slice(0, 10);
-        
-        let translatedCount = 0;
-        let failedCount = 0;
-        
-        for (const paper of sortedPapers) {
-          const originalTitle = paper.title || '无标题';
-          const originalContent = paper.abstract || paper.content || '暂无摘要';
-          
-          const { title, content, translated, error } = await translateIfNeeded(originalTitle, originalContent);
-          
-          if (translated) {
-            translatedCount++;
-          } else if (error) {
-            failedCount++;
-            console.warn(`论文 "${originalTitle}" 翻译失败:`, error);
-          }
+      toast({
+        title: '🔍 启动 Research Retrieval Agent',
+        description: '正在从 5 个数据源检索相关资料...',
+      });
 
-          await createKnowledgeBase({
-            project_id: projectId,
-            title: title + (translated ? ' (已翻译并提取数据观点)' : ''),
-            content: content,
-            source: paper.source || 'Google Scholar',
-            source_url: paper.url || undefined,
-            published_at: paper.publishedAt || undefined,
-            collected_at: new Date().toISOString(),
-            next_update_suggestion: '建议 30 天后更新',
-            selected: false,
-            keywords: result.academicKeywords?.main_keywords || [],
-          });
+      // 使用新的 Agent 驱动的研究工作流
+      const { retrievalResults, synthesisResults } = await agentDrivenResearchWorkflow(
+        requirementsDoc,
+        projectId,
+        user.id
+      );
+
+      toast({
+        title: '✅ Research Synthesis Agent 完成',
+        description: '资料已整理为中文写作素材',
+      });
+
+      // 保存检索结果到知识库
+      const allSources = [
+        ...(retrievalResults.academic_sources || []).map((s: any) => ({ ...s, sourceType: 'academic' })),
+        ...(retrievalResults.news_sources || []).map((s: any) => ({ ...s, sourceType: 'news' })),
+        ...(retrievalResults.web_sources || []).map((s: any) => ({ ...s, sourceType: 'web' })),
+        ...(retrievalResults.user_library_sources || []).map((s: any) => ({ ...s, sourceType: 'user_library' })),
+        ...(retrievalResults.personal_sources || []).map((s: any) => ({ ...s, sourceType: 'personal' })),
+      ];
+
+      // 保存到知识库
+      for (const source of allSources) {
+        let title = '';
+        let content = '';
+        let sourceLabel = '';
+        let sourceUrl = '';
+
+        if (source.sourceType === 'academic') {
+          title = source.title || '无标题';
+          content = `作者: ${source.authors || '未知'}\n年份: ${source.year || '未知'}\n引用次数: ${source.citation_count || 0}\n\n摘要:\n${source.abstract || '暂无摘要'}`;
+          sourceLabel = 'Google Scholar';
+          sourceUrl = source.url || '';
+        } else if (source.sourceType === 'news') {
+          title = source.title || '无标题';
+          content = `来源: ${source.source || '未知'}\n发布时间: ${source.published_at || '未知'}\n\n${source.snippet || '暂无内容'}`;
+          sourceLabel = 'TheNews';
+          sourceUrl = source.url || '';
+        } else if (source.sourceType === 'web') {
+          title = source.title || '无标题';
+          content = `网站: ${source.site_name || '未知'}\n最后爬取: ${source.last_crawled_at || '未知'}\n\n${source.snippet || '暂无内容'}`;
+          sourceLabel = 'Smart Search';
+          sourceUrl = source.url || '';
+        } else if (source.sourceType === 'user_library') {
+          title = source.title || '无标题';
+          content = source.content || '暂无内容';
+          sourceLabel = '参考文章库';
+          sourceUrl = source.url || '';
+        } else if (source.sourceType === 'personal') {
+          title = source.title || '无标题';
+          content = source.content || '暂无内容';
+          sourceLabel = '个人素材库';
+          sourceUrl = '';
         }
-        
-        if (translatedCount > 0) {
-          console.log(`成功翻译 ${translatedCount} 篇学术论文（共筛选 ${sortedPapers.length} 篇）`);
-        }
-        if (failedCount > 0) {
-          console.warn(`${failedCount} 篇论文翻译失败`);
-        }
+
+        await createKnowledgeBase({
+          project_id: projectId,
+          title: title,
+          content: content,
+          source: sourceLabel,
+          source_url: sourceUrl || undefined,
+          collected_at: new Date().toISOString(),
+          selected: false,
+          keywords: retrievalResults.search_queries?.academic_keywords || [],
+        });
       }
 
-      // 保存网页搜索结果到知识库（处理英文内容）
-      if (result.webPapers && result.webPapers.length > 0) {
-        // 按相关性和时效性排序，取前10条
-        const sortedWebPapers = result.webPapers
-          .map((paper: any) => ({ ...paper, score: calculateScore(paper) }))
-          .sort((a: any, b: any) => b.score - a.score)
-          .slice(0, 10);
-        
-        let translatedCount = 0;
-        let failedCount = 0;
-        
-        for (const paper of sortedWebPapers) {
-          const originalTitle = paper.title || '无标题';
-          const originalContent = paper.abstract || paper.content || '暂无摘要';
-          
-          const { title, content, translated, error } = await translateIfNeeded(originalTitle, originalContent);
-          
-          if (translated) {
-            translatedCount++;
-          } else if (error) {
-            failedCount++;
-            console.warn(`网页 "${originalTitle}" 翻译失败:`, error);
-          }
+      // 保存综合结果到项目
+      setWorkflowResult({
+        retrievalResults,
+        synthesisResults,
+      });
 
-          await createKnowledgeBase({
-            project_id: projectId,
-            title: title + (translated ? ' (已翻译并提取数据观点)' : ''),
-            content: content,
-            source: paper.source || 'Web Search',
-            source_url: paper.url || undefined,
-            published_at: paper.publishedAt || undefined,
-            collected_at: new Date().toISOString(),
-            next_update_suggestion: '建议 7 天后更新',
-            selected: false,
-            keywords: result.webQueries?.queries || [],
-          });
-        }
-        
-        if (translatedCount > 0) {
-          console.log(`成功翻译 ${translatedCount} 条网页内容（共筛选 ${sortedWebPapers.length} 条）`);
-        }
-        if (failedCount > 0) {
-          console.warn(`${failedCount} 条网页翻译失败`);
-        }
-      }
+      // 将 synthesisResults 保存为 writingSummary
+      setWritingSummary(synthesisResults);
 
       await loadKnowledge();
       
-      const totalResults = (materials?.length || 0) + (references?.length || 0) + (result.academicPapers?.length || 0) + (result.webPapers?.length || 0);
       toast({
-        title: '智能搜索完成',
-        description: `找到 ${materials?.length || 0} 条个人素材，${references?.length || 0} 篇参考文章，${result.academicPapers?.length || 0} 篇学术论文，${result.webPapers?.length || 0} 条实时信息`,
+        title: '✅ 搜索完成',
+        description: `已从 5 个数据源检索并整理了 ${allSources.length} 条资料`,
       });
     } catch (error: any) {
+      console.error('搜索失败:', error);
       toast({
-        title: '搜索失败',
-        description: error.message || '无法搜索信息',
+        title: '❌ 搜索失败',
+        description: error.message || '请稍后重试',
         variant: 'destructive',
       });
     } finally {
       setSearching(false);
-    }
-  };
-
-  const handleToggleSelect = async (id: string, selected: boolean) => {
-    try {
-      await updateKnowledgeBase(id, { selected: !selected });
-      await loadKnowledge();
-    } catch (error) {
-      toast({
-        title: '更新失败',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleEditKnowledge = (item: KnowledgeBase) => {
-    setEditingKnowledge(item);
-    setEditDialogOpen(true);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingKnowledge) return;
-    
-    try {
-      await updateKnowledgeBase(editingKnowledge.id, {
-        title: editingKnowledge.title,
-        content: editingKnowledge.content,
-      });
-      
-      await loadKnowledge();
-      setEditDialogOpen(false);
-      setEditingKnowledge(null);
-      
-      toast({
-        title: '保存成功',
-        description: '参考文章已更新',
-      });
-    } catch (error: any) {
-      toast({
-        title: '保存失败',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleDeleteKnowledge = async (id: string) => {
-    if (!confirm('确定要删除这条参考文章吗？')) return;
-    
-    try {
-      await supabase
-        .from('knowledge_base')
-        .delete()
-        .eq('id', id);
-      
-      await loadKnowledge();
-      
-      toast({
-        title: '删除成功',
-      });
-    } catch (error: any) {
-      toast({
-        title: '删除失败',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleSynthesize = async () => {
-    const selectedKnowledge = knowledge.filter((k) => k.selected);
-    if (selectedKnowledge.length === 0) {
-      toast({
-        title: '请至少选择一条信息',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setSynthesizing(true);
-    try {
-      // 获取需求文档
-      const brief = await getBrief(projectId);
-      const requirements = brief?.requirements 
-        ? (typeof brief.requirements === 'string' ? JSON.parse(brief.requirements) : brief.requirements)
-        : null;
-
-      // 调用增强的综合摘要生成
-      const summary = await generateWritingSummaryWithRequirements(selectedKnowledge, requirements);
-      setWritingSummary(summary);
-      
-      toast({
-        title: '综合完成',
-        description: '已生成写作级研究摘要，并结合需求文档进行补充论证',
-      });
-    } catch (error: any) {
-      toast({
-        title: '综合失败',
-        description: error.message || '无法生成研究摘要',
-        variant: 'destructive',
-      });
-    } finally {
-      setSynthesizing(false);
-    }
-  };
-
-  // 增强的综合摘要生成函数（结合需求文档）
-  const generateWritingSummaryWithRequirements = async (selectedKnowledge: any[], requirements: any) => {
-    const systemMessage = `你是 CoWrite 的"研究摘要生成模块"。
-
-基于已筛选的高质量来源和需求文档，请完成以下任务：
-
-1️⃣ 用 **中立、专业、可引用的语言** 总结核心观点  
-2️⃣ 明确区分：
-   - 学术共识
-   - 行业实践 / 现实应用
-3️⃣ **重点关注需求文档中的主题、核心观点和关键要点**
-4️⃣ 罗列出与需求文档相关的数据和观点，对需求文档进行补充和论证
-5️⃣ 避免编造结论，不确定的地方需标注
-6️⃣ 生成一份后续生成文章结构时能直接引用的版本
-
-输出结构必须包含：
-
-{
-  "requirement_alignment": {
-    "topic": "需求文档主题",
-    "core_viewpoints": ["需求文档核心观点"],
-    "key_points": ["需求文档关键要点"]
-  },
-  "background_summary": "背景总结（结合需求文档）",
-  "supporting_data": [
-    {
-      "data_point": "具体数据",
-      "source": "来源",
-      "relevance_to_requirement": "与需求文档的关联性"
-    }
-  ],
-  "supporting_viewpoints": [
-    {
-      "viewpoint": "观点",
-      "evidence": "证据",
-      "source": "来源",
-      "supports_requirement": "支持需求文档的哪个部分"
-    }
-  ],
-  "academic_insights": [
-    {
-      "point": "学术观点",
-      "evidence_source": "academic",
-      "relevance": "与需求的相关性"
-    }
-  ],
-  "industry_insights": [
-    {
-      "point": "行业实践",
-      "evidence_source": "industry",
-      "relevance": "与需求的相关性"
-    }
-  ],
-  "open_questions_or_debates": ["待探讨的问题"],
-  "suggested_writing_angles": ["建议的写作角度（基于需求文档）"],
-  "ready_to_cite": "可直接引用的综合版本（整合需求文档和研究资料）"
-}`;
-
-    const prompt = `需求文档：
-${requirements ? JSON.stringify(requirements, null, 2) : '无需求文档'}
-
-已筛选的高质量来源：
-${JSON.stringify(selectedKnowledge, null, 2)}
-
-请根据需求文档，从已筛选的来源中提炼相关数据和观点，生成可直接用于文章结构生成的综合摘要。`;
-
-    const result = await callLLMGenerate(prompt, '', systemMessage);
-    
-    try {
-      return JSON.parse(result);
-    } catch (e) {
-      const jsonMatch = result.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-      throw new Error('无法解析写作摘要');
     }
   };
 
@@ -545,6 +247,104 @@ ${JSON.stringify(selectedKnowledge, null, 2)}
       });
     } finally {
       setConfirming(false);
+    }
+  };
+
+  const handleToggleSelect = async (id: string, selected: boolean) => {
+    try {
+      await updateKnowledgeBase(id, { selected });
+      await loadKnowledge();
+    } catch (error) {
+      console.error('更新选中状态失败:', error);
+    }
+  };
+
+  const handleEditKnowledge = (item: KnowledgeBase) => {
+    setEditingKnowledge(item);
+    setEditDialogOpen(true);
+  };
+
+  const handleDeleteKnowledge = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('knowledge_base')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      await loadKnowledge();
+      toast({
+        title: '删除成功',
+      });
+    } catch (error) {
+      console.error('删除失败:', error);
+      toast({
+        title: '删除失败',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingKnowledge) return;
+    
+    try {
+      await updateKnowledgeBase(editingKnowledge.id, {
+        title: editingKnowledge.title,
+        content: editingKnowledge.content,
+      });
+      
+      await loadKnowledge();
+      setEditDialogOpen(false);
+      setEditingKnowledge(null);
+      
+      toast({
+        title: '保存成功',
+      });
+    } catch (error) {
+      console.error('保存失败:', error);
+      toast({
+        title: '保存失败',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSynthesize = async () => {
+    if (!workflowResult) {
+      toast({
+        title: '请先搜索资料',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSynthesizing(true);
+    try {
+      // 使用已有的 synthesisResults
+      if (workflowResult.synthesisResults) {
+        setWritingSummary(workflowResult.synthesisResults);
+        toast({
+          title: '✅ 综合摘要已生成',
+          description: '可以查看并确认进入下一阶段',
+        });
+      } else {
+        toast({
+          title: '❌ 未找到综合摘要',
+          description: '请重新搜索',
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      console.error('生成综合摘要失败:', error);
+      toast({
+        title: '❌ 生成失败',
+        description: error.message || '请稍后重试',
+        variant: 'destructive',
+      });
+    } finally {
+      setSynthesizing(false);
     }
   };
 

@@ -1155,6 +1155,62 @@ ${JSON.stringify(selectedKnowledge, null, 2)}`;
   }
 }
 
+// ============ 新的 Agent 驱动的搜索工作流 ============
+
+/**
+ * Research Retrieval Agent - 资料检索 Agent
+ * 负责在 5 个数据源中检索相关资料
+ */
+export async function researchRetrievalAgent(requirementsDoc: any, projectId?: string, userId?: string) {
+  const { data, error } = await supabase.functions.invoke('research-retrieval-agent', {
+    body: { requirementsDoc, projectId, userId },
+  });
+
+  if (error) {
+    console.error('Research Retrieval Agent Error:', error);
+    throw new Error(`资料检索失败: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
+ * Research Synthesis Agent - 资料整理 Agent
+ * 负责将检索结果转化为中文、结构化的写作素材
+ */
+export async function researchSynthesisAgent(retrievalResults: any, requirementsDoc: any) {
+  const { data, error } = await supabase.functions.invoke('research-synthesis-agent', {
+    body: { retrievalResults, requirementsDoc },
+  });
+
+  if (error) {
+    console.error('Research Synthesis Agent Error:', error);
+    throw new Error(`资料整理失败: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
+ * 完整的 Agent 驱动的研究工作流
+ * 1. 调用 Research Retrieval Agent 检索资料
+ * 2. 调用 Research Synthesis Agent 整理资料
+ */
+export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectId?: string, userId?: string) {
+  // 第一步：资料检索
+  const retrievalResults = await researchRetrievalAgent(requirementsDoc, projectId, userId);
+
+  // 第二步：资料整理
+  const synthesisResults = await researchSynthesisAgent(retrievalResults, requirementsDoc);
+
+  return {
+    retrievalResults,
+    synthesisResults,
+  };
+}
+
+// ============ 旧的混合搜索工作流（保留用于兼容）============
+
 // 完整的混合搜索工作流
 export async function academicSearchWorkflow(userQueryZh: string) {
   // P1: 搜索意图拆解
