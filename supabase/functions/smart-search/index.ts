@@ -59,14 +59,25 @@ serve(async (req) => {
 
     const data = await response.json();
 
+    // 辅助函数：清理文本中的特殊字符
+    const cleanText = (text: string): string => {
+      if (!text) return '';
+      // 移除控制字符和特殊Unicode字符
+      return text
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // 移除控制字符
+        .replace(/[\u2028\u2029]/g, '') // 移除行分隔符和段落分隔符
+        .replace(/\\/g, '') // 移除反斜杠
+        .trim();
+    };
+
     // 转换为统一格式
     const webPages = data.webPages?.value || [];
     const results = {
       papers: webPages.map((page: any) => ({
-        title: page.name || '',
-        authors: page.siteName || 'Web Search',
+        title: cleanText(page.name || ''),
+        authors: cleanText(page.siteName || 'Web Search'),
         year: page.dateLastCrawled ? new Date(page.dateLastCrawled).getFullYear().toString() : '',
-        abstract: page.snippet || '',
+        abstract: cleanText(page.snippet || ''),
         citations: 0,
         url: page.url || '',
         source: 'Smart Search',
@@ -76,7 +87,7 @@ serve(async (req) => {
       summary: '',
       sources: webPages.map((page: any) => ({
         url: page.url,
-        title: page.name,
+        title: cleanText(page.name || ''),
       })),
     };
 

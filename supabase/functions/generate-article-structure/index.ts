@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { topic, requirements, referenceArticles, materials } = await req.json();
+    const { topic, requirements, referenceArticles, materials, writingSummary } = await req.json();
 
     if (!topic) {
       return new Response(
@@ -36,18 +36,40 @@ serve(async (req) => {
       inputSection += `- 目标读者：${targetAudience}\n`;
     }
 
-    if (referenceArticles && referenceArticles.length > 0) {
-      inputSection += `- 参考文章摘要（如有）：\n`;
-      referenceArticles.forEach((article: any, index: number) => {
-        inputSection += `  ${index + 1}. ${article.title}\n     ${article.content.substring(0, 300)}...\n`;
-      });
-    }
+    // 如果有写作摘要（包含可引用版本），优先使用
+    if (writingSummary && writingSummary.ready_to_cite) {
+      inputSection += `- 研究摘要（可引用版本）：\n${writingSummary.ready_to_cite}\n`;
+      
+      // 添加支持数据
+      if (writingSummary.supporting_data && writingSummary.supporting_data.length > 0) {
+        inputSection += `- 支持数据：\n`;
+        writingSummary.supporting_data.forEach((data: any, index: number) => {
+          inputSection += `  ${index + 1}. ${data.data_point} (来源: ${data.source})\n`;
+        });
+      }
+      
+      // 添加支持观点
+      if (writingSummary.supporting_viewpoints && writingSummary.supporting_viewpoints.length > 0) {
+        inputSection += `- 支持观点：\n`;
+        writingSummary.supporting_viewpoints.forEach((vp: any, index: number) => {
+          inputSection += `  ${index + 1}. ${vp.viewpoint} (来源: ${vp.source})\n`;
+        });
+      }
+    } else {
+      // 如果没有写作摘要，使用原有的参考文章和素材
+      if (referenceArticles && referenceArticles.length > 0) {
+        inputSection += `- 参考文章摘要（如有）：\n`;
+        referenceArticles.forEach((article: any, index: number) => {
+          inputSection += `  ${index + 1}. ${article.title}\n     ${article.content.substring(0, 300)}...\n`;
+        });
+      }
 
-    if (materials && materials.length > 0) {
-      inputSection += `- 作者已有观点或素材（如有）：\n`;
-      materials.forEach((material: any, index: number) => {
-        inputSection += `  ${index + 1}. ${material.title}\n     ${material.content.substring(0, 200)}...\n`;
-      });
+      if (materials && materials.length > 0) {
+        inputSection += `- 作者已有观点或素材（如有）：\n`;
+        materials.forEach((material: any, index: number) => {
+          inputSection += `  ${index + 1}. ${material.title}\n     ${material.content.substring(0, 200)}...\n`;
+        });
+      }
     }
 
     const prompt = `你是写作系统中的「文章级论证架构模块」。
