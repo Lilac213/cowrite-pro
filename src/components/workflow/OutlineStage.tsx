@@ -82,6 +82,7 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
           requirements: brief?.requirements,
           referenceArticles,
           materials,
+          writingSummary: project?.writing_summary, // 传递可引用版本
         },
       });
 

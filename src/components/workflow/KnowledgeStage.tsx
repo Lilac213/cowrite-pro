@@ -18,10 +18,13 @@ import type { KnowledgeBase } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Search, Sparkles, CheckCircle2, BookmarkPlus } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Search, Sparkles, CheckCircle2, BookmarkPlus, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
 
@@ -39,6 +42,8 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [workflowResult, setWorkflowResult] = useState<any>(null);
   const [writingSummary, setWritingSummary] = useState<any>(null);
   const [autoSearched, setAutoSearched] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingKnowledge, setEditingKnowledge] = useState<KnowledgeBase | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -103,6 +108,31 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       // 3. 使用混合搜索工作流搜索外部资源
       const result = await academicSearchWorkflow(queryToUse);
       setWorkflowResult(result);
+      
+      // 辅助函数：计算相关性和时效性得分
+      const calculateScore = (item: any) => {
+        let score = 0;
+        
+        // 相关性得分（基于标题和内容匹配）
+        const titleMatch = (item.title || '').toLowerCase().includes(queryToUse.toLowerCase());
+        const contentMatch = (item.abstract || item.content || '').toLowerCase().includes(queryToUse.toLowerCase());
+        if (titleMatch) score += 50;
+        if (contentMatch) score += 30;
+        
+        // 时效性得分（基于发布时间）
+        if (item.publishedAt) {
+          const publishDate = new Date(item.publishedAt);
+          const now = new Date();
+          const daysDiff = Math.floor((now.getTime() - publishDate.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (daysDiff <= 30) score += 20;        // 最近30天
+          else if (daysDiff <= 90) score += 15;   // 最近3个月
+          else if (daysDiff <= 180) score += 10;  // 最近6个月
+          else if (daysDiff <= 365) score += 5;   // 最近1年
+        }
+        
+        return score;
+      };
       
       // 保存个人素材到知识库（标记来源）
       if (materials && materials.length > 0) {
@@ -195,10 +225,16 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
       // 保存学术论文结果到知识库（处理英文内容）
       if (result.academicPapers && result.academicPapers.length > 0) {
+        // 按相关性和时效性排序，取前10条
+        const sortedPapers = result.academicPapers
+          .map((paper: any) => ({ ...paper, score: calculateScore(paper) }))
+          .sort((a: any, b: any) => b.score - a.score)
+          .slice(0, 10);
+        
         let translatedCount = 0;
         let failedCount = 0;
         
-        for (const paper of result.academicPapers) {
+        for (const paper of sortedPapers) {
           const originalTitle = paper.title || '无标题';
           const originalContent = paper.abstract || paper.content || '暂无摘要';
           
@@ -226,7 +262,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         }
         
         if (translatedCount > 0) {
-          console.log(`成功翻译 ${translatedCount} 篇学术论文`);
+          console.log(`成功翻译 ${translatedCount} 篇学术论文（共筛选 ${sortedPapers.length} 篇）`);
         }
         if (failedCount > 0) {
           console.warn(`${failedCount} 篇论文翻译失败`);
@@ -235,10 +271,16 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
       // 保存网页搜索结果到知识库（处理英文内容）
       if (result.webPapers && result.webPapers.length > 0) {
+        // 按相关性和时效性排序，取前10条
+        const sortedWebPapers = result.webPapers
+          .map((paper: any) => ({ ...paper, score: calculateScore(paper) }))
+          .sort((a: any, b: any) => b.score - a.score)
+          .slice(0, 10);
+        
         let translatedCount = 0;
         let failedCount = 0;
         
-        for (const paper of result.webPapers) {
+        for (const paper of sortedWebPapers) {
           const originalTitle = paper.title || '无标题';
           const originalContent = paper.abstract || paper.content || '暂无摘要';
           
@@ -266,7 +308,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         }
         
         if (translatedCount > 0) {
-          console.log(`成功翻译 ${translatedCount} 条网页内容`);
+          console.log(`成功翻译 ${translatedCount} 条网页内容（共筛选 ${sortedWebPapers.length} 条）`);
         }
         if (failedCount > 0) {
           console.warn(`${failedCount} 条网页翻译失败`);
@@ -298,6 +340,60 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     } catch (error) {
       toast({
         title: '更新失败',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleEditKnowledge = (item: KnowledgeBase) => {
+    setEditingKnowledge(item);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingKnowledge) return;
+    
+    try {
+      await updateKnowledgeBase(editingKnowledge.id, {
+        title: editingKnowledge.title,
+        content: editingKnowledge.content,
+      });
+      
+      await loadKnowledge();
+      setEditDialogOpen(false);
+      setEditingKnowledge(null);
+      
+      toast({
+        title: '保存成功',
+        description: '参考文章已更新',
+      });
+    } catch (error: any) {
+      toast({
+        title: '保存失败',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteKnowledge = async (id: string) => {
+    if (!confirm('确定要删除这条参考文章吗？')) return;
+    
+    try {
+      await supabase
+        .from('knowledge_base')
+        .delete()
+        .eq('id', id);
+      
+      await loadKnowledge();
+      
+      toast({
+        title: '删除成功',
+      });
+    } catch (error: any) {
+      toast({
+        title: '删除失败',
+        description: error.message,
         variant: 'destructive',
       });
     }
@@ -431,7 +527,12 @@ ${JSON.stringify(selectedKnowledge, null, 2)}
 
     setConfirming(true);
     try {
-      await updateProject(projectId, { status: 'outline_confirmed' });
+      // 保存写作摘要到项目
+      await updateProject(projectId, { 
+        status: 'outline_confirmed',
+        writing_summary: writingSummary
+      });
+      
       toast({
         title: '确认成功',
         description: '进入下一阶段',
@@ -645,45 +746,61 @@ ${JSON.stringify(selectedKnowledge, null, 2)}
                       )}
                     </div>
                   </div>
-                  <Button
-                    onClick={async () => {
-                      try {
-                        const { data: { user } } = await supabase.auth.getUser();
-                        if (!user) {
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleEditKnowledge(item)}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      onClick={() => handleDeleteKnowledge(item.id)}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        try {
+                          const { data: { user } } = await supabase.auth.getUser();
+                          if (!user) {
+                            toast({
+                              title: '请先登录',
+                              variant: 'destructive',
+                            });
+                            return;
+                          }
+
+                          await saveToReferenceLibrary(user.id, {
+                            title: item.title,
+                            content: item.content,
+                            source: item.source,
+                            source_url: item.source_url,
+                            keywords: item.keywords,
+                            published_at: item.published_at,
+                          });
+
                           toast({
-                            title: '请先登录',
+                            title: '收藏成功',
+                            description: '已保存到参考文章库',
+                          });
+                        } catch (error: any) {
+                          toast({
+                            title: '收藏失败',
+                            description: error.message,
                             variant: 'destructive',
                           });
-                          return;
                         }
-
-                        await saveToReferenceLibrary(user.id, {
-                          title: item.title,
-                          content: item.content,
-                          source: item.source,
-                          source_url: item.source_url,
-                          keywords: item.keywords,
-                          published_at: item.published_at,
-                        });
-
-                        toast({
-                          title: '收藏成功',
-                          description: '已保存到参考文章库',
-                        });
-                      } catch (error: any) {
-                        toast({
-                          title: '收藏失败',
-                          description: error.message,
-                          variant: 'destructive',
-                        });
-                      }
-                    }}
-                    size="sm"
-                    variant="outline"
-                  >
-                    <BookmarkPlus className="h-4 w-4 mr-1" />
-                    收藏
-                  </Button>
+                      }}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <BookmarkPlus className="h-4 w-4 mr-1" />
+                      收藏
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))}
@@ -906,6 +1023,45 @@ ${JSON.stringify(selectedKnowledge, null, 2)}
           </CardContent>
         </Card>
       )}
+
+      {/* 编辑参考文章对话框 */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>编辑参考文章</DialogTitle>
+            <DialogDescription>修改参考文章的标题和内容</DialogDescription>
+          </DialogHeader>
+          {editingKnowledge && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">标题</Label>
+                <Input
+                  id="edit-title"
+                  value={editingKnowledge.title}
+                  onChange={(e) => setEditingKnowledge({ ...editingKnowledge, title: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-content">内容</Label>
+                <Textarea
+                  id="edit-content"
+                  value={editingKnowledge.content}
+                  onChange={(e) => setEditingKnowledge({ ...editingKnowledge, content: e.target.value })}
+                  rows={15}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                  取消
+                </Button>
+                <Button onClick={handleSaveEdit}>
+                  保存
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

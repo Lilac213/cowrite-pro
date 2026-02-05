@@ -1244,7 +1244,7 @@ export async function academicSearchWorkflow(userQueryZh: string) {
 // Google Scholar 搜索（学术论文）
 async function searchGoogleScholar(query: string) {
   const { data, error } = await supabase.functions.invoke('google-scholar-search', {
-    body: { query, yearStart: '2020', yearEnd: new Date().getFullYear().toString() },
+    body: { query, yearStart: '2020', yearEnd: new Date().getFullYear().toString(), limit: 10 },
   });
   
   if (error) throw error;

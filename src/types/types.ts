@@ -53,6 +53,7 @@ export interface Project {
   status: ProjectStatus;
   article_argument_structure?: ArticleArgumentStructure;
   paragraph_structures?: any[];
+  writing_summary?: any;
   created_at: string;
   updated_at: string;
 }
