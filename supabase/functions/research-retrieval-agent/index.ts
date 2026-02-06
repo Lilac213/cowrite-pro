@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
     const integrationsApiKey = Deno.env.get('INTEGRATIONS_API_KEY');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     
     addLog('========== API Keys 状态检查 ==========');
     addLog(`QIANWEN_API_KEY 存在: ${!!qianwenApiKey}`);
@@ -399,21 +400,40 @@ Output Format:
       try {
         addLog(`[Content Fetch] 开始抓取: ${url}`);
         
-        const response = await supabase.functions.invoke('webpage-content-extract', {
-          body: { url }
+        // 直接调用 webpage-content-extract Edge Function 的 HTTP 端点
+        const extractUrl = `${supabaseUrl}/functions/v1/webpage-content-extract`;
+        const response = await fetch(extractUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({ url })
         });
 
-        if (response.error) {
-          addLog(`[Content Fetch] 错误: ${response.error.message}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          addLog(`[Content Fetch] HTTP 错误: ${response.status} - ${errorText}`);
           return {
             content_status: 'unavailable_fulltext',
             extracted_content: [],
             full_text: '',
-            notes: response.error.message
+            notes: `HTTP ${response.status}: ${errorText}`
           };
         }
 
-        const data = response.data;
+        const data = await response.json();
+        
+        if (!data.success) {
+          addLog(`[Content Fetch] 提取失败: ${data.error || '未知错误'}`);
+          return {
+            content_status: data.content_status || 'unavailable_fulltext',
+            extracted_content: [],
+            full_text: '',
+            notes: data.notes || data.error || '提取失败'
+          };
+        }
+
         addLog(`[Content Fetch] 成功 - 状态: ${data.content_status}, 段落数: ${data.extracted_content?.length || 0}`);
         
         return {
@@ -433,9 +453,11 @@ Output Format:
       }
     };
 
-    // Process Academic Sources
+    // Process Academic Sources (只提取前3条的全文)
     addLog('========== 处理学术来源 ==========');
-    for (const source of rawResults.academic_sources) {
+    for (let i = 0; i < rawResults.academic_sources.length; i++) {
+      const source = rawResults.academic_sources[i];
+      
       if (!source.url) {
         finalResults.academic_sources.push({
           source_type: 'GoogleScholar',
@@ -452,7 +474,18 @@ Output Format:
         continue;
       }
 
-      const fullTextData = await fetchFullText(source.url, 'academic');
+      // 只对前3条进行全文提取，其余保留摘要
+      let fullTextData;
+      if (i < 3) {
+        fullTextData = await fetchFullText(source.url, 'academic');
+      } else {
+        fullTextData = {
+          content_status: 'abstract_only',
+          extracted_content: [source.abstract || ''],
+          full_text: source.abstract || '',
+          notes: '未提取全文（优先级较低）'
+        };
+      }
       
       finalResults.academic_sources.push({
         source_type: 'GoogleScholar',
@@ -470,9 +503,11 @@ Output Format:
       });
     }
 
-    // Process News Sources
+    // Process News Sources (只提取前3条的全文)
     addLog('========== 处理新闻来源 ==========');
-    for (const source of rawResults.news_sources) {
+    for (let i = 0; i < rawResults.news_sources.length; i++) {
+      const source = rawResults.news_sources[i];
+      
       if (!source.url) {
         finalResults.news_sources.push({
           source_type: 'TheNews',
@@ -488,7 +523,18 @@ Output Format:
         continue;
       }
 
-      const fullTextData = await fetchFullText(source.url, 'news');
+      // 只对前3条进行全文提取
+      let fullTextData;
+      if (i < 3) {
+        fullTextData = await fetchFullText(source.url, 'news');
+      } else {
+        fullTextData = {
+          content_status: 'abstract_only',
+          extracted_content: [source.summary || ''],
+          full_text: source.summary || '',
+          notes: '未提取全文（优先级较低）'
+        };
+      }
       
       finalResults.news_sources.push({
         source_type: 'TheNews',
@@ -505,9 +551,11 @@ Output Format:
       });
     }
 
-    // Process Web Sources
+    // Process Web Sources (只提取前3条的全文)
     addLog('========== 处理网络来源 ==========');
-    for (const source of rawResults.web_sources) {
+    for (let i = 0; i < rawResults.web_sources.length; i++) {
+      const source = rawResults.web_sources[i];
+      
       if (!source.url) {
         finalResults.web_sources.push({
           source_type: 'SmartSearch',
@@ -522,7 +570,18 @@ Output Format:
         continue;
       }
 
-      const fullTextData = await fetchFullText(source.url, 'web');
+      // 只对前3条进行全文提取
+      let fullTextData;
+      if (i < 3) {
+        fullTextData = await fetchFullText(source.url, 'web');
+      } else {
+        fullTextData = {
+          content_status: 'abstract_only',
+          extracted_content: [source.snippet || ''],
+          full_text: source.snippet || '',
+          notes: '未提取全文（优先级较低）'
+        };
+      }
       
       finalResults.web_sources.push({
         source_type: 'SmartSearch',
