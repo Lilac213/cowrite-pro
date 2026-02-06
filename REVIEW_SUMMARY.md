@@ -37,13 +37,7 @@ LLM 生成的 JSON 可能包含：
 ### 已实施的改进
 优化了 JSON 自动修复逻辑，使用更精确的正则表达式：
 
-#### 改进前（可能误匹配）
-```javascript
-jsonText.replace(/"\s*"\s*([a-zA-Z_])/g, '", "$1');
-// 问题：可能匹配字符串内容，导致误修复
-```
-
-#### 改进后（精确匹配）
+#### 改进 1: 精确的逗号修复（之前已实施）
 ```javascript
 // 模式1: 字符串值后直接跟属性名
 jsonText.replace(/"(\s+)"([a-zA-Z_][a-zA-Z0-9_]*)"(\s*):/g, '",$1"$2"$3:');
@@ -53,6 +47,26 @@ jsonText.replace(/(\d+|true|false|null)(\s+)"([a-zA-Z_][a-zA-Z0-9_]*)"(\s*):/g, 
 
 // 模式3: 对象/数组结束后直接跟属性名
 jsonText.replace(/([}\]])(\s+)"([a-zA-Z_][a-zA-Z0-9_]*)"(\s*):/g, '$1,$2"$3"$4:');
+```
+
+#### 改进 2: 控制字符转义（新增）⭐
+```javascript
+// 转义字符串中的控制字符
+jsonText = jsonText.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match) => {
+  let fixed = match;
+  // 转义未转义的控制字符
+  fixed = fixed.replace(/([^\\])\n/g, '$1\\n');
+  fixed = fixed.replace(/([^\\])\r/g, '$1\\r');
+  fixed = fixed.replace(/([^\\])\t/g, '$1\\t');
+  fixed = fixed.replace(/([^\\])\b/g, '$1\\b');
+  fixed = fixed.replace(/([^\\])\f/g, '$1\\f');
+  // 处理字符串开头的控制字符
+  fixed = fixed.replace(/^"\n/g, '"\\n');
+  fixed = fixed.replace(/^"\r/g, '"\\r');
+  fixed = fixed.replace(/^"\t/g, '"\\t');
+  // ... 其他控制字符
+  return fixed;
+});
 ```
 
 ### 修复示例
@@ -84,13 +98,24 @@ jsonText.replace(/([}\]])(\s+)"([a-zA-Z_][a-zA-Z0-9_]*)"(\s*):/g, '$1,$2"$3"$4:'
 {"data": {}, "items": []}
 ```
 
+#### 示例 4: 控制字符未转义 ⭐ 新增
+```json
+// 修复前（包含未转义的换行符）
+{"description": "第一行
+第二行"}
+
+// 修复后
+{"description": "第一行\\n第二行"}
+```
+
 ## 📈 预期效果
 
 | 指标 | 改进前 | 改进后 |
 |------|--------|--------|
 | JSON 解析成功率 | ~60% | ~95% |
 | 误修复风险 | 中等 | 低 |
-| 覆盖的错误类型 | 3 种 | 5 种 |
+| 覆盖的错误类型 | 3 种 | 6 种 |
+| 控制字符处理 | ❌ | ✅ |
 
 ## 🚀 已部署更新
 

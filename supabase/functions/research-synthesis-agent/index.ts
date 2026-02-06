@@ -189,7 +189,27 @@ ${JSON.stringify(retrievalResults, null, 2)}
       // 1. 移除注释
       jsonText = jsonText.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
       
-      // 2. 修复常见的 JSON 错误
+      // 2. 修复控制字符（必须在其他修复之前）
+      // 转义字符串中的控制字符
+      jsonText = jsonText.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match) => {
+        // 保留已经正确转义的字符
+        let fixed = match;
+        // 转义未转义的控制字符
+        fixed = fixed.replace(/([^\\])\n/g, '$1\\n');
+        fixed = fixed.replace(/([^\\])\r/g, '$1\\r');
+        fixed = fixed.replace(/([^\\])\t/g, '$1\\t');
+        fixed = fixed.replace(/([^\\])\b/g, '$1\\b');
+        fixed = fixed.replace(/([^\\])\f/g, '$1\\f');
+        // 处理字符串开头的控制字符
+        fixed = fixed.replace(/^"\n/g, '"\\n');
+        fixed = fixed.replace(/^"\r/g, '"\\r');
+        fixed = fixed.replace(/^"\t/g, '"\\t');
+        fixed = fixed.replace(/^"\b/g, '"\\b');
+        fixed = fixed.replace(/^"\f/g, '"\\f');
+        return fixed;
+      });
+      
+      // 3. 修复常见的 JSON 错误
       // 移除尾随逗号
       jsonText = jsonText.replace(/,(\s*[}\]])/g, '$1');
       
