@@ -1070,11 +1070,12 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 - LLM 配置：
   - 默认配置：通义千问
   - 不提供其他选项
+  - **配置方式**：管理员在管理面板中配置 LLM 服务的 API 密钥，系统自动将配置信息存储至 Supabase Edge Function 的 Secrets 中，供后端服务调用
 - 搜索配置：
   - Google Scholar（via SerpApi）：用于学术论文搜索
   - TheNews：用于新闻与行业动态搜索
   - Smart Search（Bing Web Search）：用于博客、白皮书、行业报告搜索
-  - 需配置相应 API
+  - **配置方式**：管理员在管理面板中配置各搜索服务的 API 密钥，系统自动将配置信息存储至 Supabase Edge Function 的 Secrets 中，供后端服务调用
 
 ## 4. 提示词规范
 
@@ -1811,10 +1812,15 @@ sub_claim：
   - 每个数据源搜索完成后，实时更新状态为已完成，并显示搜索到的结果数量
   - 所有数据源搜索完成后，展示完整的搜索结果
 
+### 6.8 配置信息存储规则
+- 管理员在管理面板中配置的 LLM 服务 API 密钥，系统自动将配置信息存储至 Supabase Edge Function 的 Secrets 中
+- 管理员在管理面板中配置的搜索服务 API 密钥（Google Scholar via SerpApi、TheNews、Smart Search），系统自动将配置信息存储至 Supabase Edge Function 的 Secrets 中
+- 后端服务调用 LLM 服务或搜索服务时，从 Supabase Edge Function 的 Secrets 中读取相应的 API 密钥
+- 配置信息存储至 Secrets 后，管理面板中不再明文显示完整 API 密钥，仅显示部分字符（如前4位和后4位）
+
 ## 7. 状态机
 init → confirm_brief → knowledge_selected → article_structure_confirmed → paragraph_structure_completed → drafting → content_review → layout_export → completed
 
 ## 8. 参考文件
 1. 管理面板配置截图：image.png
 2. 项目进度条示例：image-2.png
-3. 文章结构生成页面截图：image-3.png

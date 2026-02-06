@@ -10,6 +10,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/db/supabase';
+
+// 同步配置到 Edge Function Secrets
+async function syncConfigToSecrets() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    throw new Error('未登录');
+  }
+
+  const { data, error } = await supabase.functions.invoke('sync-config-to-secrets', {
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  });
+
+  if (error) {
+    console.error('同步配置失败:', error);
+    throw error;
+  }
+
+  return data;
+}
 
 export default function AdminPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -70,9 +92,13 @@ export default function AdminPage() {
         updateSystemConfig('search_provider', systemConfig.search_provider || 'openalex'),
         updateSystemConfig('search_api_key', systemConfig.search_api_key || ''),
       ]);
+      
+      // 同步配置到 Edge Function Secrets
+      await syncConfigToSecrets();
+      
       toast({
         title: '保存成功',
-        description: '系统配置已更新',
+        description: '系统配置已更新并同步到 Edge Functions',
       });
     } catch (error) {
       toast({
@@ -108,8 +134,15 @@ export default function AdminPage() {
         <TabsContent value="system" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>LLM 配置</CardTitle>
-              <CardDescription>配置全局 LLM 服务（通义千问）</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>LLM 配置</CardTitle>
+                  <CardDescription>配置全局 LLM 服务（通义千问）</CardDescription>
+                </div>
+                <Badge variant={systemConfig.llm_api_key ? 'default' : 'outline'}>
+                  {systemConfig.llm_api_key ? '✓ 已配置' : '未配置'}
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -135,6 +168,20 @@ export default function AdminPage() {
                 />
                 <p className="text-xs text-muted-foreground">
                   在阿里云控制台获取：https://dashscope.console.aliyun.com/
+                </p>
+              </div>
+              
+              {/* 同步状态提示 */}
+              <div className="p-3 bg-muted rounded-lg space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <span>🔄</span>
+                  <span>Edge Function 同步</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  保存配置后，API 密钥将自动同步到 Edge Functions（QIANWEN_API_KEY）
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  ⚠️ INTEGRATIONS_API_KEY（搜索服务密钥）需要平台管理员单独配置
                 </p>
               </div>
             </CardContent>
