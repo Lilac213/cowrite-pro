@@ -82,6 +82,9 @@ export interface KnowledgeBase {
   next_update_suggestion?: string;
   selected: boolean;
   keywords?: string[];
+  content_status?: 'full_text' | 'abstract_only' | 'insufficient_content' | 'unavailable_fulltext';
+  extracted_content?: string[];
+  full_text?: string;
   created_at: string;
 }
 

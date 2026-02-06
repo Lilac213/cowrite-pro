@@ -195,11 +195,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
       // 保存检索结果到知识库
       const allSources = [
-        ...(retrievalResults.academic_sources || []).map((s: any) => ({ ...s, sourceType: 'academic' })),
-        ...(retrievalResults.news_sources || []).map((s: any) => ({ ...s, sourceType: 'news' })),
-        ...(retrievalResults.web_sources || []).map((s: any) => ({ ...s, sourceType: 'web' })),
-        ...(retrievalResults.user_library_sources || []).map((s: any) => ({ ...s, sourceType: 'user_library' })),
-        ...(retrievalResults.personal_sources || []).map((s: any) => ({ ...s, sourceType: 'personal' })),
+        ...(retrievalResults.academic_sources || []),
+        ...(retrievalResults.news_sources || []),
+        ...(retrievalResults.web_sources || []),
+        ...(retrievalResults.user_library_sources || []),
+        ...(retrievalResults.personal_sources || []),
       ];
 
       console.log('[KnowledgeStage] 所有来源数量:', allSources.length);
@@ -218,35 +218,66 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
       // 保存到知识库
       for (const source of allSources) {
-        let title = '';
+        let title = source.title || '无标题';
         let content = '';
         let sourceLabel = '';
-        let sourceUrl = '';
+        let sourceUrl = source.url || '';
+        let contentStatus = source.content_status || 'abstract_only';
+        let extractedContent = source.extracted_content || [];
+        let fullText = source.full_text || '';
 
-        if (source.sourceType === 'academic') {
-          title = source.title || '无标题';
-          content = `作者: ${source.authors || '未知'}\n年份: ${source.year || '未知'}\n引用次数: ${source.citation_count || 0}\n\n摘要:\n${source.abstract || '暂无摘要'}`;
+        // 根据 source_type 构建内容
+        if (source.source_type === 'GoogleScholar') {
           sourceLabel = 'Google Scholar';
-          sourceUrl = source.url || '';
-        } else if (source.sourceType === 'news') {
-          title = source.title || '无标题';
-          content = `来源: ${source.source || '未知'}\n发布时间: ${source.published_at || '未知'}\n\n${source.snippet || '暂无内容'}`;
+          content = `作者: ${source.authors || '未知'}\n年份: ${source.year || '未知'}\n引用次数: ${source.citation_count || 0}\n\n`;
+          
+          if (fullText && fullText.length > 100) {
+            content += `全文:\n${fullText}`;
+          } else if (extractedContent.length > 0) {
+            content += `摘要:\n${extractedContent.join('\n\n')}`;
+          } else {
+            content += `摘要:\n${source.abstract || '暂无摘要'}`;
+          }
+          
+          if (source.notes) {
+            content += `\n\n备注: ${source.notes}`;
+          }
+        } else if (source.source_type === 'TheNews') {
           sourceLabel = 'TheNews';
-          sourceUrl = source.url || '';
-        } else if (source.sourceType === 'web') {
-          title = source.title || '无标题';
-          content = `网站: ${source.site_name || '未知'}\n最后爬取: ${source.last_crawled_at || '未知'}\n\n${source.snippet || '暂无内容'}`;
+          content = `来源: ${source.source || '未知'}\n发布时间: ${source.published_at || '未知'}\n\n`;
+          
+          if (fullText && fullText.length > 100) {
+            content += `全文:\n${fullText}`;
+          } else if (extractedContent.length > 0) {
+            content += `内容:\n${extractedContent.join('\n\n')}`;
+          } else {
+            content += `摘要:\n${source.summary || '暂无内容'}`;
+          }
+          
+          if (source.notes) {
+            content += `\n\n备注: ${source.notes}`;
+          }
+        } else if (source.source_type === 'SmartSearch') {
           sourceLabel = 'Smart Search';
-          sourceUrl = source.url || '';
-        } else if (source.sourceType === 'user_library') {
-          title = source.title || '无标题';
-          content = source.content || '暂无内容';
+          content = `网站: ${source.site_name || '未知'}\n\n`;
+          
+          if (fullText && fullText.length > 100) {
+            content += `全文:\n${fullText}`;
+          } else if (extractedContent.length > 0) {
+            content += `内容:\n${extractedContent.join('\n\n')}`;
+          } else {
+            content += `摘要:\n${source.snippet || '暂无内容'}`;
+          }
+          
+          if (source.notes) {
+            content += `\n\n备注: ${source.notes}`;
+          }
+        } else if (source.source_type === 'UserLibrary') {
           sourceLabel = '参考文章库';
-          sourceUrl = source.url || '';
-        } else if (source.sourceType === 'personal') {
-          title = source.title || '无标题';
-          content = source.content || '暂无内容';
+          content = fullText || extractedContent.join('\n\n') || '暂无内容';
+        } else if (source.source_type === 'PersonalMaterial') {
           sourceLabel = '个人素材库';
+          content = fullText || extractedContent.join('\n\n') || '暂无内容';
           sourceUrl = '';
         }
 
@@ -259,6 +290,9 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           collected_at: new Date().toISOString(),
           selected: false,
           keywords: retrievalResults.search_queries?.academic_keywords || [],
+          content_status: contentStatus,
+          extracted_content: extractedContent.length > 0 ? extractedContent : undefined,
+          full_text: fullText || undefined,
         });
       }
 
@@ -680,12 +714,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 <div className="flex items-start gap-3">
                   <Checkbox
                     checked={item.selected}
-                    onCheckedChange={() => handleToggleSelect(item.id, item.selected)}
+                    onCheckedChange={(checked) => handleToggleSelect(item.id, checked as boolean)}
                   />
                   <div className="flex-1 space-y-2">
                     <h4 className="font-semibold">{item.title}</h4>
-                    <p className="text-sm text-muted-foreground">{item.content}</p>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground line-clamp-3">{item.content}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                       <Badge 
                         variant={
                           item.source === '个人素材库' ? 'default' :
@@ -700,6 +734,20 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                       >
                         {item.source}
                       </Badge>
+                      {item.content_status && (
+                        <Badge 
+                          variant={
+                            item.content_status === 'full_text' ? 'default' :
+                            item.content_status === 'abstract_only' ? 'secondary' :
+                            'outline'
+                          }
+                        >
+                          {item.content_status === 'full_text' ? '✓ 完整全文' :
+                           item.content_status === 'abstract_only' ? '摘要' :
+                           item.content_status === 'insufficient_content' ? '内容不足' :
+                           '无法获取'}
+                        </Badge>
+                      )}
                       {item.published_at && (
                         <span>{new Date(item.published_at).toLocaleDateString('zh-CN')}</span>
                       )}

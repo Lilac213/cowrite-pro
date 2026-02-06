@@ -52,14 +52,15 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
 **核心流程：双 Agent 协作模式**
 
 资料查询阶段采用两个独立 Agent 协作完成：
-1. Research Retrieval Agent：负责多源检索与结构化返回
+1. Research Retrieval Agent：负责多源检索、全文抓取与结构化返回
 2. Research Synthesis Agent：负责中文化与可写作转化
 
-**Agent 1：Research Retrieval Agent（资料搜索 Agent）**
+**Agent 1：Research Retrieval Agent（资料搜索与全文抓取 Agent）**
 
 角色定义：
 - 负责根据用户提供的结构化 JSON 需求文档，在多个数据源中检索最贴合主题、最具时效性、最具信息密度的研究与事实材料
-- 只做搜索、筛选、结构化返回，不做观点发挥、不做写作、不做总结结论
+- 核心职责是获取可用于写作的完整、可引用内容，而不是摘要卡片
+- 只做搜索、筛选、全文抓取、结构化返回，不做观点发挥、不做写作、不做总结结论
 
 输入：
 - 接收 JSON 格式的需求文档，字段包括但不限于：主题、关键要点、核心观点、目标读者、写作风格、预期长度
@@ -78,13 +79,21 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
      - 引用次数较高
      - 明确包含方法、模型、实证或失败案例
    - 返回字段：title、authors、abstract、citation_count、publication_year、url
+   - 全文抓取规则：
+     - Scholar 默认只有摘要
+     - 若 URL 可访问全文（PDF / HTML），必须尝试获取
+     - 若无法获取全文，明确标注：abstract_only = true
 
 2. TheNews（新闻 & 行业动态）
    - 用途：最新趋势、商业实践、失败案例、公司动向
    - 检索要求：
      - 强时效性（最近 1-2 年优先）
      - 返回数量：最多 10 条
-   - 返回字段：title、summary、source、published_at、url
+   - 初始返回字段：title、summary、source、published_at、url
+   - 强制规则：
+     - TheNews 返回的内容永远不是最终内容
+     - 必须读取 URL、抓取新闻正文、提取主要段落
+     - 若正文抓取失败，必须标注原因（付费墙 / 403 / 空页面）
 
 3. Smart Search（Bing Web Search）
    - 用途：博客、白皮书、行业报告、实践总结
@@ -93,27 +102,50 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
      - freshness 参数：开启（优先近 12-24 个月）
      - 返回数量：最多 10 条
      - 自动清理特殊字符，确保 JSON 可解析
-   - 返回字段：title、site_name、snippet、url、last_crawled_at
+   - 初始返回字段：title、site_name、snippet、url、last_crawled_at
+   - 强制规则：
+     - snippet 仅用于判断是否值得点开
+     - 必须访问 URL，获取正文内容
+     - 禁止直接把 snippet 当作资料使用
 
 4. 用户参考文章库（User Reference Library）
    - 用途：用户显式提供或历史沉淀的参考资料
+   - 处理方式：
+     - 直接视为高可信完整资料
+     - 不需要二次搜索
+     - 需要结构化拆分（核心观点 / 可引用段落）
    - 要求：
      - 判断与当前需求文档的相关度
      - 标记高度相关/可补充/边缘相关
 
 5. 用户个人素材库（Personal Knowledge Base）
    - 用途：用户过往观点、笔记、方法论、内部总结
-   - 要求：
+   - 处理方式：
      - 只做检索与匹配
      - 不篡改、不重写原始内容
+     - 不可当作事实来源，需标注为 personal_material
 
-检索策略（必须执行）：
-1. 先理解需求：从 JSON 中提取核心问题、关键判断维度、隐含研究目标（如失败原因、商业闭环、用户识别方法）
-2. 反向生成搜索 Query：
-   - 将中文需求转写为英文学术关键词（供 Google Scholar）
-   - 中英文混合行业关键词（供 News / Web）
-3. 多源并行搜索：三个外部搜索源 + 两个内部库同时进行
-4. 结果去重 & 相关度过滤：删除明显跑题、纯营销内容、无实质信息的新闻稿
+工作流程（必须严格遵守）：
+
+Step 1：多源检索
+- 针对用户需求，分别从 Scholar、TheNews、Smart Search、用户资料库各取 Top N（≤10）
+
+Step 2：内容补全（关键步骤）
+- 对每一条非用户本地资料：
+  - IF 内容仅包含 title / snippet / abstract:
+    - 访问 URL
+    - 抓取正文
+    - 提取 3-8 个核心段落
+  - ELSE:
+    - 保留原文
+
+Step 3：内容质量判断
+- 若正文长度 < 300 字：标记为 insufficient_content
+- 若全文不可访问：标记为 unavailable_fulltext
+- 严禁 AI 自行补写不存在的内容
+
+Step 4：结果去重与相关度过滤
+- 删除明显跑题、纯营销内容、无实质信息的新闻稿
 
 Research Retrieval Agent 输出格式（严格遵守）：
 ```json
@@ -122,37 +154,21 @@ Research Retrieval Agent 输出格式（严格遵守）：
     \"interpreted_topic\": \"...\",
     \"key_dimensions\": [\"...\", \"...\"]
   },
-  \"academic_sources\": [
+  \"sources\": [
     {
+      \"source_type\": \"SmartSearch | TheNews | GoogleScholar | UserLibrary | PersonalMaterial\",
       \"title\": \"...\",
       \"authors\": \"...\",
-      \"year\": 2023,
-      \"citation_count\": 128,
-      \"core_relevance\": \"高度相关 / 中度相关\",
-      \"url\": \"...\"
-    }
-  ],
-  \"news_sources\": [
-    {
-      \"title\": \"...\",
-      \"source\": \"...\",
-      \"published_at\": \"...\",
-      \"why_relevant\": \"...\",
-      \"url\": \"...\"
-    }
-  ],
-  \"web_sources\": [
-    {
-      \"title\": \"...\",
-      \"site_name\": \"...\",
-      \"why_relevant\": \"...\",
-      \"url\": \"...\"
-    }
-  ],
-  \"user_library_sources\": [
-    {
-      \"title\": \"...\",
-      \"relevance_level\": \"高 / 中 / 低\"
+      \"year\": 2024,
+      \"url\": \"...\",
+      \"content_status\": \"full_text | abstract_only | insufficient_content | unavailable_fulltext\",
+      \"extracted_content\": [
+        \"段落1\",
+        \"段落2\",
+        \"段落3\"
+      ],
+      \"notes\": \"是否存在付费墙 / 转载 / 摘要限制\",
+      \"core_relevance\": \"高度相关 / 中度相关\"
     }
   ]
 }
@@ -161,12 +177,15 @@ Research Retrieval Agent 输出格式（严格遵守）：
 约束：
 - 不允许输出自然语言总结
 - 不允许中文翻译或观点提炼（这是下一个 Agent 的工作）
+- 不允许基于标题 / snippet / abstract 推断全文观点
+- 不允许常识补全
 
 **Agent 2：Research Synthesis Agent（资料整理 Agent）**
 
 角色定义：
 - 负责将 Research Retrieval Agent 输出的多源资料，转化为中文、结构化、可直接用于写作的研究素材包
 - 不写完整文章，但要做到：写作者拿到输出后可以直接开始写
+- 只允许基于 Research Retrieval Agent 输出的 extracted_content 进行写作支持
 
 输入：
 - 接收 Research Retrieval Agent 输出的 JSON，包含：学术论文（英文）、新闻资讯、网页内容、用户参考文章、用户个人素材
@@ -184,6 +203,9 @@ Research Retrieval Agent 输出格式（严格遵守）：
      - 关键数据/实证结果
      - 使用的方法/分析框架
      - 与需求文档中关键要点的对应关系
+   - 每一个观点，必须能对应到：
+     - 某一 source
+     - 某一 extracted_content 段落
 
 3. 结构化归类
    - 主动帮写作者整理思路，而不是简单罗列资料
@@ -211,7 +233,15 @@ Research Synthesis Agent 输出格式（严格）：
           \"evidence\": \"……\",
           \"source_type\": \"academic / news / web / user\",
           \"usable_as\": \"核心论点 / 案例 / 背景\",
-          \"notes\": \"样本主要来自欧美创业公司\"
+          \"notes\": \"样本主要来自欧美创业公司\",
+          \"supporting_sources\": [
+            {
+              \"title\": \"...\",
+              \"source_type\": \"...\",
+              \"quote\": \"对应原文段落\"
+            }
+          ],
+          \"confidence_level\": \"high | medium | low\"
         }
       ]
     }
@@ -226,6 +256,10 @@ Research Synthesis Agent 输出格式（严格）：
   ],
   \"contradictions_or_gaps\": [
     \"学术研究与行业实践在 ROI 衡量方式上存在明显分歧\"
+  ],
+  \"gaps\": [
+    \"哪些问题目前资料不足\",
+    \"是否需要进一步搜索\"
   ]
 }
 ```
@@ -234,6 +268,8 @@ Research Synthesis Agent 输出格式（严格）：
 - 不输出完整文章
 - 不引入未在资料中出现的新观点
 - 所有内容服务于后续写作阶段
+- 不允许基于标题 / snippet / abstract 推断全文观点
+- 不允许常识补全
 
 **资料查询页面展示**
 - 点击智能搜索按钮后，系统立即展示搜索进度界面
@@ -245,13 +281,15 @@ Research Synthesis Agent 输出格式（严格）：
   - 正在搜索参考文章库...
 - 每个数据源搜索完成后，实时更新状态为已完成，并显示搜索到的结果数量
 - 所有数据源搜索完成后，展示完整的搜索结果
-- 搜索结果以卡片形式展示，包含来源、发布时间、摘要
+- 搜索结果以卡片形式展示，包含来源、发布时间、摘要或正文片段
 - 明确标识内容来源：Google Scholar、TheNews、Smart Search、个人素材库、参考文章库
+- 明确标识内容状态：完整正文、仅摘要、内容不足、无法访问
 - 用户可勾选认可的信息
 - 信息保存至 _knowledge_base/ 文件夹，文件名格式：主题-时间.md
 - 必须包含：信息收集时间、信息来源、下次更新建议
 - 资料查询中整理观点、论据或案例
 - 资料查询增加按钮一键收藏到参考文章库
+- 每个数据源最多展示 10 条结果，总计最多展示 50 条结果（5个数据源 × 10条）
 
 **用户额外查询**
 - 若用户需要额外查询补充内容，可在搜索框中输入关键词进行补充搜索
@@ -278,7 +316,7 @@ Research Synthesis Agent 输出格式（严格）：
 
 **生成 Prompt**
 ```
-你是写作系统中的「文章级论证架构模块」。
+你是写作系统中的文章级论证架构模块。
 
 请基于以下输入，构建文章的整体论证结构，而不是生成正文内容。
 
@@ -291,8 +329,8 @@ Research Synthesis Agent 输出格式（严格）：
 - 作者已有观点或素材（如有）：
 
 【你的任务】
-1. 提炼文章的「核心论点」（一句话）
-2. 拆分 3–5 个一级论证块（章节级）
+1. 提炼文章的核心论点（一句话）
+2. 拆分 3-5 个一级论证块（章节级）
 3. 说明每个论证块的作用（为什么需要这一块）
 4. 标注论证块之间的关系（并列 / 递进 / 因果 / 对比）
 5. 确保文章结构与需求文档一致
@@ -365,7 +403,7 @@ Research Synthesis Agent 输出格式（严格）：
 
 使用 Prompt（不可修改）：
 ```
-你是写作系统中的【段落级推理模块】。
+你是写作系统中的段落级推理模块。
 你只负责生成段落的论证结构，而不是正文。
 
 【文章级约束】
@@ -388,7 +426,7 @@ Research Synthesis Agent 生成的综合摘要：
 按以下顺序输出段落结构：
 - input_assumption（承接前文的前提）
 - core_claim（本段要证明的核心主张）
-- sub_claims（1–3 条分论据）
+- sub_claims（1-3 条分论据）
 - output_state（为下一段铺垫的逻辑出口）
 
 【输出格式】
@@ -409,7 +447,7 @@ output_state：
 
 使用 Prompt（不可修改）：
 ```
-你是写作系统中的【论据与支撑材料模块】。
+你是写作系统中的论据与支撑材料模块。
 
 【上下文】
 文章主题：
@@ -417,7 +455,7 @@ output_state：
 当前 sub_claim（仅针对这一条）：
 
 【你的任务】
-为该分论据提供 1–3 条【可选支撑材料】。
+为该分论据提供 1-3 条可选支撑材料。
 
 支撑材料类型可包括：
 - 行业 / 写作实践案例
@@ -442,7 +480,7 @@ sub_claim：
 
 使用 Prompt（不可修改）：
 ```
-你是写作系统中的【段落连贯性校验模块】。
+你是写作系统中的段落连贯性校验模块。
 请对以下段落结构进行逻辑诊断，不要改写任何内容。
 
 【输入】
@@ -503,7 +541,7 @@ sub_claim：
 
 **生成初稿 Prompt（不可修改）**
 ```
-你是写作系统中的【成文与润色模块】。
+你是写作系统中的成文与润色模块。
 现在逻辑结构已经确认无误，你的任务是将其转写为自然、连贯的段落文本。
 
 【输入】
@@ -666,10 +704,11 @@ sub_claim：
 
 **核心架构：Research Retrieval Agent + Research Synthesis Agent**
 
-#### Research Retrieval Agent（资料搜索 Agent）
+#### Research Retrieval Agent（资料搜索与全文抓取 Agent）
 
 **职责**
 - 多源检索：Google Scholar、TheNews、Smart Search、用户参考文章库、用户个人素材库
+- 全文抓取：对非用户本地资料，访问 URL 并抓取正文内容
 - 结构化返回：输出标准 JSON 格式的搜索结果
 - 不做观点发挥、不做写作、不做总结结论
 
@@ -679,19 +718,33 @@ sub_claim：
    - 英文学术关键词（供 Google Scholar）
    - 中英文混合行业关键词（供 TheNews / Smart Search）
 3. 多源并行搜索：三个外部搜索源 + 两个内部库同时进行
-4. 结果去重与过滤：删除跑题、营销、无实质信息的内容
+4. 内容补全：对每一条非用户本地资料，访问 URL 并抓取正文内容
+5. 内容质量判断：标记内容状态（完整正文 / 仅摘要 / 内容不足 / 无法访问）
+6. 结果去重与过滤：删除跑题、营销、无实质信息的内容
 
 **输出格式**
 ```json
 {
   \"search_summary\": {
     \"interpreted_topic\": \"...\",
-    \"key_dimensions\": [\"...\", \"...\"]
-  },
-  \"academic_sources\": [...],
-  \"news_sources\": [...],
-  \"web_sources\": [...],
-  \"user_library_sources\": [...]
+    \"key_dimensions\": [\"...\", \"...\"]  },
+  \"sources\": [
+    {
+      \"source_type\": \"SmartSearch | TheNews | GoogleScholar | UserLibrary | PersonalMaterial\",
+      \"title\": \"...\",
+      \"authors\": \"...\",
+      \"year\": 2024,
+      \"url\": \"...\",
+      \"content_status\": \"full_text | abstract_only | insufficient_content | unavailable_fulltext\",
+      \"extracted_content\": [
+        \"段落1\",
+        \"段落2\",
+        \"段落3\"
+      ],
+      \"notes\": \"是否存在付费墙 / 转载 / 摘要限制\",
+      \"core_relevance\": \"高度相关 / 中度相关\"
+    }
+  ]
 }
 ```
 
@@ -715,13 +768,22 @@ sub_claim：
           \"evidence\": \"...\",
           \"source_type\": \"academic / news / web / user\",
           \"usable_as\": \"核心论点 / 案例 / 背景\",
-          \"notes\": \"...\"
+          \"notes\": \"...\",
+          \"supporting_sources\": [
+            {
+              \"title\": \"...\",
+              \"source_type\": \"...\",
+              \"quote\": \"对应原文段落\"
+            }
+          ],
+          \"confidence_level\": \"high | medium | low\"
         }
       ]
     }
   ],
   \"key_data_points\": [...],
-  \"contradictions_or_gaps\": [...]
+  \"contradictions_or_gaps\": [...],
+  \"gaps\": [...]
 }
 ```
 
@@ -731,10 +793,12 @@ sub_claim：
 - 每个数据源搜索完成后，实时更新状态为已完成，并显示搜索到的结果数量
 - 所有数据源搜索完成后，展示完整的搜索结果
 - 分来源卡片展示（Google Scholar、TheNews、Smart Search、个人素材库、参考文章库）
+- 明确标识内容状态（完整正文、仅摘要、内容不足、无法访问）
 - 信息勾选与保存
 - 知识库长期存储
 - 整理观点、论据或案例
 - 资料查询增加按钮一键收藏到参考文章库
+- 每个数据源最多展示 10 条结果，总计最多展示 50 条结果（5个数据源 × 10条）
 
 **用户额外查询**
 - 若用户需要额外查询补充内容，可在搜索框中输入关键词进行补充搜索
@@ -783,7 +847,7 @@ sub_claim：
 - 所有观点可编辑
 
 **论据级支撑材料生成（右侧）**
-- 为每条分论据提供 1–3 条候选支撑材料
+- 为每条分论据提供 1-3 条候选支撑材料
 - 包括行业或真实案例、数据 / 研究结论、类比或通俗解释
 - 在相关论据旁展示可支撑的案例或论据
 - 作者可自行修改或增补
@@ -919,10 +983,10 @@ AI 的角色是：把人话转成排版规则
 使用以下 Prompt 将自然语言转换为 JSON 格式：
 ```
 Prompt：排版规范解析器（Natural Language → JSON）
-你是一个【文档排版规范解析器】。
+你是一个文档排版规范解析器。
 
 你的任务是：
-将用户提供的【自然语言排版要求】解析为【结构化排版样式 JSON】。
+将用户提供的自然语言排版要求解析为结构化排版样式 JSON。
 
 请严格遵守以下规则：
 
@@ -1070,12 +1134,12 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 - LLM 配置：
   - 默认配置：通义千问
   - 不提供其他选项
-  - **配置方式**：管理员在管理面板中配置 LLM 服务的 API 密钥，系统自动将配置信息存储至 Supabase Edge Function 的 Secrets 中，供后端服务调用
+  - 配置方式：管理员在管理面板中配置 LLM 服务的 API 密钥，系统自动将配置信息存储至 Supabase Edge Function 的 Secrets 中，供后端服务调用
 - 搜索配置：
   - Google Scholar（via SerpApi）：用于学术论文搜索
   - TheNews：用于新闻与行业动态搜索
   - Smart Search（Bing Web Search）：用于博客、白皮书、行业报告搜索
-  - **配置方式**：管理员在管理面板中配置各搜索服务的 API 密钥，系统自动将配置信息存储至 Supabase Edge Function 的 Secrets 中，供后端服务调用
+  - 配置方式：管理员在管理面板中配置各搜索服务的 API 密钥，系统自动将配置信息存储至 Supabase Edge Function 的 Secrets 中，供后端服务调用
 
 ## 4. 提示词规范
 
@@ -1083,9 +1147,11 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 
 #### Research Retrieval Agent Prompt
 ```
-你是 CoWrite 的 Research Retrieval Agent，负责根据用户提供的【结构化 JSON 需求文档】，在多个数据源中检索最贴合主题、最具时效性、最具信息密度的研究与事实材料，为后续写作提供高质量输入。
+你是 CoWrite 的 Research Retrieval Agent，负责根据用户提供的结构化 JSON 需求文档，在多个数据源中检索最贴合主题、最具时效性、最具信息密度的研究与事实材料，为后续写作提供高质量输入。
 
-你不做观点发挥、不做写作、不做总结结论，只做搜索、筛选、结构化返回。
+你的核心职责是获取可用于写作的完整、可引用内容，而不是摘要卡片。
+
+你不做观点发挥、不做写作、不做总结结论，只做搜索、筛选、全文抓取、结构化返回。
 
 【输入】
 你将接收一个 JSON 格式的需求文档，字段可能包括但不限于：
@@ -1113,13 +1179,24 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
      - 引用次数较高
      - 明确包含方法、模型、实证或失败案例
    - 返回字段：title、authors、abstract、citation_count、publication_year、url
+   - 全文抓取规则：
+     - Scholar 默认只有摘要
+     - 若 URL 可访问全文（PDF / HTML），必须尝试获取
+     - 若无法获取全文，明确标注：abstract_only = true
 
 2. TheNews（新闻 & 行业动态）
    - 用途：最新趋势、商业实践、失败案例、公司动向
    - 检索要求：
      - 强时效性（最近 1-2 年优先）
      - 返回数量：最多 10 条
-   - 返回字段：title、summary、source、published_at、url
+   - 初始返回字段：title、summary、source、published_at、url
+   - 强制规则：
+     - TheNews 返回的内容永远不是最终内容
+     - 你必须：
+       - 读取 URL
+       - 抓取新闻正文
+       - 提取主要段落
+     - 若正文抓取失败，必须标注原因（付费墙 / 403 / 空页面）
 
 3. Smart Search（Bing Web Search）
    - 用途：博客、白皮书、行业报告、实践总结
@@ -1128,10 +1205,18 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
      - freshness 参数：开启（优先近 12-24 个月）
      - 返回数量：最多 10 条
      - 自动清理特殊字符，确保 JSON 可解析
-   - 返回字段：title、site_name、snippet、url、last_crawled_at
+   - 初始返回字段：title、site_name、snippet、url、last_crawled_at
+   - 强制规则：
+     - snippet 仅用于判断是否值得点开
+     - 你必须访问 URL，获取正文内容
+     - 禁止直接把 snippet 当作资料使用
 
 4. 用户参考文章库（User Reference Library）
    - 用途：用户显式提供或历史沉淀的参考资料
+   - 处理方式：
+     - 直接视为高可信完整资料
+     - 不需要二次搜索
+     - 但需要结构化拆分（核心观点 / 可引用段落）
    - 要求：
      - 判断与当前需求文档的相关度
      - 标记高度相关/可补充/边缘相关
@@ -1141,69 +1226,61 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
    - 要求：
      - 只做检索与匹配
      - 不篡改、不重写原始内容
+     - 不可当作事实来源，需标注为 personal_material
 
-【检索策略（必须执行）】
+【工作流程（你必须严格遵守）】
 
-1. 先理解需求
-   - 从 JSON 中提取：
-     - 核心问题
-     - 关键判断维度
-     - 隐含研究目标（如：失败原因、商业闭环、用户识别方法）
+Step 1：多源检索
+- 针对用户需求，分别从：
+  - Scholar
+  - TheNews
+  - Smart Search
+  - 用户资料库
+- 各取 Top N（≤10）
 
-2. 反向生成搜索 Query
-   - 将中文需求转写为：
-     - 英文学术关键词（供 Google Scholar）
-     - 中英文混合行业关键词（供 News / Web）
+Step 2：内容补全（关键步骤）
+- 对每一条非用户本地资料：
+  - IF 内容仅包含 title / snippet / abstract:
+    - 访问 URL
+    - 抓取正文
+    - 提取 3-8 个核心段落
+  - ELSE:
+    - 保留原文
 
-3. 多源并行搜索
-   - 三个外部搜索源 + 两个内部库同时进行
+Step 3：内容质量判断
+- 若正文长度 < 300 字：
+  - 标记为 insufficient_content
+- 若全文不可访问：
+  - 标记为 unavailable_fulltext
+- 严禁 AI 自行补写不存在的内容
 
-4. 结果去重 & 相关度过滤
-   - 删除：
-     - 明显跑题
-     - 纯营销内容
-     - 无实质信息的新闻稿
+Step 4：结果去重 & 相关度过滤
+- 删除：
+  - 明显跑题
+  - 纯营销内容
+  - 无实质信息的新闻稿
 
-【输出格式（严格遵守）】
-
-你必须输出一个结构化 JSON，示例如下：
-
+【你的最终输出格式】
 {
   \"search_summary\": {
     \"interpreted_topic\": \"...\",
     \"key_dimensions\": [\"...\", \"...\"]
   },
-  \"academic_sources\": [
+  \"sources\": [
     {
+      \"source_type\": \"SmartSearch | TheNews | GoogleScholar | UserLibrary | PersonalMaterial\",
       \"title\": \"...\",
       \"authors\": \"...\",
-      \"year\": 2023,
-      \"citation_count\": 128,
-      \"core_relevance\": \"高度相关 / 中度相关\",
-      \"url\": \"...\"
-    }
-  ],
-  \"news_sources\": [
-    {
-      \"title\": \"...\",
-      \"source\": \"...\",
-      \"published_at\": \"...\",
-      \"why_relevant\": \"...\",
-      \"url\": \"...\"
-    }
-  ],
-  \"web_sources\": [
-    {
-      \"title\": \"...\",
-      \"site_name\": \"...\",
-      \"why_relevant\": \"...\",
-      \"url\": \"...\"
-    }
-  ],
-  \"user_library_sources\": [
-    {
-      \"title\": \"...\",
-      \"relevance_level\": \"高 / 中 / 低\"
+      \"year\": 2024,
+      \"url\": \"...\",
+      \"content_status\": \"full_text | abstract_only | insufficient_content | unavailable_fulltext\",
+      \"extracted_content\": [
+        \"段落1\",
+        \"段落2\",
+        \"段落3\"
+      ],
+      \"notes\": \"是否存在付费墙 / 转载 / 摘要限制\",
+      \"core_relevance\": \"高度相关 / 中度相关\"
     }
   ]
 }
@@ -1211,6 +1288,8 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 【约束】
 - 不允许输出自然语言总结
 - 不允许中文翻译或观点提炼（这是下一个 Agent 的工作）
+- 不允许基于标题 / snippet / abstract 推断全文观点
+- 不允许常识补全
 ```
 
 #### Research Synthesis Agent Prompt
@@ -1218,6 +1297,8 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 你是 CoWrite 的 Research Synthesis Agent，负责将 Research Retrieval Agent 输出的多源资料，转化为中文、结构化、可直接用于写作的研究素材包。
 
 你不写完整文章，但你要做到：写作者拿到你的输出，可以直接开始写。
+
+你只允许基于 Research Retrieval Agent 输出的 extracted_content 进行写作支持。
 
 【输入】
 
@@ -1242,6 +1323,9 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
      - 关键数据/实证结果
      - 使用的方法/分析框架
      - 与需求文档中关键要点的对应关系
+   - 每一个观点，必须能对应到：
+     - 某一 source
+     - 某一 extracted_content 段落
 
 3. 结构化归类
    - 你需要主动帮写作者整理思路，而不是简单罗列资料
@@ -1269,7 +1353,15 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
           \"evidence\": \"……\",
           \"source_type\": \"academic / news / web / user\",
           \"usable_as\": \"核心论点 / 案例 / 背景\",
-          \"notes\": \"样本主要来自欧美创业公司\"
+          \"notes\": \"样本主要来自欧美创业公司\",
+          \"supporting_sources\": [
+            {
+              \"title\": \"...\",
+              \"source_type\": \"...\",
+              \"quote\": \"对应原文段落\"
+            }
+          ],
+          \"confidence_level\": \"high | medium | low\"
         }
       ]
     }
@@ -1284,6 +1376,10 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
   ],
   \"contradictions_or_gaps\": [
     \"学术研究与行业实践在 ROI 衡量方式上存在明显分歧\"
+  ],
+  \"gaps\": [
+    \"哪些问题目前资料不足\",
+    \"是否需要进一步搜索\"
   ]
 }
 
@@ -1292,11 +1388,13 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 - 不输出完整文章
 - 不引入未在资料中出现的新观点
 - 所有内容服务于后续写作阶段
+- 不允许基于标题 / snippet / abstract 推断全文观点
+- 不允许常识补全
 ```
 
 ### 4.2 文章结构生成 Prompt
 ```
-你是写作系统中的「文章级论证架构模块」。
+你是写作系统中的文章级论证架构模块。
 
 请基于以下输入，构建文章的整体论证结构，而不是生成正文内容。
 
@@ -1309,8 +1407,8 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 - 作者已有观点或素材（如有）：
 
 【你的任务】
-1. 提炼文章的「核心论点」（一句话）
-2. 拆分 3–5 个一级论证块（章节级）
+1. 提炼文章的核心论点（一句话）
+2. 拆分 3-5 个一级论证块（章节级）
 3. 说明每个论证块的作用（为什么需要这一块）
 4. 标注论证块之间的关系（并列 / 递进 / 因果 / 对比）
 5. 确保文章结构与需求文档一致
@@ -1338,7 +1436,7 @@ JSON 必须可被 python-docx 或 LaTeX 渲染器直接消费
 
 #### 段落级论据生成 Prompt（不可修改）
 ```
-你是写作系统中的【段落级推理模块】。
+你是写作系统中的段落级推理模块。
 你只负责生成段落的论证结构，而不是正文。
 
 【文章级约束】
@@ -1361,7 +1459,7 @@ Research Synthesis Agent 生成的综合摘要：
 按以下顺序输出段落结构：
 - input_assumption（承接前文的前提）
 - core_claim（本段要证明的核心主张）
-- sub_claims（1–3 条分论据）
+- sub_claims（1-3 条分论据）
 - output_state（为下一段铺垫的逻辑出口）
 
 【输出格式】
@@ -1380,7 +1478,7 @@ output_state：
 
 #### 论据级支撑材料生成 Prompt（不可修改）
 ```
-你是写作系统中的【论据与支撑材料模块】。
+你是写作系统中的论据与支撑材料模块。
 
 【上下文】
 文章主题：
@@ -1388,7 +1486,7 @@ output_state：
 当前 sub_claim（仅针对这一条）：
 
 【你的任务】
-为该分论据提供 1–3 条【可选支撑材料】。
+为该分论据提供 1-3 条可选支撑材料。
 
 支撑材料类型可包括：
 - 行业 / 写作实践案例
@@ -1411,7 +1509,7 @@ sub_claim：
 
 #### 连贯性校验 Prompt（不可修改）
 ```
-你是写作系统中的【段落连贯性校验模块】。
+你是写作系统中的段落连贯性校验模块。
 请对以下段落结构进行逻辑诊断，不要改写任何内容。
 
 【输入】
@@ -1439,7 +1537,7 @@ sub_claim：
 
 ### 4.4 生成初稿 Prompt（不可修改）
 ```
-你是写作系统中的【成文与润色模块】。
+你是写作系统中的成文与润色模块。
 现在逻辑结构已经确认无误，你的任务是将其转写为自然、连贯的段落文本。
 
 【输入】
@@ -1692,7 +1790,7 @@ sub_claim：
 请在不改变原意、不新增观点、不删减关键信息的前提下，对以下论文内容进行语言与结构层面的精修，使其符合正式学术论文发表标准。
 
 **一、句子层面（Sentence-level）**
-检查句子长度，以20–35字为主，单句不超过45字，找出超过45字的句子，并拆分为逻辑清晰的短句。
+检查句子长度，以20-35字为主，单句不超过45字，找出超过45字的句子，并拆分为逻辑清晰的短句。
 提升句法学术性，主谓关系清晰，避免主语缺失或指代不明。
 
 **二、段落层面（Paragraph-level）**
@@ -1767,11 +1865,13 @@ sub_claim：
 - 官方文档
 
 ### 6.4 双 Agent 协作约束规则
-- Research Retrieval Agent 负责多源检索与结构化返回，不做观点发挥、不做写作、不做总结结论
+- Research Retrieval Agent 负责多源检索、全文抓取与结构化返回，不做观点发挥、不做写作、不做总结结论
 - Research Synthesis Agent 负责中文化、信息提炼、结构化归类、标注可引用性
 - 学术内容、网页内容、个人素材库内容、参考文章库内容必须分开展示，并明确标识来源
+- 明确标识内容状态（完整正文、仅摘要、内容不足、无法访问）
 - 资料查询中整理观点、论据或案例
 - 搜索结果优先展示关联性+实时性最高的 Top 10 条结果
+- 每个数据源最多展示 10 条结果，总计最多展示 50 条结果（5个数据源 × 10条）
 
 ### 6.5 提示词使用规则
 - 资料查询阶段：使用 Research Retrieval Agent Prompt 和 Research Synthesis Agent Prompt
@@ -1803,9 +1903,11 @@ sub_claim：
 - 调用 Research Synthesis Agent 进行中文化、信息提炼、结构化归类、标注可引用性
 - Research Synthesis Agent 输出可直接用于写作的研究素材包
 - 搜索结果以卡片形式展示，明确标识来源
+- 明确标识内容状态（完整正文、仅摘要、内容不足、无法访问）
 - 搜索结果优先展示关联性+实时性最高的 Top 10 条结果
 - 用户可勾选认可的信息纳入本文参考资料
 - 若用户需要额外查询补充内容，可在搜索框中输入关键词进行补充搜索
+- 每个数据源最多展示 10 条结果，总计最多展示 50 条结果（5个数据源 × 10条）
 - **搜索过程实时展示**：
   - 点击智能搜索按钮后，系统立即展示搜索进度界面
   - 搜索进度界面实时显示当前正在搜索的数据源及搜索状态

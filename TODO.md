@@ -1,96 +1,68 @@
-# Task: Build CoWrite Writing Assistant Application
+# Task: Fix Research Retrieval Agent - Implement Full-Text Fetching
 
 ## Plan
-- [x] Step 1: Setup - Read config files and initialize Supabase
-  - [x] Read index.css for color system
-  - [x] Read tailwind.config.js for semantic tokens
-  - [x] Read AuthContext.tsx for auth pattern
-  - [x] Initialize Supabase with authentication
-  - [x] Create database schema with all tables
-- [x] Step 2: Backend - Edge Functions and API layer
-  - [x] Create LLM integration Edge Function
-  - [x] Create web search Edge Function
-  - [x] Deploy Edge Functions
-  - [x] Create type definitions
-  - [x] Create database API layer
-- [x] Step 3: Core Components - Layout and shared components
-  - [x] Update AuthContext for CoWrite
-  - [x] Update RouteGuard with public routes
-  - [x] Create main layout with sidebar
-  - [x] Create workflow wizard component
-  - [x] Create collaborative editor component
-- [x] Step 4: Pages - Authentication and project management
-  - [x] Create login/registration page
-  - [x] Create project list page
-  - [x] Create project workflow page (stages 2-8)
-  - [x] Create settings page
-- [x] Step 5: Pages - Toolbox features
-  - [x] Create AI rate reduction tool page
-  - [x] Create material library page
-  - [x] Create reference library page
-  - [x] Create template management page
-- [x] Step 6: Integration - Routes and final touches
-  - [x] Update App.tsx with providers
-  - [x] Update routes.tsx with all routes
-  - [x] Run lint and fix issues
-  - [x] Final verification
-- [x] Step 7: Hybrid Search System Implementation
-  - [x] Replace Google Scholar and AI Search with OpenAlex and Tavily
-  - [x] Implement 5-step hybrid search pipeline (P1-P5)
-  - [x] Add progress bar history saving and stage navigation
-  - [x] Enhance reference article creation with URL/file upload
-  - [x] Replace OpenAlex and Tavily with Google Scholar, TheNews, and Smart Search
-  - [x] Deploy new Edge Functions for improved search results
-- [x] Step 8: Knowledge Stage Enhancements
-  - [x] Reset brief confirmation when regenerating
-  - [x] Add P6 writing-level summary generation
-  - [x] Add synthesis button and display in KnowledgeStage
-  - [x] Require synthesis before proceeding to next stage
-- [x] Step 9: Search Engine Replacement
-  - [x] Replace OpenAlex and Tavily with Google Scholar, TheNews, and Smart Search
-  - [x] Deploy new Edge Functions for improved search results
-  - [x] Update documentation and UI labels
-- [x] Step 10: Integrate Professional Prompts
-  - [x] Create prompts.ts constants file with all professional prompts
-  - [x] Integrate Default Polish Prompt for content review (Step 1)
-  - [x] Integrate Default Enhance Prompt for style review and AI reduction tool (Step 2)
-  - [x] Integrate Rhythm Prompt for detail polishing (Step 3)
-  - [x] Update ReviewStage component to use imported prompts
-  - [x] Update AIReducerPage to use DEFAULT_ENHANCE_PROMPT
-- [x] Step 11: Enhanced File Upload and Content Management
-  - [x] Add PDF and Word document parsing support
-  - [x] Create document parsing Edge Function
-  - [x] Create content summarization Edge Function
-  - [x] Deploy Edge Functions
-  - [x] Add database columns for summary, file_url, file_type, tags
-  - [x] Update type definitions
-  - [x] Add API functions for parsing, summarization, and tag search
-  - [x] Update MaterialsPage with file upload, AI summarization, edit/delete, tag search
-- [x] Step 12: Draft Annotations and Content Filtering
-  - [x] Update draft generation prompt to include structured annotations
-  - [x] Create annotation display component for draft stage
-  - [x] Modify DraftingStage to show draft with side-by-side annotations
-  - [x] Update ReviewStage to hide instruction box and show only final content
-  - [x] Filter search results to exclude cases, only use viewpoints
-  - [x] Add paragraph ID mapping between draft and annotations
-  - [x] Implement hover highlighting and click-to-navigate between draft and annotations
-  - [x] Add database column for annotations in drafts table
-  - [x] Update Draft type to include annotations and ParagraphAnnotation interface
-  - [x] Create DRAFT_WITH_ANNOTATIONS_PROMPT and FINAL_ACADEMIC_REFINEMENT_PROMPT
-  - [x] Implement two-view mode: annotated view and plain text view
-  - [x] Add material type filtering to exclude cases from draft generation
+- [x] Step 1: Analyze Current Issues
+  - [x] Understand the 4 reported problems
+  - [x] Review current research-retrieval-agent implementation
+  - [x] Review database schema for knowledge_base
+  - [x] Identify root causes
+- [x] Step 2: Create Full-Text Extraction Edge Function
+  - [x] Create webpage-content-extract Edge Function using Webpage Content Extract API
+  - [x] Handle different content types (academic, news, web)
+  - [x] Implement content quality judgment (full_text, abstract_only, insufficient_content, unavailable_fulltext)
+  - [x] Deploy Edge Function with plugin ID
+- [x] Step 3: Update Research Retrieval Agent
+  - [x] Modify research-retrieval-agent to implement 2-step workflow: Search + Fetch
+  - [x] Add content completion step after each search result
+  - [x] Extract 3-8 core paragraphs from full text
+  - [x] Mark content_status for each result
+  - [x] Integrate user library and personal materials search
+  - [x] Fix duplicate results issue (30 vs 60) - removed old code
+  - [x] Update output format to include extracted_content field
+- [x] Step 4: Update Database Schema
+  - [x] Add content_status column to knowledge_base table
+  - [x] Add extracted_content jsonb column for storing paragraphs
+  - [x] Add full_text text column for complete content
+  - [x] Update indexes for better search performance
+- [x] Step 5: Update Frontend Components
+  - [x] Fix checkbox selection bug in KnowledgeStage (onCheckedChange callback fixed)
+  - [x] Update result display to show full content instead of snippets
+  - [x] Add content status indicators (full_text, abstract_only, etc.)
+  - [x] Improve result deduplication logic
+- [x] Step 6: Integrate User Library Search
+  - [x] Add reference_articles search to research-retrieval-agent
+  - [x] Add materials search to research-retrieval-agent
+  - [x] Implement parallel search across all 5 sources
+  - [x] Merge and deduplicate results
+- [x] Step 7: Testing and Validation
+  - [x] Run lint and fix issues (passed with no errors)
+  - [x] Create comprehensive documentation
 
 ## Notes
-- Using Supabase for authentication, database, and storage
-- Edge Functions for LLM and search API calls (user-configured)
-- Minimal design aesthetic with ample whitespace
-- State machine workflow: init → confirm_brief → knowledge_selected → outline_confirmed → drafting → review_pass_1 → review_pass_2 → review_pass_3 → completed
-- File storage structure: _briefs/, _knowledge_base/, _reference/, _human_character/
-- Hybrid search system: Google Scholar (academic) + TheNews (news) + Smart Search (web)
-- P1: Intent decomposition, P2: Academic keywords, P3: Web queries, P4: Cross-source alignment, P5: Structured summary, P6: Writing-level synthesis
-- Professional prompts integrated:
-  - DEFAULT_POLISH_PROMPT: Content review (Step 1) - Deep explanatory polishing
-  - DEFAULT_ENHANCE_PROMPT: Style review (Step 2) + AI reduction tool - De-AI-ification
-  - RHYTHM_PROMPT: Detail polishing (Step 3) - Sentence and paragraph optimization
-- All core features implemented successfully
-- Lint passed with no errors
+- **Core Problem**: Research Agent only does Search, not Search + Fetch + Normalize
+- **Critical Missing Step**: Content Completion - fetching full text from URLs using Webpage Content Extract API
+- **4 Issues to Fix**:
+  1. ✅ Search returns 30 but displays 60 (duplication bug) - FIXED: Removed duplicate code
+  2. ✅ Cannot select search results (checkbox bug) - FIXED: onCheckedChange now passes checked value correctly
+  3. ✅ User library not being searched (missing integration) - FIXED: Added reference_articles and materials search
+  4. ✅ Incomplete content from all sources (no full-text fetching) - FIXED: Implemented full-text extraction
+- **New Workflow**: Search → Extract URL → Fetch Full Text → Extract Paragraphs → Mark Status → Save
+- **5 Data Sources**: Google Scholar, TheNews, Smart Search, User Library (reference_articles), Personal Materials (materials)
+- **Content Status Types**: full_text, abstract_only, insufficient_content, unavailable_fulltext
+- **Webpage Content Extract API**: Plugin ID 371d109d-df38-4c24-8330-a1644e986572
+- **Output Format**: Each source must include extracted_content array with 3-8 paragraphs
+- **Edge Functions Deployed**: webpage-content-extract, research-retrieval-agent (updated)
+- **Database Migration Applied**: 00013_add_fulltext_content_fields
+- **Frontend Updated**: KnowledgeStage.tsx with checkbox fix and content status display
+- **Types Updated**: KnowledgeBase interface with new fields
+- **Documentation Created**: RESEARCH_AGENT_FIX_DOCUMENTATION.md
+
+## Summary
+All 4 reported issues have been successfully fixed:
+1. ✅ Duplicate results issue resolved
+2. ✅ Checkbox selection now works correctly
+3. ✅ User library (reference_articles + materials) now integrated
+4. ✅ Full-text extraction implemented for all search sources
+
+The Research Retrieval Agent now implements the complete workflow:
+**Search + Fetch + Normalize** instead of just **Search**
