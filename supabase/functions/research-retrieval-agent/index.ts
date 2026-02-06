@@ -152,6 +152,19 @@ ${JSON.stringify(requirementsDoc, null, 2)}
       // 移除尾随逗号
       jsonText = jsonText.replace(/,(\s*[}\]])/g, '$1');
       
+      // 移除多余的连续逗号
+      jsonText = jsonText.replace(/,+/g, ',');
+      
+      // 修复缺少逗号的情况（在 "value" 后面直接跟 "key" 的情况）
+      jsonText = jsonText.replace(/"\s*"\s*([a-zA-Z_])/g, '", "$1');
+      jsonText = jsonText.replace(/"\s*\n\s*"/g, '",\n"');
+      
+      // 修复数字/布尔值后缺少逗号的情况
+      jsonText = jsonText.replace(/(\d|true|false|null)\s*"\s*([a-zA-Z_])/g, '$1, "$2');
+      
+      // 修复对象/数组后缺少逗号的情况
+      jsonText = jsonText.replace(/([}\]])\s*"\s*([a-zA-Z_])/g, '$1, "$2');
+      
       // 3. 尝试解析
       try {
         searchPlan = JSON.parse(jsonText);
