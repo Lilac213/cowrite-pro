@@ -45,6 +45,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [autoSearched, setAutoSearched] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingKnowledge, setEditingKnowledge] = useState<KnowledgeBase | null>(null);
+  const [searchProgress, setSearchProgress] = useState<{
+    stage: string;
+    message: string;
+    details?: string;
+  } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -96,9 +101,13 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     if (!queryToUse.trim()) return;
 
     setSearching(true);
+    setSearchProgress({ stage: '准备中', message: '正在初始化搜索...' });
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('未登录');
+
+      setSearchProgress({ stage: '读取需求', message: '正在读取需求文档...' });
 
       // 获取需求文档
       const brief = await getBrief(projectId);
@@ -118,6 +127,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         预期长度: requirements.预期长度 || '中等',
       };
 
+      setSearchProgress({ 
+        stage: '资料查询', 
+        message: '正在从 5 个数据源检索相关资料...',
+        details: '数据源：Google Scholar、TheNews、Smart Search、参考文章库、个人素材库'
+      });
+
       toast({
         title: '🔍 启动 Research Retrieval Agent',
         description: '正在从 5 个数据源检索相关资料...',
@@ -129,6 +144,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         projectId,
         user.id
       );
+
+      setSearchProgress({ 
+        stage: '资料整理', 
+        message: '正在整理检索结果...',
+        details: `已检索到资料，正在分类整理`
+      });
 
       toast({
         title: '✅ Research Synthesis Agent 完成',
@@ -143,6 +164,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         ...(retrievalResults.user_library_sources || []).map((s: any) => ({ ...s, sourceType: 'user_library' })),
         ...(retrievalResults.personal_sources || []).map((s: any) => ({ ...s, sourceType: 'personal' })),
       ];
+
+      setSearchProgress({ 
+        stage: '保存资料', 
+        message: `正在保存 ${allSources.length} 条资料到知识库...`
+      });
 
       // 保存到知识库
       for (const source of allSources) {
@@ -201,6 +227,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
       await loadKnowledge();
       
+      setSearchProgress({ 
+        stage: '完成', 
+        message: `搜索完成！已从 5 个数据源检索并整理了 ${allSources.length} 条资料`
+      });
+      
       toast({
         title: '✅ 搜索完成',
         description: `已从 5 个数据源检索并整理了 ${allSources.length} 条资料`,
@@ -210,6 +241,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       
       // 提取详细错误信息
       let errorMessage = '请稍后重试';
+      let errorStage = '未知阶段';
+      
+      if (searchProgress) {
+        errorStage = searchProgress.stage;
+      }
       
       if (error?.message) {
         errorMessage = error.message;
@@ -228,13 +264,21 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         }
       }
       
+      setSearchProgress({ 
+        stage: '失败', 
+        message: `在 ${errorStage} 阶段失败`,
+        details: errorMessage
+      });
+      
       toast({
         title: '❌ 资料检索失败',
-        description: errorMessage,
+        description: `${errorStage}：${errorMessage}`,
         variant: 'destructive',
       });
     } finally {
       setSearching(false);
+      // 3秒后清除进度信息
+      setTimeout(() => setSearchProgress(null), 3000);
     }
   };
 
@@ -398,6 +442,53 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               {searching ? '搜索中...' : '智能搜索'}
             </Button>
           </div>
+
+          {/* 搜索进度显示 */}
+          {searchProgress && (
+            <Card className={`border-2 ${
+              searchProgress.stage === '失败' 
+                ? 'border-destructive bg-destructive/5' 
+                : searchProgress.stage === '完成'
+                ? 'border-primary bg-primary/5'
+                : 'border-primary bg-primary/5'
+            }`}>
+              <CardContent className="pt-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {searchProgress.stage === '失败' ? (
+                        <span className="text-destructive text-lg">❌</span>
+                      ) : searchProgress.stage === '完成' ? (
+                        <span className="text-primary text-lg">✅</span>
+                      ) : (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      )}
+                      <span className="font-semibold text-sm">
+                        {searchProgress.stage}
+                      </span>
+                    </div>
+                    <Badge variant={
+                      searchProgress.stage === '失败' 
+                        ? 'destructive' 
+                        : searchProgress.stage === '完成'
+                        ? 'default'
+                        : 'secondary'
+                    }>
+                      {searchProgress.stage === '失败' ? '失败' : searchProgress.stage === '完成' ? '完成' : '进行中'}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {searchProgress.message}
+                  </p>
+                  {searchProgress.details && (
+                    <p className="text-xs text-muted-foreground bg-muted p-2 rounded">
+                      {searchProgress.details}
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </CardContent>
       </Card>
 

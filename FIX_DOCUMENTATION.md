@@ -1,25 +1,87 @@
 # 修复说明文档
 
-## 问题 1: 资料搜索失败错误显示不清晰
+## 更新记录
+
+### 2026-02-06 更新：添加实时搜索进度显示
+
+用户反馈搜索失败时无法了解具体进度和失败原因，现已添加实时进度显示功能。
+
+---
+
+## 问题 1: 资料搜索失败错误显示不清晰 + 添加实时搜索进度显示
 
 ### 问题描述
-当资料搜索失败时，错误提示只显示 "Edge Function returned a non-2xx status code"，没有显示具体的错误原因，用户无法了解失败的真正原因。
+1. 当资料搜索失败时，错误提示只显示 "Edge Function returned a non-2xx status code"，没有显示具体的错误原因
+2. 搜索过程中用户无法看到当前进度，不知道系统正在做什么
+3. 失败时不知道在哪个阶段失败的
 
 ### 解决方案
-更新 `KnowledgeStage.tsx` 中的错误处理逻辑：
 
-1. **提取详细错误信息**：
-   - 首先尝试从 `error.message` 获取错误信息
-   - 如果是 Supabase Edge Function 错误，尝试从 `error.context` 中提取更详细的错误信息
-   - 解析 JSON 格式的错误响应，获取实际的错误消息
+#### 1. 添加搜索进度状态管理
 
-2. **改进的错误处理代码**：
+在 `KnowledgeStage.tsx` 中添加进度状态：
+
+```typescript
+const [searchProgress, setSearchProgress] = useState<{
+  stage: string;
+  message: string;
+  details?: string;
+} | null>(null);
+```
+
+#### 2. 在搜索流程中更新进度
+
+在 `handleSearch` 函数的各个阶段更新进度信息：
+
+```typescript
+// 准备阶段
+setSearchProgress({ stage: '准备中', message: '正在初始化搜索...' });
+
+// 读取需求阶段
+setSearchProgress({ stage: '读取需求', message: '正在读取需求文档...' });
+
+// 资料查询阶段
+setSearchProgress({ 
+  stage: '资料查询', 
+  message: '正在从 5 个数据源检索相关资料...',
+  details: '数据源：Google Scholar、TheNews、Smart Search、参考文章库、个人素材库'
+});
+
+// 资料整理阶段
+setSearchProgress({ 
+  stage: '资料整理', 
+  message: '正在整理检索结果...',
+  details: `已检索到资料，正在分类整理`
+});
+
+// 保存资料阶段
+setSearchProgress({ 
+  stage: '保存资料', 
+  message: `正在保存 ${allSources.length} 条资料到知识库...`
+});
+
+// 完成阶段
+setSearchProgress({ 
+  stage: '完成', 
+  message: `搜索完成！已从 5 个数据源检索并整理了 ${allSources.length} 条资料`
+});
+```
+
+#### 3. 改进错误处理
+
+在错误处理中记录失败阶段和详细错误信息：
+
 ```typescript
 catch (error: any) {
   console.error('搜索失败:', error);
   
   // 提取详细错误信息
   let errorMessage = '请稍后重试';
+  let errorStage = '未知阶段';
+  
+  if (searchProgress) {
+    errorStage = searchProgress.stage;
+  }
   
   if (error?.message) {
     errorMessage = error.message;
@@ -38,18 +100,124 @@ catch (error: any) {
     }
   }
   
+  setSearchProgress({ 
+    stage: '失败', 
+    message: `在 ${errorStage} 阶段失败`,
+    details: errorMessage
+  });
+  
   toast({
     title: '❌ 资料检索失败',
-    description: errorMessage,
+    description: `${errorStage}：${errorMessage}`,
     variant: 'destructive',
   });
+} finally {
+  setSearching(false);
+  // 3秒后清除进度信息
+  setTimeout(() => setSearchProgress(null), 3000);
 }
 ```
 
-3. **改进效果**：
-   - 用户现在可以看到具体的错误原因（如 "API密钥未配置"、"缺少需求文档" 等）
-   - 更容易定位和解决问题
-   - 提供更好的用户体验
+#### 4. 添加进度显示 UI
+
+在搜索框下方添加实时进度显示卡片：
+
+```typescript
+{/* 搜索进度显示 */}
+{searchProgress && (
+  <Card className={`border-2 ${
+    searchProgress.stage === '失败' 
+      ? 'border-destructive bg-destructive/5' 
+      : searchProgress.stage === '完成'
+      ? 'border-primary bg-primary/5'
+      : 'border-primary bg-primary/5'
+  }`}>
+    <CardContent className="pt-4">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {searchProgress.stage === '失败' ? (
+              <span className="text-destructive text-lg">❌</span>
+            ) : searchProgress.stage === '完成' ? (
+              <span className="text-primary text-lg">✅</span>
+            ) : (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+            )}
+            <span className="font-semibold text-sm">
+              {searchProgress.stage}
+            </span>
+          </div>
+          <Badge variant={
+            searchProgress.stage === '失败' 
+              ? 'destructive' 
+              : searchProgress.stage === '完成'
+              ? 'default'
+              : 'secondary'
+          }>
+            {searchProgress.stage === '失败' ? '失败' : searchProgress.stage === '完成' ? '完成' : '进行中'}
+          </Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {searchProgress.message}
+        </p>
+        {searchProgress.details && (
+          <p className="text-xs text-muted-foreground bg-muted p-2 rounded">
+            {searchProgress.details}
+          </p>
+        )}
+      </div>
+    </CardContent>
+  </Card>
+)}
+```
+
+### 功能特点
+
+#### 1. 实时进度反馈
+- **准备中**：初始化搜索
+- **读取需求**：读取需求文档
+- **资料查询**：从 5 个数据源检索（显示数据源列表）
+- **资料整理**：整理检索结果
+- **保存资料**：保存到知识库（显示数量）
+- **完成**：显示最终结果
+
+#### 2. 视觉反馈
+- **进行中**：显示旋转加载动画
+- **完成**：显示绿色 ✅ 图标和成功样式
+- **失败**：显示红色 ❌ 图标和错误样式
+- **状态徽章**：显示当前状态（进行中/完成/失败）
+
+#### 3. 详细信息显示
+- **主要消息**：当前阶段的简要说明
+- **详细信息**：额外的上下文信息（如数据源列表、错误详情）
+- **失败定位**：明确显示在哪个阶段失败
+- **错误原因**：显示具体的错误消息
+
+#### 4. 用户体验优化
+- 进度信息在完成或失败后 3 秒自动消失
+- 不同状态使用不同的颜色和图标
+- 清晰的视觉层次和信息组织
+- 响应式设计，适配不同屏幕尺寸
+
+### 改进效果
+
+#### 搜索过程透明化
+用户可以实时看到：
+1. 当前正在执行的步骤
+2. 每个步骤的具体操作
+3. 涉及的数据源和资源
+4. 处理的数据量
+
+#### 错误定位精确化
+失败时用户可以看到：
+1. 在哪个阶段失败（准备中/读取需求/资料查询/资料整理/保存资料）
+2. 具体的错误原因（API密钥未配置/网络错误/数据格式错误等）
+3. 可能的解决方案提示
+
+#### 用户信心提升
+- 不再是"黑盒"操作，用户知道系统在做什么
+- 长时间操作时不会焦虑，能看到进度
+- 失败时能快速定位问题，不需要反复尝试
 
 ---
 
