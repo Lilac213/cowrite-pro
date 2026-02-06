@@ -1168,7 +1168,36 @@ export async function researchRetrievalAgent(requirementsDoc: any, projectId?: s
 
   if (error) {
     console.error('Research Retrieval Agent Error:', error);
-    throw new Error(`资料检索失败: ${error.message}`);
+    
+    // 尝试提取详细错误信息
+    let errorMessage = error.message || '资料检索失败';
+    
+    // 如果有 context，尝试提取更详细的错误
+    if (error.context) {
+      try {
+        const contextText = typeof error.context === 'string' 
+          ? error.context 
+          : await error.context.text?.();
+        
+        if (contextText) {
+          try {
+            const contextJson = JSON.parse(contextText);
+            errorMessage = contextJson.error || contextText;
+          } catch {
+            errorMessage = contextText;
+          }
+        }
+      } catch (e) {
+        console.error('提取错误上下文失败:', e);
+      }
+    }
+    
+    // 如果返回的 data 中包含错误信息
+    if (data && typeof data === 'object' && 'error' in data) {
+      errorMessage = data.error;
+    }
+    
+    throw new Error(errorMessage);
   }
 
   return data;
@@ -1185,7 +1214,36 @@ export async function researchSynthesisAgent(retrievalResults: any, requirements
 
   if (error) {
     console.error('Research Synthesis Agent Error:', error);
-    throw new Error(`资料整理失败: ${error.message}`);
+    
+    // 尝试提取详细错误信息
+    let errorMessage = error.message || '资料整理失败';
+    
+    // 如果有 context，尝试提取更详细的错误
+    if (error.context) {
+      try {
+        const contextText = typeof error.context === 'string' 
+          ? error.context 
+          : await error.context.text?.();
+        
+        if (contextText) {
+          try {
+            const contextJson = JSON.parse(contextText);
+            errorMessage = contextJson.error || contextText;
+          } catch {
+            errorMessage = contextText;
+          }
+        }
+      } catch (e) {
+        console.error('提取错误上下文失败:', e);
+      }
+    }
+    
+    // 如果返回的 data 中包含错误信息
+    if (data && typeof data === 'object' && 'error' in data) {
+      errorMessage = data.error;
+    }
+    
+    throw new Error(errorMessage);
   }
 
   return data;

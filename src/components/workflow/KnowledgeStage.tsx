@@ -237,7 +237,9 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         description: `已从 5 个数据源检索并整理了 ${allSources.length} 条资料`,
       });
     } catch (error: any) {
-      console.error('搜索失败:', error);
+      console.error('搜索失败 - 完整错误对象:', error);
+      console.error('错误类型:', typeof error);
+      console.error('错误属性:', Object.keys(error));
       
       // 提取详细错误信息
       let errorMessage = '请稍后重试';
@@ -249,18 +251,30 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       
       if (error?.message) {
         errorMessage = error.message;
+        console.error('错误消息:', errorMessage);
       }
       
       // 如果是 Supabase Edge Function 错误，尝试提取更详细的信息
       if (error?.context) {
+        console.error('发现 error.context');
         try {
-          const contextText = await error.context.text();
+          const contextText = typeof error.context === 'string' 
+            ? error.context 
+            : await error.context.text?.();
+          console.error('context 文本:', contextText);
+          
           if (contextText) {
-            const contextJson = JSON.parse(contextText);
-            errorMessage = contextJson.error || contextText;
+            try {
+              const contextJson = JSON.parse(contextText);
+              errorMessage = contextJson.error || contextText;
+              console.error('解析后的错误:', errorMessage);
+            } catch {
+              errorMessage = contextText;
+              console.error('使用原始 context 文本:', errorMessage);
+            }
           }
         } catch (e) {
-          // 忽略解析错误
+          console.error('提取 context 失败:', e);
         }
       }
       
@@ -275,6 +289,17 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         description: `${errorStage}：${errorMessage}`,
         variant: 'destructive',
       });
+      
+      // 如果是 API 密钥相关错误，提供额外提示
+      if (errorMessage.includes('API密钥') || errorMessage.includes('API key') || errorMessage.includes('INTEGRATIONS_API_KEY')) {
+        setTimeout(() => {
+          toast({
+            title: '💡 提示',
+            description: '请检查 Supabase 项目的 Secrets 配置，确保 INTEGRATIONS_API_KEY 已正确设置',
+            duration: 8000,
+          });
+        }, 1000);
+      }
     } finally {
       setSearching(false);
       // 3秒后清除进度信息

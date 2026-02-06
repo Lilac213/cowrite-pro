@@ -2,13 +2,261 @@
 
 ## 更新记录
 
-### 2026-02-06 更新：添加实时搜索进度显示
+### 2026-02-06 更新 3: 增强错误提取和调试功能
+
+用户反馈搜索仍然显示"Edge Function returned a non-2xx status code"错误，现已增强错误提取逻辑并添加详细的调试日志。
+
+### 2026-02-06 更新 2: 添加实时搜索进度显示
 
 用户反馈搜索失败时无法了解具体进度和失败原因，现已添加实时进度显示功能。
 
+### 2026-02-06 更新 1: 改进错误显示
+
+用户反馈搜索失败时错误提示不清晰，现已改进错误提取逻辑。
+
 ---
 
-## 问题 1: 资料搜索失败错误显示不清晰 + 添加实时搜索进度显示
+## 问题 1.2: 增强错误提取和调试功能
+
+### 问题描述
+虽然已经添加了进度显示，但错误信息仍然不够详细，显示"Edge Function returned a non-2xx status code"，无法看到 Edge Function 返回的具体错误原因。
+
+### 解决方案
+
+#### 1. 改进 API 层的错误提取
+
+在 `src/db/api.ts` 中增强了 `researchRetrievalAgent` 和 `researchSynthesisAgent` 函数的错误处理：
+
+**改进前**:
+```typescript
+if (error) {
+  console.error('Research Synthesis Agent Error:', error);
+  throw new Error(`资料整理失败: ${error.message}`);
+}
+```
+
+**改进后**:
+```typescript
+if (error) {
+  console.error('Research Synthesis Agent Error:', error);
+  
+  // 尝试提取详细错误信息
+  let errorMessage = error.message || '资料整理失败';
+  
+  // 如果有 context，尝试提取更详细的错误
+  if (error.context) {
+    try {
+      const contextText = typeof error.context === 'string' 
+        ? error.context 
+        : await error.context.text?.();
+      
+      if (contextText) {
+        try {
+          const contextJson = JSON.parse(contextText);
+          errorMessage = contextJson.error || contextText;
+        } catch {
+          errorMessage = contextText;
+        }
+      }
+    } catch (e) {
+      console.error('提取错误上下文失败:', e);
+    }
+  }
+  
+  // 如果返回的 data 中包含错误信息
+  if (data && typeof data === 'object' && 'error' in data) {
+    errorMessage = data.error;
+  }
+  
+  throw new Error(errorMessage);
+}
+```
+
+**改进点**:
+1. 支持从 `error.context` 提取详细错误（字符串或 Response 对象）
+2. 尝试解析 JSON 格式的错误响应
+3. 如果解析失败，使用原始文本
+4. 检查 `data.error` 字段（Edge Function 可能在 data 中返回错误）
+
+#### 2. 添加详细的调试日志
+
+在 `src/components/workflow/KnowledgeStage.tsx` 的错误处理中添加了详细的控制台日志：
+
+```typescript
+catch (error: any) {
+  console.error('搜索失败 - 完整错误对象:', error);
+  console.error('错误类型:', typeof error);
+  console.error('错误属性:', Object.keys(error));
+  
+  // 提取详细错误信息
+  let errorMessage = '请稍后重试';
+  let errorStage = '未知阶段';
+  
+  if (searchProgress) {
+    errorStage = searchProgress.stage;
+  }
+  
+  if (error?.message) {
+    errorMessage = error.message;
+    console.error('错误消息:', errorMessage);
+  }
+  
+  // 如果是 Supabase Edge Function 错误，尝试提取更详细的信息
+  if (error?.context) {
+    console.error('发现 error.context');
+    try {
+      const contextText = typeof error.context === 'string' 
+        ? error.context 
+        : await error.context.text?.();
+      console.error('context 文本:', contextText);
+      
+      if (contextText) {
+        try {
+          const contextJson = JSON.parse(contextText);
+          errorMessage = contextJson.error || contextText;
+          console.error('解析后的错误:', errorMessage);
+        } catch {
+          errorMessage = contextText;
+          console.error('使用原始 context 文本:', errorMessage);
+        }
+      }
+    } catch (e) {
+      console.error('提取 context 失败:', e);
+    }
+  }
+  
+  setSearchProgress({ 
+    stage: '失败', 
+    message: `在 ${errorStage} 阶段失败`,
+    details: errorMessage
+  });
+  
+  toast({
+    title: '❌ 资料检索失败',
+    description: `${errorStage}：${errorMessage}`,
+    variant: 'destructive',
+  });
+}
+```
+
+**日志输出内容**:
+1. 完整的错误对象
+2. 错误的类型
+3. 错误对象的所有属性
+4. 提取的错误消息
+5. context 的原始文本
+6. 解析后的错误信息
+
+#### 3. 创建调试指南文档
+
+创建了 `DEBUG_GUIDE.md` 文档，包含：
+
+**内容结构**:
+1. 问题现象描述
+2. 已实施的改进说明
+3. 如何使用调试功能的详细步骤
+4. 常见错误及解决方案
+5. 进度显示说明
+6. 检查 Edge Function 日志的方法
+7. 测试建议和示例代码
+
+**常见错误类型**:
+- API密钥未配置
+- LLM API 请求失败
+- 解析整理结果失败
+- 缺少检索结果或需求文档
+
+### 使用方法
+
+#### 开发者调试步骤:
+
+1. **打开浏览器控制台**
+   - 按 F12 或右键 → 检查
+   - 切换到 Console 标签
+
+2. **执行搜索操作**
+   - 输入搜索内容
+   - 点击"智能搜索"
+   - 观察控制台输出
+
+3. **查看详细日志**
+   ```
+   搜索失败 - 完整错误对象: {...}
+   错误类型: object
+   错误属性: ["message", "context", ...]
+   错误消息: API密钥未配置
+   发现 error.context
+   context 文本: {"error": "API密钥未配置"}
+   解析后的错误: API密钥未配置
+   ```
+
+4. **根据错误信息采取行动**
+   - 如果是 API 密钥问题：检查 Supabase Secrets
+   - 如果是 LLM 请求失败：检查 API 配额和密钥有效性
+   - 如果是解析失败：检查 Edge Function 日志
+
+#### 用户体验改进:
+
+1. **更清晰的错误提示**
+   - 从 "Edge Function returned a non-2xx status code"
+   - 变为 "API密钥未配置" 或其他具体错误
+
+2. **精确的失败阶段定位**
+   - 显示具体在哪个阶段失败（准备中/读取需求/资料查询/资料整理/保存资料）
+   - 帮助快速定位问题
+
+3. **详细的错误信息**
+   - 在进度卡片的 details 区域显示完整错误信息
+   - 在 toast 通知中显示简要错误
+
+### 改进效果
+
+#### 错误信息透明化
+- **改进前**: "Edge Function returned a non-2xx status code"
+- **改进后**: "API密钥未配置" / "LLM API 请求失败: 401" / "解析整理结果失败: Unexpected token"
+
+#### 调试效率提升
+- 开发者可以在控制台看到完整的错误对象和提取过程
+- 每一步的错误提取都有日志记录
+- 可以快速定位是哪个环节出了问题
+
+#### 问题解决速度加快
+- 明确的错误信息 → 快速找到解决方案
+- 详细的调试日志 → 减少排查时间
+- 完整的调试指南 → 自助解决常见问题
+
+### 技术细节
+
+#### Error Context 提取逻辑
+
+Supabase Edge Function 错误可能以多种形式返回：
+
+1. **error.message**: 基本错误消息
+2. **error.context**: 可能是字符串或 Response 对象
+   - 如果是 Response 对象，需要调用 `.text()` 方法
+   - 如果是字符串，直接使用
+3. **data.error**: Edge Function 在响应体中返回的错误
+
+我们的代码会依次尝试所有可能的提取方式，确保能获取到最详细的错误信息。
+
+#### 多层错误处理
+
+```
+Edge Function Error
+    ↓
+API Layer (api.ts)
+    ↓ 提取详细错误
+Component Layer (KnowledgeStage.tsx)
+    ↓ 记录调试日志
+User Interface
+    ↓ 显示友好提示
+```
+
+每一层都会尝试提取和丰富错误信息，确保最终用户看到的是最有用的错误描述。
+
+---
+
+## 问题 1.1: 添加实时搜索进度显示
 
 ### 问题描述
 1. 当资料搜索失败时，错误提示只显示 "Edge Function returned a non-2xx status code"，没有显示具体的错误原因

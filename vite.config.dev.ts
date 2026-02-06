@@ -19,6 +19,8 @@
 
     export default defineConfig({
       ...userConfig,
+      // 将 Vite 缓存目录设置为项目本地目录，避免在 /workspace/node_modules/ 下创建
+      cacheDir: path.resolve(__dirname, "node_modules/.vite"),
       plugins: [
         makeTagger(),
         injectedGuiListenerPlugin({
