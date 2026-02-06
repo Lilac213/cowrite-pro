@@ -1,5 +1,23 @@
 # 🎉 搜索系统重构完成报告
 
+## 📋 最新更新：已切换到通义千问 API
+
+**更新时间**：2025-02-06
+
+### API 变更
+- ❌ 旧版：DeepSeek API (`DEEPSEEK_API_KEY`)
+- ✅ 新版：通义千问 API (`QIANWEN_API_KEY`)
+
+### 为什么切换？
+CoWrite 系统使用通义千问作为 LLM 服务提供商，具有更好的中文理解能力和更快的响应速度。
+
+### 配置要求
+**必须配置环境变量**：`QIANWEN_API_KEY`
+
+详细配置步骤请参考：[API 切换说明](./API_SWITCH_DEEPSEEK_TO_QIANWEN.md)
+
+---
+
 ## 📋 问题回顾
 
 用户遇到的问题：
@@ -93,6 +111,25 @@
 ```
 
 ## 🔧 技术细节
+
+### 0. LLM API 配置
+```typescript
+// 使用通义千问 API
+const qianwenApiKey = Deno.env.get('QIANWEN_API_KEY');
+
+const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${qianwenApiKey}`
+  },
+  body: JSON.stringify({
+    model: 'qwen-plus',
+    messages: [...],
+    temperature: 0.7,
+    max_tokens: 2000
+  })
+});
+```
 
 ### 1. JSON 提取逻辑
 ```typescript

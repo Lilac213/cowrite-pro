@@ -26,11 +26,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    const deepseekApiKey = Deno.env.get('DEEPSEEK_API_KEY');
+    const qianwenApiKey = Deno.env.get('QIANWEN_API_KEY');
     const integrationsApiKey = Deno.env.get('INTEGRATIONS_API_KEY');
     
-    if (!deepseekApiKey) {
-      throw new Error('DEEPSEEK_API_KEY 未配置');
+    if (!qianwenApiKey) {
+      throw new Error('QIANWEN_API_KEY 未配置');
     }
     if (!integrationsApiKey) {
       throw new Error('INTEGRATIONS_API_KEY 未配置');
@@ -78,17 +78,17 @@ Output Format:
 
     const userPrompt = `研究需求文档：\n${requirementsDoc}\n\n请生成搜索计划。`;
 
-    console.log('开始调用 DeepSeek API 生成搜索计划...');
+    console.log('开始调用通义千问 API 生成搜索计划...');
 
-    // 调用 DeepSeek API 生成搜索计划
-    const llmResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    // 调用通义千问 API 生成搜索计划
+    const llmResponse = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${deepseekApiKey}`,
+        'Authorization': `Bearer ${qianwenApiKey}`,
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: 'qwen-plus',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -100,18 +100,18 @@ Output Format:
 
     if (!llmResponse.ok) {
       const errorText = await llmResponse.text();
-      console.error('DeepSeek API 错误:', errorText);
-      throw new Error(`DeepSeek API 请求失败: ${llmResponse.status}`);
+      console.error('通义千问 API 错误:', errorText);
+      throw new Error(`通义千问 API 请求失败: ${llmResponse.status}`);
     }
 
     const llmData = await llmResponse.json();
     const content = llmData.choices?.[0]?.message?.content;
 
     if (!content) {
-      throw new Error('DeepSeek API 返回内容为空');
+      throw new Error('通义千问 API 返回内容为空');
     }
 
-    console.log('DeepSeek 返回内容:', content);
+    console.log('通义千问返回内容:', content);
 
     // 提取 ---JSON--- 部分
     let searchPlan;

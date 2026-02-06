@@ -1,5 +1,22 @@
 # 🎯 100% 搜索成功率实现方案
 
+## ⚠️ 重要更新：已切换到通义千问 API
+
+**更新时间**：2025-02-06
+
+系统已从 DeepSeek API 切换到通义千问（Qianwen）API。
+
+**环境变量变更**：
+- ❌ 旧版：`DEEPSEEK_API_KEY`
+- ✅ 新版：`QIANWEN_API_KEY`
+
+**配置步骤**：
+1. 访问阿里云控制台获取通义千问 API Key
+2. 在 Supabase Dashboard 中添加 `QIANWEN_API_KEY` 环境变量
+3. 详细说明请参考：[API 切换说明](./API_SWITCH_DEEPSEEK_TO_QIANWEN.md)
+
+---
+
 ## 问题分析
 
 之前的实现存在以下问题导致搜索失败：
