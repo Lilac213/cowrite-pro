@@ -193,18 +193,18 @@ ${JSON.stringify(retrievalResults, null, 2)}
       // 移除尾随逗号
       jsonText = jsonText.replace(/,(\s*[}\]])/g, '$1');
       
-      // 移除多余的连续逗号
+      // 修复缺少逗号的情况 - 更精确的模式
+      // 模式1: 字符串值后直接跟属性名 "value" "key":
+      jsonText = jsonText.replace(/"(\s+)"([a-zA-Z_][a-zA-Z0-9_]*)"(\s*):/g, '",$1"$2"$3:');
+      
+      // 模式2: 数字/布尔值/null后直接跟属性名 123 "key":
+      jsonText = jsonText.replace(/(\d+|true|false|null)(\s+)"([a-zA-Z_][a-zA-Z0-9_]*)"(\s*):/g, '$1,$2"$3"$4:');
+      
+      // 模式3: 对象/数组结束后直接跟属性名 } "key": 或 ] "key":
+      jsonText = jsonText.replace(/([}\]])(\s+)"([a-zA-Z_][a-zA-Z0-9_]*)"(\s*):/g, '$1,$2"$3"$4:');
+      
+      // 移除多余的连续逗号（在修复后可能产生）
       jsonText = jsonText.replace(/,+/g, ',');
-      
-      // 修复缺少逗号的情况（在 "value" 后面直接跟 "key" 的情况）
-      jsonText = jsonText.replace(/"\s*"\s*([a-zA-Z_])/g, '", "$1');
-      jsonText = jsonText.replace(/"\s*\n\s*"/g, '",\n"');
-      
-      // 修复数字/布尔值后缺少逗号的情况
-      jsonText = jsonText.replace(/(\d|true|false|null)\s*"\s*([a-zA-Z_])/g, '$1, "$2');
-      
-      // 修复对象/数组后缺少逗号的情况
-      jsonText = jsonText.replace(/([}\]])\s*"\s*([a-zA-Z_])/g, '$1, "$2');
       
       // 3. 尝试解析
       try {
