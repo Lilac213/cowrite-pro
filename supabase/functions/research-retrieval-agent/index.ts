@@ -134,14 +134,50 @@ ${JSON.stringify(requirementsDoc, null, 2)}
 
     // 提取 JSON 内容
     let searchPlan;
+    let jsonText = '';
+    
     try {
       const jsonMatch = fullText.match(/```json\s*([\s\S]*?)\s*```/) || fullText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        searchPlan = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+        jsonText = (jsonMatch[1] || jsonMatch[0]).trim();
       } else {
-        throw new Error('无法解析搜索计划');
+        throw new Error('无法找到 JSON 内容');
+      }
+      
+      // 清理 JSON 文本
+      // 1. 移除注释
+      jsonText = jsonText.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
+      
+      // 2. 修复常见的 JSON 错误
+      // 移除尾随逗号
+      jsonText = jsonText.replace(/,(\s*[}\]])/g, '$1');
+      
+      // 3. 尝试解析
+      try {
+        searchPlan = JSON.parse(jsonText);
+      } catch (parseError) {
+        // 如果解析失败，尝试修复属性名未加引号的问题
+        console.error('首次 JSON 解析失败，尝试修复属性名:', parseError);
+        
+        // 尝试给未加引号的属性名加上引号
+        const fixedJson = jsonText.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+        
+        try {
+          searchPlan = JSON.parse(fixedJson);
+          console.log('JSON 修复成功');
+        } catch (fixError) {
+          // 记录详细错误信息
+          console.error('JSON 修复后仍然解析失败:', fixError);
+          console.error('原始文本长度:', fullText.length);
+          console.error('提取的 JSON 文本:', jsonText.substring(0, 1000));
+          console.error('修复后的 JSON 文本:', fixedJson.substring(0, 1000));
+          
+          throw new Error(`解析搜索计划失败: ${fixError.message}。请查看 Edge Function 日志获取详细信息。`);
+        }
       }
     } catch (e) {
+      console.error('JSON 提取或解析失败:', e);
+      console.error('完整原始文本:', fullText);
       throw new Error(`解析搜索计划失败: ${e.message}`);
     }
 

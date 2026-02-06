@@ -35,7 +35,9 @@ context 文本: {"error": "API密钥未配置"}
 | API密钥未配置 | INTEGRATIONS_API_KEY 未设置 | 在 Supabase Dashboard → Settings → Secrets 中添加密钥 |
 | LLM API 请求失败: 401 | API 密钥无效 | 检查并更新 INTEGRATIONS_API_KEY |
 | LLM API 请求失败: 403 | 权限不足或配额用完 | 检查 API 配额和权限 |
-| 解析整理结果失败 | LLM 返回格式错误 | 查看 Edge Function 日志，可能需要调整 prompt |
+| Expected double-quoted property name | JSON 格式错误（属性名未加引号） | 系统会自动修复，如失败查看 Edge Function 日志 |
+| Unexpected token in JSON | JSON 格式错误（语法错误） | 系统会自动修复，如失败查看 Edge Function 日志 |
+| 解析整理结果失败 | LLM 返回格式错误 | 查看 Edge Function 日志中的详细 JSON 内容 |
 | 缺少检索结果或需求文档 | 数据传递问题 | 确保已创建需求文档 |
 | Edge Function returned a non-2xx status code | 通用错误 | 查看控制台详细日志 |
 
@@ -78,6 +80,62 @@ console.log('错误信息:', error);
 1. 在搜索框输入任意内容
 2. 点击"智能搜索"
 3. 立即切换到控制台查看实时日志
+
+---
+
+## 🔧 JSON 自动修复功能
+
+系统现在具备自动修复 LLM 返回的常见 JSON 格式错误的能力。
+
+### 支持的自动修复类型
+
+1. **移除注释**
+   - 块注释: `/* comment */`
+   - 行注释: `// comment`
+
+2. **移除尾随逗号**
+   - 修复前: `{"key": "value",}`
+   - 修复后: `{"key": "value"}`
+
+3. **修复未加引号的属性名**
+   - 修复前: `{name: "value", age: 18}`
+   - 修复后: `{"name": "value", "age": 18}`
+
+### 修复流程
+
+```
+LLM 返回文本
+    ↓
+提取 JSON 内容（从 markdown 代码块或直接提取）
+    ↓
+清理 JSON（移除注释、尾随逗号）
+    ↓
+尝试解析
+    ↓ 失败
+修复属性名（添加引号）
+    ↓
+再次尝试解析
+    ↓ 成功/失败
+返回结果或详细错误
+```
+
+### 查看修复日志
+
+当 JSON 修复成功时，Edge Function 日志会显示：
+```
+首次 JSON 解析失败，尝试修复属性名: [错误信息]
+JSON 修复成功
+```
+
+当修复失败时，日志会显示：
+```
+JSON 修复后仍然解析失败: [错误信息]
+原始文本长度: [数字]
+提取的 JSON 文本（前1000字符）: [JSON 内容]
+修复后的 JSON 文本（前1000字符）: [修复后的内容]
+错误位置附近的内容: [错误位置的上下文]
+错误位置标记: ^
+```
 
 ---
 

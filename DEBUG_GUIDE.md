@@ -90,15 +90,31 @@ context 文本: {"error": "API密钥未配置"}
 2. 检查 API 配额是否已用完
 3. 更新 API 密钥
 
-### 错误 3: 解析整理结果失败
-**错误信息**: `解析整理结果失败: Unexpected token`
+### 错误 3: 解析整理结果失败 / JSON 解析错误
+**错误信息**: 
+- `解析整理结果失败: Unexpected token`
+- `Expected double-quoted property name in JSON at position XXX`
+- `Unexpected token in JSON at position XXX`
 
 **原因**: LLM 返回的内容不是有效的 JSON 格式
 
-**解决方案**:
-1. 检查 LLM 返回的原始文本（在 Edge Function 日志中）
-2. 可能需要调整 prompt 以确保返回正确的 JSON 格式
-3. 检查 JSON 提取逻辑是否正确
+**已实施的自动修复**:
+系统现在会自动尝试修复以下常见的 JSON 错误：
+1. 移除 JSON 注释（`//` 和 `/* */`）
+2. 移除尾随逗号（如 `{"key": "value",}` → `{"key": "value"}`）
+3. 修复未加引号的属性名（如 `{name: "value"}` → `{"name": "value"}`）
+
+**如果自动修复失败**:
+1. 检查 Edge Function 日志中的详细错误信息
+2. 查看 "提取的 JSON 文本" 和 "修复后的 JSON 文本" 日志
+3. 查看 "错误位置附近的内容" 以定位具体问题
+4. 可能需要调整 LLM prompt 以确保返回正确的 JSON 格式
+
+**调试步骤**:
+1. 在 Supabase Dashboard → Edge Functions → Logs 中查看详细日志
+2. 找到 "提取的 JSON 文本（前1000字符）" 日志条目
+3. 复制 JSON 文本到 JSON 验证工具（如 jsonlint.com）检查具体错误
+4. 如果是 LLM 输出格式问题，可能需要调整 system prompt
 
 ### 错误 4: 缺少检索结果或需求文档
 **错误信息**: `缺少检索结果或需求文档`
