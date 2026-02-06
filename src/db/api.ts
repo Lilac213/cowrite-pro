@@ -206,6 +206,18 @@ export async function deleteKnowledgeBase(knowledgeId: string) {
   if (error) throw error;
 }
 
+/**
+ * 清空项目的所有知识库
+ */
+export async function clearProjectKnowledge(projectId: string) {
+  const { error } = await supabase
+    .from('knowledge_base')
+    .delete()
+    .eq('project_id', projectId);
+
+  if (error) throw error;
+}
+
 // ============ Outline API ============
 export async function getOutlines(projectId: string) {
   const { data, error } = await supabase
@@ -1210,10 +1222,13 @@ export async function researchRetrievalAgent(requirementsDoc: any, projectId?: s
     throw new Error('资料检索返回数据为空');
   }
 
-  // 如果返回的是 { success: true, data: {...} } 格式，提取 data 字段
+  // 如果返回的是 { success: true, data: {...}, logs: [...] } 格式，提取 data 和 logs 字段
   if (data.success && data.data) {
     console.log('[researchRetrievalAgent] 提取 data 字段:', data.data);
-    return data.data;
+    return {
+      ...data.data,
+      logs: data.logs || []
+    };
   }
 
   // 否则直接返回
@@ -1276,10 +1291,13 @@ export async function researchSynthesisAgent(retrievalResults: any, requirements
     throw new Error('资料整理返回数据为空');
   }
 
-  // 如果返回的是 { success: true, data: {...} } 格式，提取 data 字段
+  // 如果返回的是 { success: true, data: {...}, logs: [...] } 格式，提取 data 和 logs 字段
   if (data.success && data.data) {
     console.log('[researchSynthesisAgent] 提取 data 字段:', data.data);
-    return data.data;
+    return {
+      ...data.data,
+      logs: data.logs || []
+    };
   }
 
   // 否则直接返回

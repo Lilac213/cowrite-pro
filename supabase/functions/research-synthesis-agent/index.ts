@@ -15,8 +15,22 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // 用于收集日志的数组
+  const logs: string[] = [];
+  const addLog = (...args: any[]) => {
+    const message = args.map(arg => 
+      typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+    ).join(' ');
+    addLog(...args);
+    logs.push(message);
+  };
+
   try {
     const { retrievalResults, requirementsDoc }: SynthesisRequest = await req.json();
+
+    addLog('========== 接收到的请求参数 ==========');
+    addLog(`retrievalResults 存在: ${!!retrievalResults}`);
+    addLog(`requirementsDoc 存在: ${!!requirementsDoc}`);
 
     if (!retrievalResults || !requirementsDoc) {
       return new Response(
@@ -26,6 +40,9 @@ Deno.serve(async (req) => {
     }
 
     const qianwenApiKey = Deno.env.get('QIANWEN_API_KEY');
+    
+    addLog('========== API Keys 状态检查 ==========');
+    addLog(`QIANWEN_API_KEY 存在: ${!!qianwenApiKey}`);
     
     if (!qianwenApiKey) {
       throw new Error('QIANWEN_API_KEY 未配置');
@@ -118,7 +135,7 @@ ${JSON.stringify(retrievalResults, null, 2)}
 
 请整理为可写作的研究素材。`;
 
-    console.log('开始调用通义千问 API 整理资料...');
+    addLog('========== 开始调用通义千问 API ==========');
 
     // 调用通义千问 API 整理资料
     const llmResponse = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
@@ -140,7 +157,7 @@ ${JSON.stringify(retrievalResults, null, 2)}
 
     if (!llmResponse.ok) {
       const errorText = await llmResponse.text();
-      console.error('通义千问 API 错误:', errorText);
+      addLog(`❌ 通义千问 API 错误: ${errorText}`);
       throw new Error(`通义千问 API 请求失败: ${llmResponse.status}`);
     }
 
@@ -151,7 +168,8 @@ ${JSON.stringify(retrievalResults, null, 2)}
       throw new Error('通义千问 API 返回内容为空');
     }
 
-    console.log('通义千问返回内容:', content);
+    addLog('========== 通义千问返回内容 ==========');
+    addLog(content);
 
     // 提取 ---JSON--- 部分
     let synthesisResult;
@@ -163,7 +181,7 @@ ${JSON.stringify(retrievalResults, null, 2)}
       }
       
       const jsonText = jsonMatch[1].trim();
-      console.log('提取的 JSON 文本:', jsonText);
+      addLog('提取的 JSON 文本:', jsonText);
       
       synthesisResult = JSON.parse(jsonText);
       
@@ -178,12 +196,13 @@ ${JSON.stringify(retrievalResults, null, 2)}
       throw new Error(`整理结果失败: ${parseError.message}`);
     }
 
-    console.log('整理结果:', JSON.stringify(synthesisResult, null, 2));
+    addLog('整理结果:', JSON.stringify(synthesisResult, null, 2));
 
     return new Response(
       JSON.stringify({
         success: true,
         data: synthesisResult,
+        logs: logs,
         raw_content: content
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -191,10 +210,12 @@ ${JSON.stringify(retrievalResults, null, 2)}
 
   } catch (error) {
     console.error('处理请求时出错:', error);
+    addLog(`❌ 错误: ${error.message || '处理请求时出错'}`);
     return new Response(
       JSON.stringify({ 
         error: error.message || '处理请求时出错',
-        details: error.toString()
+        details: error.toString(),
+        logs: logs
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

@@ -16,14 +16,23 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // 用于收集日志的数组
+  const logs: string[] = [];
+  const addLog = (...args: any[]) => {
+    const message = args.map(arg => 
+      typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+    ).join(' ');
+    console.log(...args);
+    logs.push(message);
+  };
+
   try {
     const { requirementsDoc, projectId, userId }: ResearchRequest = await req.json();
 
-    console.log('========== 接收到的请求参数 ==========');
-    console.log('requirementsDoc 类型:', typeof requirementsDoc);
-    console.log('requirementsDoc 内容:', requirementsDoc);
-    console.log('projectId:', projectId);
-    console.log('userId:', userId);
+    addLog('========== 接收到的请求参数 ==========');
+    addLog(`requirementsDoc 类型: ${typeof requirementsDoc}`);
+    addLog(`projectId: ${projectId || '未提供'}`);
+    addLog(`userId: ${userId || '未提供'}`);
 
     if (!requirementsDoc) {
       return new Response(
@@ -37,18 +46,13 @@ Deno.serve(async (req) => {
       ? requirementsDoc 
       : JSON.stringify(requirementsDoc, null, 2);
 
-    console.log('处理后的 requirementsDoc:', requirementsDocStr);
-
     const qianwenApiKey = Deno.env.get('QIANWEN_API_KEY');
     const integrationsApiKey = Deno.env.get('INTEGRATIONS_API_KEY');
     
-    console.log('========== API Keys 状态检查 ==========');
-    console.log('QIANWEN_API_KEY 存在:', !!qianwenApiKey);
-    console.log('QIANWEN_API_KEY 长度:', qianwenApiKey?.length || 0);
-    console.log('QIANWEN_API_KEY 前缀:', qianwenApiKey?.substring(0, 10) || 'N/A');
-    console.log('INTEGRATIONS_API_KEY 存在:', !!integrationsApiKey);
-    console.log('INTEGRATIONS_API_KEY 长度:', integrationsApiKey?.length || 0);
-    console.log('INTEGRATIONS_API_KEY 前缀:', integrationsApiKey?.substring(0, 10) || 'N/A');
+    addLog('========== API Keys 状态检查 ==========');
+    addLog(`QIANWEN_API_KEY 存在: ${!!qianwenApiKey}`);
+    addLog(`INTEGRATIONS_API_KEY 存在: ${!!integrationsApiKey}`);
+    addLog(`INTEGRATIONS_API_KEY 前缀: ${integrationsApiKey?.substring(0, 10) || 'N/A'}`);
     
     if (!qianwenApiKey) {
       throw new Error('QIANWEN_API_KEY 未配置');
@@ -99,8 +103,8 @@ Output Format:
 
     const userPrompt = `研究需求文档：\n${requirementsDocStr}\n\n请生成搜索计划。`;
 
-    console.log('========== 开始调用通义千问 API ==========');
-    console.log('用户提示词:', userPrompt);
+    addLog('========== 开始调用通义千问 API ==========');
+    addLog('用户提示词:', userPrompt);
 
     // 调用通义千问 API 生成搜索计划
     const llmResponse = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
@@ -133,7 +137,7 @@ Output Format:
       throw new Error('通义千问 API 返回内容为空');
     }
 
-    console.log('通义千问返回内容:', content);
+    addLog('通义千问返回内容:', content);
 
     // 提取 ---JSON--- 部分
     let searchPlan;
@@ -145,7 +149,7 @@ Output Format:
       }
       
       const jsonText = jsonMatch[1].trim();
-      console.log('提取的 JSON 文本:', jsonText);
+      addLog('提取的 JSON 文本:', jsonText);
       
       searchPlan = JSON.parse(jsonText);
       
@@ -161,7 +165,7 @@ Output Format:
       throw new Error(`解析搜索计划失败: ${parseError.message}`);
     }
 
-    console.log('搜索计划:', JSON.stringify(searchPlan, null, 2));
+    addLog('搜索计划:', JSON.stringify(searchPlan, null, 2));
 
     // 并行执行所有搜索
     const searchPromises = [];
@@ -174,12 +178,12 @@ Output Format:
 
     // 1. Google Scholar 搜索
     if (searchPlan.academic_queries && searchPlan.academic_queries.length > 0) {
-      console.log('========== Google Scholar 搜索开始 ==========');
-      console.log('学术查询关键词:', searchPlan.academic_queries);
+      addLog('========== Google Scholar 搜索开始 ==========');
+      addLog('学术查询关键词:', searchPlan.academic_queries);
       for (const query of searchPlan.academic_queries.slice(0, 2)) {
         const scholarUrl = `https://app-9bwpferlujnl-api-Xa6JZq2055oa.gateway.appmedo.com/search?engine=google_scholar&q=${encodeURIComponent(query)}&as_ylo=2020&hl=en`;
-        console.log(`[Google Scholar] 查询: "${query}"`);
-        console.log(`[Google Scholar] URL: ${scholarUrl}`);
+        addLog(`[Google Scholar] 查询: "${query}"`);
+        addLog(`[Google Scholar] URL: ${scholarUrl}`);
         
         searchPromises.push(
           fetch(scholarUrl, {
@@ -189,18 +193,18 @@ Output Format:
             }
           })
           .then(async res => {
-            console.log(`[Google Scholar] 响应状态: ${res.status}`);
+            addLog(`[Google Scholar] 响应状态: ${res.status}`);
             const text = await res.text();
-            console.log(`[Google Scholar] 原始响应: ${text.substring(0, 500)}...`);
+            addLog(`[Google Scholar] 原始响应: ${text.substring(0, 500)}...`);
             return JSON.parse(text);
           })
           .then(data => {
-            console.log('[Google Scholar] 解析后的数据结构:', Object.keys(data));
-            console.log('[Google Scholar] organic_results 存在:', !!data.organic_results);
-            console.log('[Google Scholar] organic_results 长度:', data.organic_results?.length || 0);
+            addLog('[Google Scholar] 解析后的数据结构:', Object.keys(data));
+            addLog('[Google Scholar] organic_results 存在:', !!data.organic_results);
+            addLog('[Google Scholar] organic_results 长度:', data.organic_results?.length || 0);
             
             if (data.organic_results && data.organic_results.length > 0) {
-              console.log('[Google Scholar] 第一条结果示例:', JSON.stringify(data.organic_results[0], null, 2));
+              addLog('[Google Scholar] 第一条结果示例:', JSON.stringify(data.organic_results[0], null, 2));
               const mapped = data.organic_results.slice(0, 5).map((item: any) => ({
                 title: item.title || '',
                 authors: item.publication_info?.summary || '',
@@ -209,11 +213,11 @@ Output Format:
                 publication_year: item.publication_info?.summary?.match(/\d{4}/)?.[0] || '',
                 url: item.link || ''
               }));
-              console.log('[Google Scholar] 映射后的结果数量:', mapped.length);
+              addLog('[Google Scholar] 映射后的结果数量:', mapped.length);
               results.academic_sources.push(...mapped);
             } else {
-              console.log('[Google Scholar] ⚠️ 没有找到 organic_results 或结果为空');
-              console.log('[Google Scholar] 完整响应数据:', JSON.stringify(data, null, 2));
+              addLog('[Google Scholar] ⚠️ 没有找到 organic_results 或结果为空');
+              addLog('[Google Scholar] 完整响应数据:', JSON.stringify(data, null, 2));
             }
           })
           .catch(err => {
@@ -224,17 +228,17 @@ Output Format:
         );
       }
     } else {
-      console.log('⚠️ 没有学术查询关键词，跳过 Google Scholar 搜索');
+      addLog('⚠️ 没有学术查询关键词，跳过 Google Scholar 搜索');
     }
 
     // 2. TheNews 搜索
     if (searchPlan.news_queries && searchPlan.news_queries.length > 0) {
-      console.log('========== TheNews 搜索开始 ==========');
-      console.log('新闻查询关键词:', searchPlan.news_queries);
+      addLog('========== TheNews 搜索开始 ==========');
+      addLog('新闻查询关键词:', searchPlan.news_queries);
       for (const query of searchPlan.news_queries.slice(0, 2)) {
         const newsUrl = `https://app-9bwpferlujnl-api-W9z3M6eOKQVL.gateway.appmedo.com/v1/news/all?api_token=dummy&search=${encodeURIComponent(query)}&limit=5&sort=published_on`;
-        console.log(`[TheNews] 查询: "${query}"`);
-        console.log(`[TheNews] URL: ${newsUrl}`);
+        addLog(`[TheNews] 查询: "${query}"`);
+        addLog(`[TheNews] URL: ${newsUrl}`);
         
         searchPromises.push(
           fetch(newsUrl, {
@@ -243,18 +247,18 @@ Output Format:
             }
           })
           .then(async res => {
-            console.log(`[TheNews] 响应状态: ${res.status}`);
+            addLog(`[TheNews] 响应状态: ${res.status}`);
             const text = await res.text();
-            console.log(`[TheNews] 原始响应: ${text.substring(0, 500)}...`);
+            addLog(`[TheNews] 原始响应: ${text.substring(0, 500)}...`);
             return JSON.parse(text);
           })
           .then(data => {
-            console.log('[TheNews] 解析后的数据结构:', Object.keys(data));
-            console.log('[TheNews] data 字段存在:', !!data.data);
-            console.log('[TheNews] data 长度:', data.data?.length || 0);
+            addLog('[TheNews] 解析后的数据结构:', Object.keys(data));
+            addLog('[TheNews] data 字段存在:', !!data.data);
+            addLog('[TheNews] data 长度:', data.data?.length || 0);
             
             if (data.data && data.data.length > 0) {
-              console.log('[TheNews] 第一条结果示例:', JSON.stringify(data.data[0], null, 2));
+              addLog('[TheNews] 第一条结果示例:', JSON.stringify(data.data[0], null, 2));
               const mapped = data.data.map((item: any) => ({
                 title: item.title || '',
                 summary: item.description || item.snippet || '',
@@ -262,11 +266,11 @@ Output Format:
                 published_at: item.published_at || '',
                 url: item.url || ''
               }));
-              console.log('[TheNews] 映射后的结果数量:', mapped.length);
+              addLog('[TheNews] 映射后的结果数量:', mapped.length);
               results.news_sources.push(...mapped);
             } else {
-              console.log('[TheNews] ⚠️ 没有找到 data 字段或结果为空');
-              console.log('[TheNews] 完整响应数据:', JSON.stringify(data, null, 2));
+              addLog('[TheNews] ⚠️ 没有找到 data 字段或结果为空');
+              addLog('[TheNews] 完整响应数据:', JSON.stringify(data, null, 2));
             }
           })
           .catch(err => {
@@ -277,17 +281,17 @@ Output Format:
         );
       }
     } else {
-      console.log('⚠️ 没有新闻查询关键词，跳过 TheNews 搜索');
+      addLog('⚠️ 没有新闻查询关键词，跳过 TheNews 搜索');
     }
 
     // 3. Smart Search (Bing) 搜索
     if (searchPlan.web_queries && searchPlan.web_queries.length > 0) {
-      console.log('========== Smart Search 搜索开始 ==========');
-      console.log('网络查询关键词:', searchPlan.web_queries);
+      addLog('========== Smart Search 搜索开始 ==========');
+      addLog('网络查询关键词:', searchPlan.web_queries);
       for (const query of searchPlan.web_queries.slice(0, 2)) {
         const smartUrl = `https://app-9bwpferlujnl-api-VaOwP8E7dKEa.gateway.appmedo.com/search/FgEFxazBTfRUumJx/smart?q=${encodeURIComponent(query)}&count=5&freshness=Month&mkt=zh-CN`;
-        console.log(`[Smart Search] 查询: "${query}"`);
-        console.log(`[Smart Search] URL: ${smartUrl}`);
+        addLog(`[Smart Search] 查询: "${query}"`);
+        addLog(`[Smart Search] URL: ${smartUrl}`);
         
         searchPromises.push(
           fetch(smartUrl, {
@@ -296,19 +300,19 @@ Output Format:
             }
           })
           .then(async res => {
-            console.log(`[Smart Search] 响应状态: ${res.status}`);
+            addLog(`[Smart Search] 响应状态: ${res.status}`);
             const text = await res.text();
-            console.log(`[Smart Search] 原始响应: ${text.substring(0, 500)}...`);
+            addLog(`[Smart Search] 原始响应: ${text.substring(0, 500)}...`);
             return JSON.parse(text);
           })
           .then(data => {
-            console.log('[Smart Search] 解析后的数据结构:', Object.keys(data));
-            console.log('[Smart Search] webPages 存在:', !!data.webPages);
-            console.log('[Smart Search] webPages.value 存在:', !!data.webPages?.value);
-            console.log('[Smart Search] webPages.value 长度:', data.webPages?.value?.length || 0);
+            addLog('[Smart Search] 解析后的数据结构:', Object.keys(data));
+            addLog('[Smart Search] webPages 存在:', !!data.webPages);
+            addLog('[Smart Search] webPages.value 存在:', !!data.webPages?.value);
+            addLog('[Smart Search] webPages.value 长度:', data.webPages?.value?.length || 0);
             
             if (data.webPages?.value && data.webPages.value.length > 0) {
-              console.log('[Smart Search] 第一条结果示例:', JSON.stringify(data.webPages.value[0], null, 2));
+              addLog('[Smart Search] 第一条结果示例:', JSON.stringify(data.webPages.value[0], null, 2));
               const mapped = data.webPages.value.map((item: any) => ({
                 title: item.name || '',
                 site_name: item.siteName || '',
@@ -316,11 +320,11 @@ Output Format:
                 url: item.url || '',
                 last_crawled_at: item.dateLastCrawled || ''
               }));
-              console.log('[Smart Search] 映射后的结果数量:', mapped.length);
+              addLog('[Smart Search] 映射后的结果数量:', mapped.length);
               results.web_sources.push(...mapped);
             } else {
-              console.log('[Smart Search] ⚠️ 没有找到 webPages.value 或结果为空');
-              console.log('[Smart Search] 完整响应数据:', JSON.stringify(data, null, 2));
+              addLog('[Smart Search] ⚠️ 没有找到 webPages.value 或结果为空');
+              addLog('[Smart Search] 完整响应数据:', JSON.stringify(data, null, 2));
             }
           })
           .catch(err => {
@@ -331,22 +335,22 @@ Output Format:
         );
       }
     } else {
-      console.log('⚠️ 没有网络查询关键词，跳过 Smart Search 搜索');
+      addLog('⚠️ 没有网络查询关键词，跳过 Smart Search 搜索');
     }
 
     // 等待所有搜索完成
-    console.log('========== 等待所有搜索完成 ==========');
-    console.log('搜索任务数量:', searchPromises.length);
+    addLog('========== 等待所有搜索完成 ==========');
+    addLog('搜索任务数量:', searchPromises.length);
     await Promise.all(searchPromises);
 
-    console.log('========== 所有搜索完成 ==========');
-    console.log('学术来源数量:', results.academic_sources.length);
-    console.log('新闻来源数量:', results.news_sources.length);
-    console.log('网络来源数量:', results.web_sources.length);
-    console.log('用户库来源数量:', results.user_library_sources.length);
+    addLog('========== 所有搜索完成 ==========');
+    addLog('学术来源数量:', results.academic_sources.length);
+    addLog('新闻来源数量:', results.news_sources.length);
+    addLog('网络来源数量:', results.web_sources.length);
+    addLog('用户库来源数量:', results.user_library_sources.length);
 
     // 去重
-    console.log('========== 开始去重 ==========');
+    addLog('========== 开始去重 ==========');
     const beforeDedup = {
       academic: results.academic_sources.length,
       news: results.news_sources.length,
@@ -357,16 +361,16 @@ Output Format:
     results.news_sources = Array.from(new Map(results.news_sources.map(item => [item.url, item])).values()).slice(0, 10);
     results.web_sources = Array.from(new Map(results.web_sources.map(item => [item.url, item])).values()).slice(0, 10);
 
-    console.log('去重前数量:', beforeDedup);
-    console.log('去重后数量:', {
+    addLog('去重前数量:', beforeDedup);
+    addLog('去重后数量:', {
       academic: results.academic_sources.length,
       news: results.news_sources.length,
       web: results.web_sources.length
     });
 
-    console.log('========== 最终结果统计 ==========');
-    console.log('总计资料数量:', results.academic_sources.length + results.news_sources.length + results.web_sources.length + results.user_library_sources.length);
-    console.log('最终结果详情:', JSON.stringify({
+    addLog('========== 最终结果统计 ==========');
+    addLog('总计资料数量:', results.academic_sources.length + results.news_sources.length + results.web_sources.length + results.user_library_sources.length);
+    addLog('最终结果详情:', JSON.stringify({
       academic_count: results.academic_sources.length,
       news_count: results.news_sources.length,
       web_count: results.web_sources.length,
@@ -383,6 +387,7 @@ Output Format:
           search_summary: searchPlan.search_summary,
           ...results
         },
+        logs: logs,
         raw_content: content
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -390,10 +395,12 @@ Output Format:
 
   } catch (error) {
     console.error('处理请求时出错:', error);
+    addLog(`❌ 错误: ${error.message || '处理请求时出错'}`);
     return new Response(
       JSON.stringify({ 
         error: error.message || '处理请求时出错',
-        details: error.toString()
+        details: error.toString(),
+        logs: logs
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
