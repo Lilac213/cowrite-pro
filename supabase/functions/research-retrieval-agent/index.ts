@@ -29,6 +29,14 @@ Deno.serve(async (req) => {
     const qianwenApiKey = Deno.env.get('QIANWEN_API_KEY');
     const integrationsApiKey = Deno.env.get('INTEGRATIONS_API_KEY');
     
+    console.log('========== API Keys 状态检查 ==========');
+    console.log('QIANWEN_API_KEY 存在:', !!qianwenApiKey);
+    console.log('QIANWEN_API_KEY 长度:', qianwenApiKey?.length || 0);
+    console.log('QIANWEN_API_KEY 前缀:', qianwenApiKey?.substring(0, 10) || 'N/A');
+    console.log('INTEGRATIONS_API_KEY 存在:', !!integrationsApiKey);
+    console.log('INTEGRATIONS_API_KEY 长度:', integrationsApiKey?.length || 0);
+    console.log('INTEGRATIONS_API_KEY 前缀:', integrationsApiKey?.substring(0, 10) || 'N/A');
+    
     if (!qianwenApiKey) {
       throw new Error('QIANWEN_API_KEY 未配置');
     }
@@ -152,107 +160,207 @@ Output Format:
 
     // 1. Google Scholar 搜索
     if (searchPlan.academic_queries && searchPlan.academic_queries.length > 0) {
-      console.log('开始 Google Scholar 搜索...');
+      console.log('========== Google Scholar 搜索开始 ==========');
+      console.log('学术查询关键词:', searchPlan.academic_queries);
       for (const query of searchPlan.academic_queries.slice(0, 2)) {
+        const scholarUrl = `https://app-9bwpferlujnl-api-Xa6JZq2055oa.gateway.appmedo.com/search?engine=google_scholar&q=${encodeURIComponent(query)}&as_ylo=2020&hl=en`;
+        console.log(`[Google Scholar] 查询: "${query}"`);
+        console.log(`[Google Scholar] URL: ${scholarUrl}`);
+        
         searchPromises.push(
-          fetch(`https://app-9bwpferlujnl-api-Xa6JZq2055oa.gateway.appmedo.com/search?engine=google_scholar&q=${encodeURIComponent(query)}&as_ylo=2020&hl=en`, {
+          fetch(scholarUrl, {
             headers: {
               'Accept': 'application/json',
               'X-Gateway-Authorization': `Bearer ${integrationsApiKey}`
             }
           })
-          .then(res => res.json())
+          .then(async res => {
+            console.log(`[Google Scholar] 响应状态: ${res.status}`);
+            const text = await res.text();
+            console.log(`[Google Scholar] 原始响应: ${text.substring(0, 500)}...`);
+            return JSON.parse(text);
+          })
           .then(data => {
-            console.log('Google Scholar 返回:', data);
-            if (data.organic_results) {
-              results.academic_sources.push(...data.organic_results.slice(0, 5).map((item: any) => ({
+            console.log('[Google Scholar] 解析后的数据结构:', Object.keys(data));
+            console.log('[Google Scholar] organic_results 存在:', !!data.organic_results);
+            console.log('[Google Scholar] organic_results 长度:', data.organic_results?.length || 0);
+            
+            if (data.organic_results && data.organic_results.length > 0) {
+              console.log('[Google Scholar] 第一条结果示例:', JSON.stringify(data.organic_results[0], null, 2));
+              const mapped = data.organic_results.slice(0, 5).map((item: any) => ({
                 title: item.title || '',
                 authors: item.publication_info?.summary || '',
                 abstract: item.snippet || '',
                 citation_count: item.inline_links?.cited_by?.total || 0,
                 publication_year: item.publication_info?.summary?.match(/\d{4}/)?.[0] || '',
                 url: item.link || ''
-              })));
+              }));
+              console.log('[Google Scholar] 映射后的结果数量:', mapped.length);
+              results.academic_sources.push(...mapped);
+            } else {
+              console.log('[Google Scholar] ⚠️ 没有找到 organic_results 或结果为空');
+              console.log('[Google Scholar] 完整响应数据:', JSON.stringify(data, null, 2));
             }
           })
           .catch(err => {
-            console.error('Google Scholar 搜索失败:', err);
+            console.error('[Google Scholar] ❌ 搜索失败:', err);
+            console.error('[Google Scholar] 错误详情:', err.message);
+            console.error('[Google Scholar] 错误堆栈:', err.stack);
           })
         );
       }
+    } else {
+      console.log('⚠️ 没有学术查询关键词，跳过 Google Scholar 搜索');
     }
 
     // 2. TheNews 搜索
     if (searchPlan.news_queries && searchPlan.news_queries.length > 0) {
-      console.log('开始 TheNews 搜索...');
+      console.log('========== TheNews 搜索开始 ==========');
+      console.log('新闻查询关键词:', searchPlan.news_queries);
       for (const query of searchPlan.news_queries.slice(0, 2)) {
+        const newsUrl = `https://app-9bwpferlujnl-api-W9z3M6eOKQVL.gateway.appmedo.com/v1/news/all?api_token=dummy&search=${encodeURIComponent(query)}&limit=5&sort=published_on`;
+        console.log(`[TheNews] 查询: "${query}"`);
+        console.log(`[TheNews] URL: ${newsUrl}`);
+        
         searchPromises.push(
-          fetch(`https://app-9bwpferlujnl-api-W9z3M6eOKQVL.gateway.appmedo.com/v1/news/all?api_token=dummy&search=${encodeURIComponent(query)}&limit=5&sort=published_on`, {
+          fetch(newsUrl, {
             headers: {
               'X-Gateway-Authorization': `Bearer ${integrationsApiKey}`
             }
           })
-          .then(res => res.json())
+          .then(async res => {
+            console.log(`[TheNews] 响应状态: ${res.status}`);
+            const text = await res.text();
+            console.log(`[TheNews] 原始响应: ${text.substring(0, 500)}...`);
+            return JSON.parse(text);
+          })
           .then(data => {
-            console.log('TheNews 返回:', data);
-            if (data.data) {
-              results.news_sources.push(...data.data.map((item: any) => ({
+            console.log('[TheNews] 解析后的数据结构:', Object.keys(data));
+            console.log('[TheNews] data 字段存在:', !!data.data);
+            console.log('[TheNews] data 长度:', data.data?.length || 0);
+            
+            if (data.data && data.data.length > 0) {
+              console.log('[TheNews] 第一条结果示例:', JSON.stringify(data.data[0], null, 2));
+              const mapped = data.data.map((item: any) => ({
                 title: item.title || '',
                 summary: item.description || item.snippet || '',
                 source: item.source || '',
                 published_at: item.published_at || '',
                 url: item.url || ''
-              })));
+              }));
+              console.log('[TheNews] 映射后的结果数量:', mapped.length);
+              results.news_sources.push(...mapped);
+            } else {
+              console.log('[TheNews] ⚠️ 没有找到 data 字段或结果为空');
+              console.log('[TheNews] 完整响应数据:', JSON.stringify(data, null, 2));
             }
           })
           .catch(err => {
-            console.error('TheNews 搜索失败:', err);
+            console.error('[TheNews] ❌ 搜索失败:', err);
+            console.error('[TheNews] 错误详情:', err.message);
+            console.error('[TheNews] 错误堆栈:', err.stack);
           })
         );
       }
+    } else {
+      console.log('⚠️ 没有新闻查询关键词，跳过 TheNews 搜索');
     }
 
     // 3. Smart Search (Bing) 搜索
     if (searchPlan.web_queries && searchPlan.web_queries.length > 0) {
-      console.log('开始 Smart Search 搜索...');
+      console.log('========== Smart Search 搜索开始 ==========');
+      console.log('网络查询关键词:', searchPlan.web_queries);
       for (const query of searchPlan.web_queries.slice(0, 2)) {
+        const smartUrl = `https://app-9bwpferlujnl-api-VaOwP8E7dKEa.gateway.appmedo.com/search/FgEFxazBTfRUumJx/smart?q=${encodeURIComponent(query)}&count=5&freshness=Month&mkt=zh-CN`;
+        console.log(`[Smart Search] 查询: "${query}"`);
+        console.log(`[Smart Search] URL: ${smartUrl}`);
+        
         searchPromises.push(
-          fetch(`https://app-9bwpferlujnl-api-VaOwP8E7dKEa.gateway.appmedo.com/search/FgEFxazBTfRUumJx/smart?q=${encodeURIComponent(query)}&count=5&freshness=Month&mkt=zh-CN`, {
+          fetch(smartUrl, {
             headers: {
               'X-Gateway-Authorization': `Bearer ${integrationsApiKey}`
             }
           })
-          .then(res => res.json())
+          .then(async res => {
+            console.log(`[Smart Search] 响应状态: ${res.status}`);
+            const text = await res.text();
+            console.log(`[Smart Search] 原始响应: ${text.substring(0, 500)}...`);
+            return JSON.parse(text);
+          })
           .then(data => {
-            console.log('Smart Search 返回:', data);
-            if (data.webPages?.value) {
-              results.web_sources.push(...data.webPages.value.map((item: any) => ({
+            console.log('[Smart Search] 解析后的数据结构:', Object.keys(data));
+            console.log('[Smart Search] webPages 存在:', !!data.webPages);
+            console.log('[Smart Search] webPages.value 存在:', !!data.webPages?.value);
+            console.log('[Smart Search] webPages.value 长度:', data.webPages?.value?.length || 0);
+            
+            if (data.webPages?.value && data.webPages.value.length > 0) {
+              console.log('[Smart Search] 第一条结果示例:', JSON.stringify(data.webPages.value[0], null, 2));
+              const mapped = data.webPages.value.map((item: any) => ({
                 title: item.name || '',
                 site_name: item.siteName || '',
                 snippet: item.snippet || '',
                 url: item.url || '',
                 last_crawled_at: item.dateLastCrawled || ''
-              })));
+              }));
+              console.log('[Smart Search] 映射后的结果数量:', mapped.length);
+              results.web_sources.push(...mapped);
+            } else {
+              console.log('[Smart Search] ⚠️ 没有找到 webPages.value 或结果为空');
+              console.log('[Smart Search] 完整响应数据:', JSON.stringify(data, null, 2));
             }
           })
           .catch(err => {
-            console.error('Smart Search 搜索失败:', err);
+            console.error('[Smart Search] ❌ 搜索失败:', err);
+            console.error('[Smart Search] 错误详情:', err.message);
+            console.error('[Smart Search] 错误堆栈:', err.stack);
           })
         );
       }
+    } else {
+      console.log('⚠️ 没有网络查询关键词，跳过 Smart Search 搜索');
     }
 
     // 等待所有搜索完成
+    console.log('========== 等待所有搜索完成 ==========');
+    console.log('搜索任务数量:', searchPromises.length);
     await Promise.all(searchPromises);
 
-    console.log('所有搜索完成');
+    console.log('========== 所有搜索完成 ==========');
+    console.log('学术来源数量:', results.academic_sources.length);
+    console.log('新闻来源数量:', results.news_sources.length);
+    console.log('网络来源数量:', results.web_sources.length);
+    console.log('用户库来源数量:', results.user_library_sources.length);
 
     // 去重
+    console.log('========== 开始去重 ==========');
+    const beforeDedup = {
+      academic: results.academic_sources.length,
+      news: results.news_sources.length,
+      web: results.web_sources.length
+    };
+    
     results.academic_sources = Array.from(new Map(results.academic_sources.map(item => [item.url, item])).values()).slice(0, 10);
     results.news_sources = Array.from(new Map(results.news_sources.map(item => [item.url, item])).values()).slice(0, 10);
     results.web_sources = Array.from(new Map(results.web_sources.map(item => [item.url, item])).values()).slice(0, 10);
 
-    console.log('最终结果:', JSON.stringify(results, null, 2));
+    console.log('去重前数量:', beforeDedup);
+    console.log('去重后数量:', {
+      academic: results.academic_sources.length,
+      news: results.news_sources.length,
+      web: results.web_sources.length
+    });
+
+    console.log('========== 最终结果统计 ==========');
+    console.log('总计资料数量:', results.academic_sources.length + results.news_sources.length + results.web_sources.length + results.user_library_sources.length);
+    console.log('最终结果详情:', JSON.stringify({
+      academic_count: results.academic_sources.length,
+      news_count: results.news_sources.length,
+      web_count: results.web_sources.length,
+      user_library_count: results.user_library_sources.length,
+      academic_sample: results.academic_sources.slice(0, 1),
+      news_sample: results.news_sources.slice(0, 1),
+      web_sample: results.web_sources.slice(0, 1)
+    }, null, 2));
 
     return new Response(
       JSON.stringify({

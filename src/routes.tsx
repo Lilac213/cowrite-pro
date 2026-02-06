@@ -11,6 +11,7 @@ import ReferencesPageEnhanced from './pages/ReferencesPageEnhanced';
 import TemplatesPageEnhanced from './pages/TemplatesPageEnhanced';
 import SettingsPage from './pages/SettingsPage';
 import AdminPage from './pages/AdminPage';
+import SearchDebugPage from './pages/SearchDebugPage';
 import NotFound from './pages/NotFound';
 
 interface RouteConfig {
@@ -76,6 +77,11 @@ const routes: RouteConfig[] = [
     name: 'Admin',
     path: '/admin',
     element: <AdminPage />,
+  },
+  {
+    name: 'Search Debug',
+    path: '/search-debug',
+    element: <SearchDebugPage />,
   },
   {
     name: 'Not Found',
