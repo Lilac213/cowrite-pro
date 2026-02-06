@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     const message = args.map(arg => 
       typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
     ).join(' ');
-    addLog(...args);
+    console.log(...args);
     logs.push(message);
   };
 
