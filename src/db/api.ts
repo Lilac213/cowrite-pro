@@ -1162,9 +1162,13 @@ ${JSON.stringify(selectedKnowledge, null, 2)}`;
  * 负责在 5 个数据源中检索相关资料
  */
 export async function researchRetrievalAgent(requirementsDoc: any, projectId?: string, userId?: string) {
+  console.log('[researchRetrievalAgent] 开始调用，需求文档:', requirementsDoc);
+  
   const { data, error } = await supabase.functions.invoke('research-retrieval-agent', {
     body: { requirementsDoc, projectId, userId },
   });
+
+  console.log('[researchRetrievalAgent] Edge Function 响应:', { data, error });
 
   if (error) {
     console.error('Research Retrieval Agent Error:', error);
@@ -1200,6 +1204,20 @@ export async function researchRetrievalAgent(requirementsDoc: any, projectId?: s
     throw new Error(errorMessage);
   }
 
+  // 检查返回的数据结构
+  if (!data) {
+    console.error('[researchRetrievalAgent] 返回数据为空');
+    throw new Error('资料检索返回数据为空');
+  }
+
+  // 如果返回的是 { success: true, data: {...} } 格式，提取 data 字段
+  if (data.success && data.data) {
+    console.log('[researchRetrievalAgent] 提取 data 字段:', data.data);
+    return data.data;
+  }
+
+  // 否则直接返回
+  console.log('[researchRetrievalAgent] 直接返回 data:', data);
   return data;
 }
 
@@ -1208,9 +1226,15 @@ export async function researchRetrievalAgent(requirementsDoc: any, projectId?: s
  * 负责将检索结果转化为中文、结构化的写作素材
  */
 export async function researchSynthesisAgent(retrievalResults: any, requirementsDoc: any) {
+  console.log('[researchSynthesisAgent] 开始调用');
+  console.log('  - retrievalResults:', retrievalResults);
+  console.log('  - requirementsDoc:', requirementsDoc);
+  
   const { data, error } = await supabase.functions.invoke('research-synthesis-agent', {
     body: { retrievalResults, requirementsDoc },
   });
+
+  console.log('[researchSynthesisAgent] Edge Function 响应:', { data, error });
 
   if (error) {
     console.error('Research Synthesis Agent Error:', error);
@@ -1246,6 +1270,20 @@ export async function researchSynthesisAgent(retrievalResults: any, requirements
     throw new Error(errorMessage);
   }
 
+  // 检查返回的数据结构
+  if (!data) {
+    console.error('[researchSynthesisAgent] 返回数据为空');
+    throw new Error('资料整理返回数据为空');
+  }
+
+  // 如果返回的是 { success: true, data: {...} } 格式，提取 data 字段
+  if (data.success && data.data) {
+    console.log('[researchSynthesisAgent] 提取 data 字段:', data.data);
+    return data.data;
+  }
+
+  // 否则直接返回
+  console.log('[researchSynthesisAgent] 直接返回 data:', data);
   return data;
 }
 

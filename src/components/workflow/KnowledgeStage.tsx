@@ -138,12 +138,18 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         description: '正在从 5 个数据源检索相关资料...',
       });
 
+      console.log('[KnowledgeStage] 调用 agentDrivenResearchWorkflow，需求文档:', requirementsDoc);
+
       // 使用新的 Agent 驱动的研究工作流
       const { retrievalResults, synthesisResults } = await agentDrivenResearchWorkflow(
         requirementsDoc,
         projectId,
         user.id
       );
+
+      console.log('[KnowledgeStage] agentDrivenResearchWorkflow 返回结果:');
+      console.log('  - retrievalResults:', retrievalResults);
+      console.log('  - synthesisResults:', synthesisResults);
 
       setSearchProgress({ 
         stage: '资料整理', 
@@ -164,6 +170,15 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         ...(retrievalResults.user_library_sources || []).map((s: any) => ({ ...s, sourceType: 'user_library' })),
         ...(retrievalResults.personal_sources || []).map((s: any) => ({ ...s, sourceType: 'personal' })),
       ];
+
+      console.log('[KnowledgeStage] 所有来源数量:', allSources.length);
+      console.log('[KnowledgeStage] 来源详情:', {
+        academic: retrievalResults.academic_sources?.length || 0,
+        news: retrievalResults.news_sources?.length || 0,
+        web: retrievalResults.web_sources?.length || 0,
+        user_library: retrievalResults.user_library_sources?.length || 0,
+        personal: retrievalResults.personal_sources?.length || 0,
+      });
 
       setSearchProgress({ 
         stage: '保存资料', 

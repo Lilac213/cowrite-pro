@@ -19,12 +19,25 @@ Deno.serve(async (req) => {
   try {
     const { requirementsDoc, projectId, userId }: ResearchRequest = await req.json();
 
+    console.log('========== 接收到的请求参数 ==========');
+    console.log('requirementsDoc 类型:', typeof requirementsDoc);
+    console.log('requirementsDoc 内容:', requirementsDoc);
+    console.log('projectId:', projectId);
+    console.log('userId:', userId);
+
     if (!requirementsDoc) {
       return new Response(
         JSON.stringify({ error: '缺少必需参数: requirementsDoc' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // 如果 requirementsDoc 是对象，转换为 JSON 字符串
+    const requirementsDocStr = typeof requirementsDoc === 'string' 
+      ? requirementsDoc 
+      : JSON.stringify(requirementsDoc, null, 2);
+
+    console.log('处理后的 requirementsDoc:', requirementsDocStr);
 
     const qianwenApiKey = Deno.env.get('QIANWEN_API_KEY');
     const integrationsApiKey = Deno.env.get('INTEGRATIONS_API_KEY');
@@ -84,9 +97,10 @@ Output Format:
 - 不允许省略任何字段
 - 不允许输出额外文本`;
 
-    const userPrompt = `研究需求文档：\n${requirementsDoc}\n\n请生成搜索计划。`;
+    const userPrompt = `研究需求文档：\n${requirementsDocStr}\n\n请生成搜索计划。`;
 
-    console.log('开始调用通义千问 API 生成搜索计划...');
+    console.log('========== 开始调用通义千问 API ==========');
+    console.log('用户提示词:', userPrompt);
 
     // 调用通义千问 API 生成搜索计划
     const llmResponse = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
