@@ -1,272 +1,201 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+interface SynthesisRequest {
+  retrievalResults: any;
+  requirementsDoc: string;
+}
+
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { retrievalResults, requirementsDoc } = await req.json();
+    const { retrievalResults, requirementsDoc }: SynthesisRequest = await req.json();
 
     if (!retrievalResults || !requirementsDoc) {
       return new Response(
-        JSON.stringify({ error: '缺少检索结果或需求文档' }),
+        JSON.stringify({ error: '缺少必需参数: retrievalResults 或 requirementsDoc' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const apiKey = Deno.env.get('INTEGRATIONS_API_KEY');
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: 'API密钥未配置' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const deepseekApiKey = Deno.env.get('DEEPSEEK_API_KEY');
+    
+    if (!deepseekApiKey) {
+      throw new Error('DEEPSEEK_API_KEY 未配置');
     }
 
-    // 构建 Research Synthesis Agent Prompt
-    const systemPrompt = `你是 CoWrite 的 Research Synthesis Agent，负责将 Research Retrieval Agent 输出的多源资料，转化为 中文、结构化、可直接用于写作的研究素材包。
+    // 新的系统提示词 - 严格的输出格式
+    const systemPrompt = `🧠 Research Synthesis Agent
 
-你不写完整文章，但你要做到：写作者拿到你的输出，可以直接开始写。
+Role:
+你是 CoWrite 的 Research Synthesis Agent。你的职责是将 Research Retrieval Agent 输出的多源资料，整理为中文、结构化、可写作的研究素材。
 
-核心任务（必须完成）：
+你不：写完整文章、引入资料中不存在的新观点
+你要做到：写作者拿到你的输出，可以直接进入正文写作
+
+Core Tasks（必须完成）:
 1️⃣ 中文化（非直译）
-- 所有英文资料：用 专业但非学术腔 的中文表达
-- 避免生硬翻译
-- 面向「商业 + 产品 + 技术复合读者」
+- 所有英文资料转为专业但非学术腔的中文
+- 面向「商业/产品/技术复合读者」
+- 保留原意，不生硬翻译
 
 2️⃣ 信息提炼（高密度）
-对每一条资料，提取以下要素（能提就提，没有则标记缺失）：
-- 核心结论 / 观点
-- 关键数据 / 实证结果
-- 使用的方法 / 分析框架
+对每条资料，尽量提取：
+- 核心结论/观点
+- 关键数据/实证结果
+- 使用的方法/分析框架
 - 与需求文档中「关键要点」的对应关系
+- 如无法提取，明确标记 "缺失"
 
-3️⃣ 结构化归类
-你需要主动帮写作者整理思路，而不是简单罗列资料。
-推荐分类维度（按需调整）：
+3️⃣ 结构化归类（主动整理）
+你需要帮助写作者理清逻辑，而不是简单堆资料。
+推荐（但不限于）以下分类方式：
 - 商业化失败模式
-- 用户识别方法
-- ROI / 价值评估方式
-- 实践案例 vs 学术结论的差异
+- 用户识别与定位方法
+- ROI/价值评估方式
+- 学术研究 vs 行业实践差异
 
 4️⃣ 标注可引用性
 对每一条观点，标注：
 - 是否适合直接引用
-- 是否更适合作为背景或论据
-- 是否存在争议或样本局限
+- 是否更适合作为背景/论据
+- 是否存在争议、样本或地区局限
 
-输出格式（严格）：
+⚠️ 输出规则（极其重要）:
+允许 ---THOUGHT---
+系统只解析 ---JSON---
+---JSON--- 中只能是合法 JSON
+
+Output Format:
+---THOUGHT---
+（你如何整理、分类和判断可引用性的说明）
+
+---JSON---
 {
   "synthesized_insights": [
     {
-      "theme": "主题分类",
-      "insights": [
-        {
-          "core_point": "核心观点",
-          "evidence": "证据",
-          "source_type": "academic / news / web / user",
-          "source_title": "来源标题",
-          "source_url": "来源链接",
-          "usable_as": "核心论点 / 案例 / 背景",
-          "notes": "备注"
-        }
-      ]
+      "category": "分类名称",
+      "insight": "核心洞察（中文）",
+      "supporting_data": ["数据点1", "数据点2"],
+      "source_type": "academic|news|web",
+      "citability": "direct|background|controversial",
+      "limitations": "局限性说明（如有）"
     }
   ],
   "key_data_points": [
     {
-      "data": "数据点",
-      "source": "来源",
-      "source_url": "来源链接",
-      "year": 2024,
-      "reliability": "高 / 中 / 低"
+      "data": "关键数据",
+      "context": "数据背景",
+      "source": "来源"
     }
   ],
   "contradictions_or_gaps": [
-    "矛盾或空白点描述"
-  ],
-  "ready_to_cite": "可直接用于文章结构生成的综合版本"
+    {
+      "issue": "矛盾或空白点",
+      "description": "详细说明"
+    }
+  ]
 }
 
-行为约束：
+行为约束（强制）:
 ❌ 不输出完整文章
-❌ 不引入未在资料中出现的新观点
-✅ 所有内容服务于后续写作阶段`;
+❌ 不引入资料外的新观点
+❌ 不输出 JSON 以外的任何结构化内容
+✅ 所有内容只服务于「后续写作」`;
 
-    const userPrompt = `需求文档：
-${JSON.stringify(requirementsDoc, null, 2)}
+    const userPrompt = `原始需求文档：
+${requirementsDoc}
 
-检索结果：
+检索到的资料：
 ${JSON.stringify(retrievalResults, null, 2)}
 
-请根据以上需求文档和检索结果，进行资料整理和中文化，输出结构化的写作素材包。`;
+请整理为可写作的研究素材。`;
 
-    // 调用 LLM 进行资料整理
-    const llmResponse = await fetch(
-      'https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Gateway-Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          contents: [
-            { role: 'user', parts: [{ text: systemPrompt }] },
-            {
-              role: 'model',
-              parts: [
-                {
-                  text: '我理解了。我是 Research Synthesis Agent，我会将检索到的多源资料转化为中文、结构化、可直接用于写作的研究素材包。',
-                },
-              ],
-            },
-            { role: 'user', parts: [{ text: userPrompt }] },
-          ],
-        }),
-      }
-    );
+    console.log('开始调用 DeepSeek API 整理资料...');
+
+    // 调用 DeepSeek API 整理资料
+    const llmResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${deepseekApiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 4000,
+      }),
+    });
 
     if (!llmResponse.ok) {
-      throw new Error(`LLM API 请求失败: ${llmResponse.status}`);
+      const errorText = await llmResponse.text();
+      console.error('DeepSeek API 错误:', errorText);
+      throw new Error(`DeepSeek API 请求失败: ${llmResponse.status}`);
     }
 
-    // 读取流式响应
-    const reader = llmResponse.body?.getReader();
-    const decoder = new TextDecoder();
-    let fullText = '';
+    const llmData = await llmResponse.json();
+    const content = llmData.choices?.[0]?.message?.content;
 
-    if (reader) {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const jsonData = JSON.parse(line.slice(6));
-              if (jsonData.candidates && jsonData.candidates[0]?.content?.parts) {
-                const text = jsonData.candidates[0].content.parts[0]?.text || '';
-                fullText += text;
-              }
-            } catch (e) {
-              // 忽略解析错误
-            }
-          }
-        }
-      }
+    if (!content) {
+      throw new Error('DeepSeek API 返回内容为空');
     }
 
-    // 提取 JSON 内容
+    console.log('DeepSeek 返回内容:', content);
+
+    // 提取 ---JSON--- 部分
     let synthesisResult;
-    let jsonText = '';
-    
     try {
-      // 尝试从 markdown 代码块中提取
-      const jsonMatch = fullText.match(/```json\s*([\s\S]*?)\s*```/) || fullText.match(/```\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        jsonText = jsonMatch[1].trim();
-      } else {
-        // 尝试直接提取 JSON 对象
-        const jsonStart = fullText.indexOf('{');
-        const jsonEnd = fullText.lastIndexOf('}');
-        if (jsonStart !== -1 && jsonEnd !== -1) {
-          jsonText = fullText.substring(jsonStart, jsonEnd + 1);
-        } else {
-          throw new Error('无法找到 JSON 内容');
-        }
+      const jsonMatch = content.match(/---JSON---\s*([\s\S]*?)(?:---|\n\n\n|$)/);
+      if (!jsonMatch) {
+        console.error('未找到 ---JSON--- 标记，原始内容:', content);
+        throw new Error('未找到 ---JSON--- 标记');
       }
       
-      // 清理 JSON 文本
-      // 1. 移除注释
-      jsonText = jsonText.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
+      const jsonText = jsonMatch[1].trim();
+      console.log('提取的 JSON 文本:', jsonText);
       
-      // 2. 修复控制字符（必须在其他修复之前）
-      // 转义字符串中的控制字符
-      jsonText = jsonText.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match) => {
-        // 保留已经正确转义的字符
-        let fixed = match;
-        // 转义未转义的控制字符
-        fixed = fixed.replace(/([^\\])\n/g, '$1\\n');
-        fixed = fixed.replace(/([^\\])\r/g, '$1\\r');
-        fixed = fixed.replace(/([^\\])\t/g, '$1\\t');
-        fixed = fixed.replace(/([^\\])\b/g, '$1\\b');
-        fixed = fixed.replace(/([^\\])\f/g, '$1\\f');
-        // 处理字符串开头的控制字符
-        fixed = fixed.replace(/^"\n/g, '"\\n');
-        fixed = fixed.replace(/^"\r/g, '"\\r');
-        fixed = fixed.replace(/^"\t/g, '"\\t');
-        fixed = fixed.replace(/^"\b/g, '"\\b');
-        fixed = fixed.replace(/^"\f/g, '"\\f');
-        return fixed;
-      });
+      synthesisResult = JSON.parse(jsonText);
       
-      // 3. 修复常见的 JSON 错误
-      // 移除尾随逗号
-      jsonText = jsonText.replace(/,(\s*[}\]])/g, '$1');
+      // 验证必需字段
+      if (!synthesisResult.synthesized_insights) synthesisResult.synthesized_insights = [];
+      if (!synthesisResult.key_data_points) synthesisResult.key_data_points = [];
+      if (!synthesisResult.contradictions_or_gaps) synthesisResult.contradictions_or_gaps = [];
       
-      // 修复缺少逗号的情况 - 更精确的模式
-      // 模式1: 字符串值后直接跟属性名 "value" "key":
-      jsonText = jsonText.replace(/"(\s+)"([a-zA-Z_][a-zA-Z0-9_]*)"(\s*):/g, '",$1"$2"$3:');
-      
-      // 模式2: 数字/布尔值/null后直接跟属性名 123 "key":
-      jsonText = jsonText.replace(/(\d+|true|false|null)(\s+)"([a-zA-Z_][a-zA-Z0-9_]*)"(\s*):/g, '$1,$2"$3"$4:');
-      
-      // 模式3: 对象/数组结束后直接跟属性名 } "key": 或 ] "key":
-      jsonText = jsonText.replace(/([}\]])(\s+)"([a-zA-Z_][a-zA-Z0-9_]*)"(\s*):/g, '$1,$2"$3"$4:');
-      
-      // 移除多余的连续逗号（在修复后可能产生）
-      jsonText = jsonText.replace(/,+/g, ',');
-      
-      // 3. 尝试解析
-      try {
-        synthesisResult = JSON.parse(jsonText);
-      } catch (parseError) {
-        // 如果解析失败，尝试修复属性名未加引号的问题
-        console.error('首次 JSON 解析失败，尝试修复属性名:', parseError);
-        
-        // 尝试给未加引号的属性名加上引号
-        const fixedJson = jsonText.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
-        
-        try {
-          synthesisResult = JSON.parse(fixedJson);
-          console.log('JSON 修复成功');
-        } catch (fixError) {
-          // 记录详细错误信息
-          console.error('JSON 修复后仍然解析失败:', fixError);
-          console.error('原始文本长度:', fullText.length);
-          console.error('提取的 JSON 文本:', jsonText.substring(0, 1000)); // 只记录前1000字符
-          console.error('修复后的 JSON 文本:', fixedJson.substring(0, 1000));
-          
-          throw new Error(`解析整理结果失败: ${fixError.message}。请查看 Edge Function 日志获取详细信息。`);
-        }
-      }
-    } catch (e) {
-      console.error('JSON 提取或解析失败:', e);
-      console.error('完整原始文本:', fullText);
-      throw new Error(`解析整理结果失败: ${e.message}`);
+    } catch (parseError) {
+      console.error('JSON 解析失败:', parseError);
+      console.error('原始内容:', content);
+      throw new Error(`整理结果失败: ${parseError.message}`);
     }
 
-    // 验证必要字段
-    if (!synthesisResult.synthesized_insights || !synthesisResult.key_data_points) {
-      throw new Error('整理结果缺少必要字段');
-    }
+    console.log('整理结果:', JSON.stringify(synthesisResult, null, 2));
 
-    return new Response(JSON.stringify(synthesisResult), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    console.error('Research Synthesis Agent Error:', error);
     return new Response(
-      JSON.stringify({ error: error.message || '资料整理失败' }),
+      JSON.stringify({
+        success: true,
+        data: synthesisResult,
+        raw_content: content
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('处理请求时出错:', error);
+    return new Response(
+      JSON.stringify({ 
+        error: error.message || '处理请求时出错',
+        details: error.toString()
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
