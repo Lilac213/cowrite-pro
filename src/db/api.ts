@@ -1175,65 +1175,86 @@ ${JSON.stringify(selectedKnowledge, null, 2)}`;
  */
 export async function researchRetrievalAgent(requirementsDoc: any, projectId?: string, userId?: string) {
   console.log('[researchRetrievalAgent] 开始调用，需求文档:', requirementsDoc);
+  console.log('[researchRetrievalAgent] projectId:', projectId);
+  console.log('[researchRetrievalAgent] userId:', userId);
+  console.log('[researchRetrievalAgent] Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
+  console.log('[researchRetrievalAgent] Supabase Anon Key exists:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
   
-  const { data, error } = await supabase.functions.invoke('research-retrieval-agent', {
-    body: { requirementsDoc, projectId, userId },
-  });
-
-  console.log('[researchRetrievalAgent] Edge Function 响应:', { data, error });
-
-  if (error) {
-    console.error('Research Retrieval Agent Error:', error);
+  try {
+    console.log('[researchRetrievalAgent] 准备调用 Edge Function...');
     
-    // 尝试提取详细错误信息
-    let errorMessage = error.message || '资料检索失败';
-    
-    // 如果有 context，尝试提取更详细的错误
-    if (error.context) {
-      try {
-        const contextText = typeof error.context === 'string' 
-          ? error.context 
-          : await error.context.text?.();
-        
-        if (contextText) {
-          try {
-            const contextJson = JSON.parse(contextText);
-            errorMessage = contextJson.error || contextText;
-          } catch {
-            errorMessage = contextText;
+    const { data, error } = await supabase.functions.invoke('research-retrieval-agent', {
+      body: { requirementsDoc, projectId, userId },
+    });
+
+    console.log('[researchRetrievalAgent] Edge Function 调用完成');
+    console.log('[researchRetrievalAgent] Edge Function 响应:', { data, error });
+
+    if (error) {
+      console.error('Research Retrieval Agent Error:', error);
+      console.error('Error type:', typeof error);
+      console.error('Error keys:', Object.keys(error));
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      
+      // 尝试提取详细错误信息
+      let errorMessage = error.message || '资料检索失败';
+      
+      // 如果有 context，尝试提取更详细的错误
+      if (error.context) {
+        try {
+          const contextText = typeof error.context === 'string' 
+            ? error.context 
+            : await error.context.text?.();
+          
+          if (contextText) {
+            console.error('Error context text:', contextText);
+            try {
+              const contextJson = JSON.parse(contextText);
+              errorMessage = contextJson.error || contextText;
+            } catch {
+              errorMessage = contextText;
+            }
           }
+        } catch (e) {
+          console.error('提取错误上下文失败:', e);
         }
-      } catch (e) {
-        console.error('提取错误上下文失败:', e);
       }
+      
+      // 如果返回的 data 中包含错误信息
+      if (data && typeof data === 'object' && 'error' in data) {
+        errorMessage = data.error;
+        console.error('Data contains error:', errorMessage);
+      }
+      
+      throw new Error(errorMessage);
     }
-    
-    // 如果返回的 data 中包含错误信息
-    if (data && typeof data === 'object' && 'error' in data) {
-      errorMessage = data.error;
+
+    // 检查返回的数据结构
+    if (!data) {
+      console.error('[researchRetrievalAgent] 返回数据为空');
+      throw new Error('资料检索返回数据为空');
     }
-    
-    throw new Error(errorMessage);
-  }
 
-  // 检查返回的数据结构
-  if (!data) {
-    console.error('[researchRetrievalAgent] 返回数据为空');
-    throw new Error('资料检索返回数据为空');
-  }
+    // 如果返回的是 { success: true, data: {...}, logs: [...] } 格式，提取 data 和 logs 字段
+    if (data.success && data.data) {
+      console.log('[researchRetrievalAgent] 提取 data 字段:', data.data);
+      return {
+        ...data.data,
+        logs: data.logs || []
+      };
+    }
 
-  // 如果返回的是 { success: true, data: {...}, logs: [...] } 格式，提取 data 和 logs 字段
-  if (data.success && data.data) {
-    console.log('[researchRetrievalAgent] 提取 data 字段:', data.data);
-    return {
-      ...data.data,
-      logs: data.logs || []
-    };
+    // 否则直接返回
+    console.log('[researchRetrievalAgent] 直接返回 data:', data);
+    return data;
+  } catch (error: any) {
+    console.error('[researchRetrievalAgent] Caught exception:', error);
+    console.error('[researchRetrievalAgent] Exception message:', error.message);
+    console.error('[researchRetrievalAgent] Exception stack:', error.stack);
+    console.error('[researchRetrievalAgent] Exception name:', error.name);
+    throw error;
   }
-
-  // 否则直接返回
-  console.log('[researchRetrievalAgent] 直接返回 data:', data);
-  return data;
 }
 
 /**
