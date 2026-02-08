@@ -735,6 +735,13 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     user_library_queries: retrievalResults.search_summary.user_library_queries,
   } : undefined;
 
+  // Debug logging
+  console.log('[KnowledgeStage] searchSummary:', searchSummary);
+  console.log('[KnowledgeStage] academic_queries:', searchSummary?.academic_queries);
+  console.log('[KnowledgeStage] news_queries:', searchSummary?.news_queries);
+  console.log('[KnowledgeStage] web_queries:', searchSummary?.web_queries);
+  console.log('[KnowledgeStage] user_library_queries:', searchSummary?.user_library_queries);
+
   return (
     <div className="space-y-4">
       {/* 标题栏 - 移除搜索框 */}
@@ -833,13 +840,39 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 onToggleFavorite={handleToggleSelect}
                 onDelete={handleBatchDelete}
                 onBatchFavorite={handleBatchFavorite}
-                onOrganize={handleOrganize}
-                onNextStep={handleNextStep}
               />
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* 底部操作按钮 */}
+      {knowledge.length > 0 && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex justify-end gap-4">
+              <Button 
+                onClick={handleOrganize} 
+                variant="outline"
+                size="lg"
+                className="min-w-[160px]"
+                disabled={!synthesisResults}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                资料整理
+              </Button>
+              <Button 
+                onClick={handleNextStep}
+                size="lg"
+                className="min-w-[160px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+              >
+                进入下一步
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 搜索分析 - 固定底部日志栏 */}
       {searchLogs.length > 0 && (

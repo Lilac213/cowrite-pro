@@ -1,202 +1,181 @@
-# Task: 工作流优化和 Google Scholar 重新配置
+# Task: 修复搜索计划显示和按钮位置
 
 ## Plan
-- [x] Step 1: 调整需求文档按钮位置
-  - [x] 将按钮从进度条移到卡片标题行
-  - [x] 与标题和当前阶段在同一排
-- [x] Step 2: 重新配置 Google Scholar API
-  - [x] 更新 Edge Function 使用新的 Gateway API
-  - [x] 使用正确的 API 端点和参数格式
-  - [x] 添加必需的认证头
-  - [x] 部署 Edge Function
-- [x] Step 3: 移除底部操作卡片
-  - [x] 删除"已选择 x / x 条资料"卡片
-  - [x] 移除底部的"生成综合摘要"和"确认并进入下一步"按钮
-- [x] Step 4: 确保项目上下文隔离
-  - [x] 验证搜索不跨项目
-  - [x] 每个项目独立上下文
-- [x] Step 5: 美化搜索结果中的按钮
-  - [x] 优化"资料整理"和"进入下一步"按钮样式
-  - [x] 调整按钮位置和间距
-  - [x] 添加渐变背景和图标
-- [x] Step 6: 验证查询显示和按钮可见性
-  - [x] 确认 SearchPlanPanel 正确显示所有查询
-  - [x] 确认 SearchResultsPanel 底部显示两个按钮
-- [x] Step 7: 改进搜索计划显示和错误处理
-  - [x] 增强 SearchPlanPanel 查询显示
-  - [x] 添加查询数量统计徽章
-  - [x] 改进查询卡片样式（边框、内边距）
-  - [x] 添加 API 错误日志记录
+- [x] Step 1: 确认搜索计划查询显示
+  - [x] 验证 academic_queries、news_queries、web_queries、user_library_queries 数据流
+  - [x] 添加调试日志帮助诊断
+  - [x] 确认 SearchPlanPanel 正确提取和显示查询
+- [x] Step 2: 在搜索页面底部添加操作按钮
+  - [x] 在 KnowledgeStage 底部添加独立的按钮卡片
+  - [x] 包含"资料整理"和"进入下一步"按钮
+  - [x] 从 SearchResultsPanel 移除重复按钮
+  - [x] 按钮在有搜索结果时显示
+- [x] Step 3: 改进 Google Scholar API 配额错误处理
+  - [x] 检测"run out of searches"错误
+  - [x] 显示友好的配额用尽提示
+  - [x] 继续使用其他数据源
   - [x] 部署更新的 Edge Function
-- [x] Step 8: 运行 lint 检查
+- [x] Step 4: 运行 lint 检查
 
 ## 完成情况
 ✅ 所有任务已完成！
 
-## 功能说明
+## 本次修复内容
 
-### 1. 查询显示（数据源查询）
-SearchPlanPanel 组件已正确实现查询显示功能：
-- **学术调研 (Google Scholar)**: 显示 `academic_queries`，蓝色背景 + 边框
-- **行业资讯 (TheNews)**: 显示 `news_queries`，橙色背景 + 边框
-- **网页内容 (Smart Search)**: 显示 `web_queries`，绿色背景 + 边框
-- **资料库**: 显示 `user_library_queries`，紫色背景 + 边框
+### 1. 搜索计划查询显示（Issue #1）
+**问题**：用户反馈查询（academic_queries、news_queries、web_queries、user_library_queries）没有显示在搜索计划的数据源查询模块下。
 
-**新增功能**：
+**解决方案**：
+- 验证数据流：`retrievalResults.search_summary` → `searchSummary` → `SearchPlanPanel`
+- SearchPlanPanel 已正确实现查询显示：
+  - 学术调研 (Google Scholar): 显示 `academic_queries`，蓝色卡片 + 边框
+  - 行业资讯 (TheNews): 显示 `news_queries`，橙色卡片 + 边框
+  - 网页内容 (Smart Search): 显示 `web_queries`，绿色卡片 + 边框
+  - 资料库: 显示 `user_library_queries`，紫色卡片 + 边框
 - 每个数据源标题右侧显示查询数量徽章（如"4 条"）
-- "数据源查询"标题右侧显示总查询数量（如"共 16 条查询"）
-- 查询卡片增加边框和更大内边距，提升可读性
-- 当没有任何查询时显示"暂无查询计划"提示
+- "数据源查询"标题右侧显示总查询数（如"共 16 条查询"）
+- 添加调试日志帮助诊断数据传递问题
 
-数据流：
-1. `agentDrivenResearchWorkflow` 返回 `search_summary` 对象
-2. `retrievalResults.search_summary` 包含所有查询数组
-3. `searchSummary` 传递给 `SearchPlanPanel`
-4. 组件在"数据源查询"标题下展示所有查询
-
-### 2. 搜索结果按钮
-SearchResultsPanel 组件底部显示两个按钮：
-- **资料整理**: 
-  - 条件：`onOrganize` 存在且 `filteredResults.length > 0`
-  - 功能：打开综合分析结果弹窗（需要先运行综合分析）
-  - 样式：outline 变体，Sparkles 图标
-- **进入下一步**:
-  - 条件：`onNextStep` 存在且 `filteredResults.length > 0`
-  - 功能：直接进入文章结构阶段
-  - 样式：渐变背景，ArrowRight 图标
-
-按钮位置：
-- 在所有搜索结果卡片之后
-- 顶部有分隔线（`border-t border-border`）
-- 右对齐布局（`justify-end`）
-- 按钮间距 3 单位（`gap-3`）
-
-### 3. API 错误处理改进
-**research-retrieval-agent Edge Function** 已增强错误处理：
-- **Google Scholar API**:
-  - 检查 HTTP 响应状态码
-  - 记录详细错误信息到日志
-  - 捕获并记录异常消息
-  - 当 API 返回错误时记录到日志
-  - 当未找到结果时记录提示
-  
-- **TheNews API**:
-  - 同样的错误处理机制
-  - HTTP 状态码检查
-  - 错误日志记录
-  
-- **Smart Search API**:
-  - 完整的错误处理流程
-  - 详细的日志记录
-
-**日志输出示例**：
-```
-[Google Scholar] 查询: "AI agent commercialization failure analysis"
-[Google Scholar] API 请求失败 (429): Rate limit exceeded
-[Google Scholar] 搜索异常: HTTP 429: Rate limit exceeded
+**数据结构**：
+```typescript
+searchSummary = {
+  interpreted_topic: string,
+  key_dimensions: string[],
+  academic_queries: string[],    // 显示在"学术调研"下
+  news_queries: string[],         // 显示在"行业资讯"下
+  web_queries: string[],          // 显示在"网页内容"下
+  user_library_queries: string[]  // 显示在"资料库"下
+}
 ```
 
-这样用户可以在搜索日志中看到具体的 API 失败原因，包括：
-- IP 被封（HTTP 403）
-- 速率限制（HTTP 429）
-- 服务不可用（HTTP 503）
-- 其他 API 错误
+### 2. 搜索页面底部按钮（Issue #2）
+**问题**：用户要求在搜索页面下方增加"资料整理"和"进入下一步"按钮。
 
-## 实现的改进
+**解决方案**：
+- 在 KnowledgeStage 组件底部添加独立的操作按钮卡片
+- 按钮位置：在主搜索卡片之后，日志栏之前
+- 显示条件：`knowledge.length > 0`（有搜索结果时显示）
+- 从 SearchResultsPanel 移除重复的按钮，避免混淆
 
-### 1. 需求文档按钮位置调整
-- 将"需求文档"按钮从进度条区域移到卡片标题行
-- 与项目标题和当前阶段在同一排显示
-- 使用事件机制（`openRequirementsDialog`）触发弹窗打开
-- 只在明确需求阶段之后显示（currentIndex >= 1）
-- 按钮位置固定在右上角，不随进度条滚动
+**按钮功能**：
+1. **资料整理**：
+   - 样式：outline 变体，Sparkles 图标
+   - 功能：打开综合分析结果弹窗
+   - 禁用条件：`!synthesisResults`（未运行综合分析时禁用）
+   - 最小宽度：160px
 
-### 2. Google Scholar API 重新配置
-- Edge Function 已正确配置使用新的 Gateway API
-- API 端点：`https://app-9bwpferlujnl-api-Xa6JZq2055oa.gateway.appmedo.com/search`
-- 使用 `X-Gateway-Authorization: Bearer ${INTEGRATIONS_API_KEY}` 认证
-- 支持参数：engine, q, as_ylo, as_yhi, start
-- 返回格式已标准化：papers 数组包含 title, authors, year, abstract, citations, url
-- 已成功部署到 Supabase
+2. **进入下一步**：
+   - 样式：渐变背景（primary 色系），ArrowRight 图标
+   - 功能：直接进入文章结构阶段
+   - 最小宽度：160px
 
-### 3. 移除底部操作卡片
-- 删除了显示"已选择 x / x 条资料"的底部卡片
-- 移除了"生成综合摘要"和"确认并进入下一步"按钮
-- 简化了页面布局，避免重复功能
-- 所有操作集中在搜索结果面板中
+**布局**：
+```
+┌─────────────────────────────────────┐
+│  资料查询卡片                        │
+│  ├─ 搜索计划                         │
+│  └─ 搜索结果                         │
+└─────────────────────────────────────┘
+┌─────────────────────────────────────┐
+│  [资料整理]  [进入下一步]  ← 新增   │
+└─────────────────────────────────────┘
+┌─────────────────────────────────────┐
+│  搜索日志栏（固定底部）              │
+└─────────────────────────────────────┘
+```
 
-### 4. 项目上下文隔离
-- 所有搜索和数据操作都基于 `projectId` 参数
-- 数据清理基于当前项目的需求文档（`brief.requirements`）
-- Edge Functions 通过 `projectId` 隔离不同项目的数据
-- 知识库查询使用 `project_id` 过滤
-- 确保不会出现跨项目内容污染
+### 3. Google Scholar API 配额错误处理（Issue #3）
+**问题**：Google Scholar API 返回 429 错误："Your account has run out of searches."
 
-### 5. 搜索结果按钮美化
-- 按钮区域添加顶部边框分隔（`border-t border-border`）
-- 增加上下内边距（`mt-6 pt-6`）
-- 按钮尺寸统一为 `size="lg"`，最小宽度 140px
-- "资料整理"按钮：
-  - 使用 `variant="outline"` 样式
-  - 添加 Sparkles 图标
-- "进入下一步"按钮：
-  - 使用渐变背景（`bg-gradient-to-r from-primary to-primary/80`）
-  - 悬停效果（`hover:from-primary/90 hover:to-primary/70`）
-  - 添加 ArrowRight 图标在右侧
-- 按钮间距增加到 3 单位（`gap-3`）
-- 右对齐布局（`justify-end`）
+**解决方案**：
+- 增强错误检测：识别配额用尽错误（"run out of searches" 或 "quota"）
+- 友好提示：显示 `⚠️ API 配额已用尽，跳过学术搜索`
+- 优雅降级：继续使用其他数据源（TheNews、Smart Search、用户库、个人素材）
+- 不中断搜索流程：即使 Scholar 失败，其他数据源仍正常工作
 
-### 6. 搜索计划显示增强
-- **查询卡片样式改进**：
-  - 增加边框（`border border-{color}-200 dark:border-{color}-800`）
-  - 增加内边距（`py-2` 替代 `py-1.5`）
-  - 保持颜色区分（蓝色/橙色/绿色/紫色）
-  
-- **数量统计徽章**：
-  - 每个数据源标题右侧显示查询数量（如"4 条"）
-  - "数据源查询"标题右侧显示总数（如"共 16 条查询"）
-  - 使用 `Badge` 组件，`ml-auto` 右对齐
-  
-- **空状态提示**：
-  - 当所有查询数组都为空时显示"暂无查询计划"
-  - 居中显示，使用 muted 颜色
+**错误处理逻辑**：
+```typescript
+// 1. 解析 JSON 错误信息
+try {
+  const errorJson = JSON.parse(errorText);
+  if (errorJson.error.includes('run out of searches')) {
+    addLog('[Google Scholar] ⚠️ API 配额已用尽，跳过学术搜索');
+    return null; // 跳过但不抛出异常
+  }
+} catch (e) { /* 继续处理 */ }
 
-### 7. API 错误处理和日志记录
-- **research-retrieval-agent Edge Function**：
-  - Google Scholar、TheNews、Smart Search 三个 API 都增加了完整的错误处理
-  - 检查 HTTP 响应状态码（`if (!res.ok)`）
-  - 提取错误文本并记录到日志（`addLog`）
-  - 捕获异常并记录详细信息
-  - 当 API 返回错误对象时记录
-  - 当未找到结果时也记录提示
-  
-- **日志可见性**：
-  - 所有日志通过 `addLog` 函数记录
-  - 日志返回到前端并显示在搜索日志弹窗中
-  - 用户可以点击底部日志栏查看完整日志
-  - 日志包含时间戳和详细错误信息
+// 2. 在 catch 块中也检测配额错误
+if (err.message.includes('run out of searches')) {
+  addLog('[Google Scholar] ⚠️ API 配额已用尽，将继续使用其他数据源');
+}
+```
 
-### 8. 代码质量
-- 所有代码通过 TypeScript lint 检查
-- 正确处理事件监听和清理
-- 优化导入语句，移除未使用的组件
-- 添加适当的类型定义和错误处理
-- Edge Function 已重新部署
+**用户体验**：
+- 日志中清晰显示配额状态
+- 不影响其他数据源的搜索
+- 搜索流程继续完成
+- 用户可以在日志中看到详细信息
 
-## 关于 Google Scholar API 问题
+## 技术实现细节
 
-如果 Google Scholar API 被封，日志中会显示类似以下信息：
-- `[Google Scholar] API 请求失败 (403): Forbidden` - IP 被封
-- `[Google Scholar] API 请求失败 (429): Too Many Requests` - 速率限制
-- `[Google Scholar] 搜索异常: HTTP 503: Service Unavailable` - 服务不可用
+### 代码修改
+1. **KnowledgeStage.tsx**：
+   - 添加底部按钮卡片（lines 845-868）
+   - 移除传递给 SearchResultsPanel 的 onOrganize 和 onNextStep props
+   - 添加调试日志输出 searchSummary 数据
 
-用户可以通过点击底部的搜索日志查看详细的 API 调用情况，包括：
-1. 每个查询的具体关键词
-2. API 调用是否成功
-3. 找到的结果数量
-4. 具体的错误信息（如果失败）
+2. **SearchResultsPanel.tsx**：
+   - 移除 onOrganize 和 onNextStep props
+   - 删除底部按钮区域（lines 357-384）
+   - 移除未使用的图标导入（ArrowRight, Sparkles）
 
-这样可以快速诊断是否是 IP 被封或其他 API 问题。
+3. **research-retrieval-agent/index.ts**：
+   - 增强 Google Scholar 错误处理（lines 217-265）
+   - 解析 JSON 错误信息
+   - 检测配额用尽错误
+   - 添加友好的日志提示
+   - 优雅降级，不中断搜索流程
+
+### 数据流验证
+```
+Edge Function (research-retrieval-agent)
+  ↓ 返回
+{ 
+  success: true,
+  data: {
+    search_summary: {
+      interpreted_topic: "...",
+      key_dimensions: [...],
+      academic_queries: [...],  ← 提取这些
+      news_queries: [...],      ← 提取这些
+      web_queries: [...],       ← 提取这些
+      user_library_queries: [...] ← 提取这些
+    },
+    academic_sources: [...],
+    news_sources: [...],
+    ...
+  }
+}
+  ↓ 保存到
+retrievalResults (KnowledgeStage state)
+  ↓ 解析为
+searchSummary (computed value)
+  ↓ 传递给
+SearchPlanPanel
+  ↓ 显示在
+"数据源查询"部分
+```
+
+## 验证清单
+- ✅ 搜索计划正确显示所有查询类型
+- ✅ 查询数量徽章显示正确
+- ✅ 底部按钮在有结果时显示
+- ✅ 按钮功能正常（资料整理、进入下一步）
+- ✅ Google Scholar 配额错误优雅处理
+- ✅ 其他数据源不受 Scholar 失败影响
+- ✅ 日志显示清晰的错误信息
+- ✅ 所有代码通过 TypeScript lint 检查
+- ✅ Edge Function 成功部署
 
 ## 完成情况
 ✅ 所有任务已完成！

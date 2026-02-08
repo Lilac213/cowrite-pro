@@ -217,13 +217,38 @@ Output Format:
           .then(async res => {
             if (!res.ok) {
               const errorText = await res.text();
-              addLog(`[Google Scholar] API 请求失败 (${res.status}): ${errorText}`);
-              throw new Error(`HTTP ${res.status}: ${errorText}`);
+              let errorMessage = errorText;
+              
+              // 尝试解析 JSON 错误信息
+              try {
+                const errorJson = JSON.parse(errorText);
+                if (errorJson.error) {
+                  errorMessage = errorJson.error;
+                  
+                  // 特殊处理配额用尽错误
+                  if (errorMessage.includes('run out of searches') || errorMessage.includes('quota')) {
+                    addLog(`[Google Scholar] ⚠️ API 配额已用尽，跳过学术搜索`);
+                    return null;
+                  }
+                }
+              } catch (e) {
+                // 如果不是 JSON，使用原始文本
+              }
+              
+              addLog(`[Google Scholar] API 请求失败 (${res.status}): ${errorMessage}`);
+              throw new Error(`HTTP ${res.status}: ${errorMessage}`);
             }
             return res.json();
           })
           .then(data => {
+            if (!data) return; // 配额用尽时跳过
+            
             if (data.error) {
+              // 检查是否是配额错误
+              if (data.error.includes('run out of searches') || data.error.includes('quota')) {
+                addLog(`[Google Scholar] ⚠️ API 配额已用尽，跳过学术搜索`);
+                return;
+              }
               addLog(`[Google Scholar] API 返回错误: ${data.error}`);
               return;
             }
@@ -243,7 +268,12 @@ Output Format:
             }
           })
           .catch(err => {
-            addLog(`[Google Scholar] 搜索异常: ${err.message}`);
+            // 检查是否是配额错误
+            if (err.message.includes('run out of searches') || err.message.includes('quota')) {
+              addLog(`[Google Scholar] ⚠️ API 配额已用尽，将继续使用其他数据源`);
+            } else {
+              addLog(`[Google Scholar] 搜索异常: ${err.message}`);
+            }
             console.error('[Google Scholar] 搜索失败:', err);
           })
         );

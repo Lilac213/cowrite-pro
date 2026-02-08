@@ -14,9 +14,7 @@ import {
   Search as SearchIcon, 
   Database,
   Bookmark,
-  Trash2,
-  ArrowRight,
-  Sparkles
+  Trash2
 } from 'lucide-react';
 import type { KnowledgeBase } from '@/types';
 import ResultDetailDialog from './ResultDetailDialog';
@@ -26,8 +24,6 @@ interface SearchResultsPanelProps {
   onToggleFavorite: (id: string, selected: boolean) => void;
   onDelete: (ids: string[]) => void;
   onBatchFavorite: (ids: string[], selected: boolean) => void;
-  onOrganize?: () => void;
-  onNextStep?: () => void;
 }
 
 type SourceType = 'all' | 'academic' | 'news' | 'web' | 'library';
@@ -37,9 +33,7 @@ export default function SearchResultsPanel({
   results, 
   onToggleFavorite, 
   onDelete,
-  onBatchFavorite,
-  onOrganize,
-  onNextStep
+  onBatchFavorite
 }: SearchResultsPanelProps) {
   const [sourceFilter, setSourceFilter] = useState<SourceType>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -357,35 +351,6 @@ export default function SearchResultsPanel({
           ))
         )}
       </div>
-
-      {/* 资料整理和进入下一步按钮 */}
-      {filteredResults.length > 0 && (
-        <div className="mt-6 pt-6 border-t border-border">
-          <div className="flex justify-end gap-3">
-            {onOrganize && (
-              <Button 
-                onClick={onOrganize} 
-                variant="outline"
-                size="lg"
-                className="min-w-[140px]"
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                资料整理
-              </Button>
-            )}
-            {onNextStep && (
-              <Button 
-                onClick={onNextStep}
-                size="lg"
-                className="min-w-[140px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-              >
-                进入下一步
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* 详情弹窗 */}
       <ResultDetailDialog
