@@ -21,15 +21,13 @@ import type { KnowledgeBase } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Search, Sparkles, CheckCircle2, BookmarkPlus, Edit, Trash2 } from 'lucide-react';
+import { Search, Sparkles, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
+import SearchPlanPanel from './SearchPlanPanel';
+import SearchResultsPanel from './SearchResultsPanel';
 
 interface KnowledgeStageProps {
   projectId: string;
@@ -45,8 +43,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [workflowResult, setWorkflowResult] = useState<any>(null);
   const [writingSummary, setWritingSummary] = useState<any>(null);
   const [autoSearched, setAutoSearched] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingKnowledge, setEditingKnowledge] = useState<KnowledgeBase | null>(null);
   const [searchProgress, setSearchProgress] = useState<{
     stage: string;
     message: string;
@@ -56,6 +52,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [retrievalResults, setRetrievalResults] = useState<any>(null);
   const [synthesisLogs, setSynthesisLogs] = useState<string[]>([]);
   const [synthesisResults, setSynthesisResults] = useState<any>(null);
+  const [lastSearchTime, setLastSearchTime] = useState<string>('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -307,6 +304,9 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
       await loadKnowledge();
       
+      // 更新最后搜索时间
+      setLastSearchTime(new Date().toLocaleString('zh-CN'));
+      
       setSearchProgress({ 
         stage: '完成', 
         message: `搜索完成！已从 5 个数据源检索并整理了 ${allSources.length} 条资料`
@@ -426,58 +426,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       await loadKnowledge();
     } catch (error) {
       console.error('更新选中状态失败:', error);
-    }
-  };
-
-  const handleEditKnowledge = (item: KnowledgeBase) => {
-    setEditingKnowledge(item);
-    setEditDialogOpen(true);
-  };
-
-  const handleDeleteKnowledge = async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from('knowledge_base')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      await loadKnowledge();
-      toast({
-        title: '删除成功',
-      });
-    } catch (error) {
-      console.error('删除失败:', error);
-      toast({
-        title: '删除失败',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingKnowledge) return;
-    
-    try {
-      await updateKnowledgeBase(editingKnowledge.id, {
-        title: editingKnowledge.title,
-        content: editingKnowledge.content,
-      });
-      
-      await loadKnowledge();
-      setEditDialogOpen(false);
-      setEditingKnowledge(null);
-      
-      toast({
-        title: '保存成功',
-      });
-    } catch (error) {
-      console.error('保存失败:', error);
-      toast({
-        title: '保存失败',
-        variant: 'destructive',
-      });
     }
   };
 
@@ -602,19 +550,97 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     }
   };
 
+  // 批量收藏
+  const handleBatchFavorite = async (ids: string[], selected: boolean) => {
+    try {
+      for (const id of ids) {
+        await updateKnowledgeBase(id, { selected });
+      }
+      await loadKnowledge();
+      toast({
+        title: '批量收藏成功',
+        description: `已收藏 ${ids.length} 条资料`,
+      });
+    } catch (error) {
+      console.error('批量收藏失败:', error);
+      toast({
+        title: '批量收藏失败',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // 批量删除
+  const handleBatchDelete = async (ids: string[]) => {
+    try {
+      for (const id of ids) {
+        await supabase.from('knowledge_base').delete().eq('id', id);
+      }
+      await loadKnowledge();
+      toast({
+        title: '批量删除成功',
+        description: `已删除 ${ids.length} 条资料`,
+      });
+    } catch (error) {
+      console.error('批量删除失败:', error);
+      toast({
+        title: '批量删除失败',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // 刷新搜索
+  const handleRefreshSearch = () => {
+    if (query.trim()) {
+      handleSearch();
+    } else {
+      toast({
+        title: '请输入搜索内容',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // 解析搜索计划
+  const searchSummary = retrievalResults?.search_summary ? {
+    interpreted_topic: retrievalResults.search_summary.interpreted_topic,
+    key_dimensions: retrievalResults.search_summary.key_dimensions,
+    academic_queries: retrievalResults.search_summary.academic_queries,
+    news_queries: retrievalResults.search_summary.news_queries,
+    web_queries: retrievalResults.search_summary.web_queries,
+    user_library_queries: retrievalResults.search_summary.user_library_queries,
+  } : undefined;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* 标题栏 */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
-            学术资料查询
-          </CardTitle>
-          <CardDescription>
-            输入中文研究需求，AI 将自动转换为学术关键词并搜索高质量论文
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Search className="h-5 w-5 text-primary" />
+              <CardTitle>资料查询</CardTitle>
+            </div>
+            <div className="flex items-center gap-4">
+              {lastSearchTime && (
+                <span className="text-sm text-muted-foreground">
+                  上次更新: {lastSearchTime}
+                </span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshSearch}
+                disabled={searching}
+              >
+                <RefreshCw className={`h-4 w-4 mr-1 ${searching ? 'animate-spin' : ''}`} />
+                刷新
+              </Button>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           <div className="flex gap-2">
             <Input
               placeholder="例如：人工智能在医学影像中的应用"
@@ -628,13 +654,13 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             />
             <Button onClick={() => handleSearch()} disabled={searching || !query.trim()}>
               <Search className="h-4 w-4 mr-2" />
-              {searching ? '搜索中...' : '智能搜索'}
+              {searching ? '搜索中...' : '开始搜索'}
             </Button>
           </div>
 
           {/* 搜索进度显示 */}
           {searchProgress && (
-            <Card className={`border-2 ${
+            <Card className={`mt-4 border-2 ${
               searchProgress.stage === '失败' 
                 ? 'border-destructive bg-destructive/5' 
                 : searchProgress.stage === '完成'
@@ -681,6 +707,57 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         </CardContent>
       </Card>
 
+      {/* 两栏布局：搜索计划 + 搜索结果 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[600px]">
+        {/* 左侧：搜索计划 */}
+        <div className="lg:col-span-1">
+          <SearchPlanPanel 
+            searchSummary={searchSummary} 
+            isSearching={searching}
+          />
+        </div>
+
+        {/* 右侧：搜索结果 */}
+        <div className="lg:col-span-2">
+          <SearchResultsPanel
+            results={knowledge}
+            onToggleFavorite={handleToggleSelect}
+            onDelete={handleBatchDelete}
+            onBatchFavorite={handleBatchFavorite}
+          />
+        </div>
+      </div>
+
+      {/* 操作按钮 */}
+      {knowledge.length > 0 && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-muted-foreground">
+                已选择 {knowledge.filter((k) => k.selected).length} / {knowledge.length} 条资料
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={handleSynthesize} 
+                  disabled={synthesizing || knowledge.filter((k) => k.selected).length === 0}
+                  variant="outline"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {synthesizing ? '生成中...' : '生成综合摘要'}
+                </Button>
+                <Button 
+                  onClick={handleConfirm} 
+                  disabled={confirming || !writingSummary}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  {confirming ? '确认中...' : '确认并进入下一步'}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* 显示搜索日志 */}
       {searchLogs.length > 0 && (
         <Card>
@@ -695,148 +772,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                   {log}
                 </div>
               ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {knowledge.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>搜索结果</CardTitle>
-            <CardDescription>
-              已选择 {knowledge.filter((k) => k.selected).length} / {knowledge.length} 条
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {knowledge.map((item) => (
-              <Card key={item.id} className="p-4">
-                <div className="flex items-start gap-3">
-                  <Checkbox
-                    checked={item.selected}
-                    onCheckedChange={(checked) => handleToggleSelect(item.id, checked as boolean)}
-                  />
-                  <div className="flex-1 space-y-2">
-                    <h4 className="font-semibold">{item.title}</h4>
-                    <p className="text-sm text-muted-foreground line-clamp-3">{item.content}</p>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                      <Badge 
-                        variant={
-                          item.source === '个人素材库' ? 'default' :
-                          item.source === '参考文章库' ? 'secondary' :
-                          'outline'
-                        }
-                        className={
-                          item.source === '个人素材库' ? 'bg-blue-500 text-white' :
-                          item.source === '参考文章库' ? 'bg-green-500 text-white' :
-                          ''
-                        }
-                      >
-                        {item.source}
-                      </Badge>
-                      {item.content_status && (
-                        <Badge 
-                          variant={
-                            item.content_status === 'full_text' ? 'default' :
-                            item.content_status === 'abstract_only' ? 'secondary' :
-                            'outline'
-                          }
-                        >
-                          {item.content_status === 'full_text' ? '✓ 完整全文' :
-                           item.content_status === 'abstract_only' ? '摘要' :
-                           item.content_status === 'insufficient_content' ? '内容不足' :
-                           '无法获取'}
-                        </Badge>
-                      )}
-                      {item.published_at && (
-                        <span>{new Date(item.published_at).toLocaleDateString('zh-CN')}</span>
-                      )}
-                      {item.source_url && (
-                        <a 
-                          href={item.source_url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline"
-                        >
-                          查看原文 →
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => handleEditKnowledge(item)}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      onClick={() => handleDeleteKnowledge(item.id)}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      onClick={async () => {
-                        try {
-                          const { data: { user } } = await supabase.auth.getUser();
-                          if (!user) {
-                            toast({
-                              title: '请先登录',
-                              variant: 'destructive',
-                            });
-                            return;
-                          }
-
-                          await saveToReferenceLibrary(user.id, {
-                            title: item.title,
-                            content: item.content,
-                            source: item.source,
-                            source_url: item.source_url,
-                            keywords: item.keywords,
-                            published_at: item.published_at,
-                          });
-
-                          toast({
-                            title: '收藏成功',
-                            description: '已保存到参考文章库',
-                          });
-                        } catch (error: any) {
-                          toast({
-                            title: '收藏失败',
-                            description: error.message,
-                            variant: 'destructive',
-                          });
-                        }
-                      }}
-                      size="sm"
-                      variant="outline"
-                    >
-                      <BookmarkPlus className="h-4 w-4 mr-1" />
-                      收藏
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            ))}
-            <div className="flex justify-end gap-2">
-              <Button 
-                onClick={handleSynthesize} 
-                disabled={synthesizing || knowledge.filter((k) => k.selected).length === 0}
-                variant="outline"
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                {synthesizing ? '生成中...' : '生成综合摘要'}
-              </Button>
-              <Button 
-                onClick={handleConfirm} 
-                disabled={confirming || !writingSummary}
-              >
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                {confirming ? '确认中...' : '确认并进入下一步'}
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -1116,45 +1051,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           </CardContent>
         </Card>
       )}
-
-      {/* 编辑参考文章对话框 */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>编辑参考文章</DialogTitle>
-            <DialogDescription>修改参考文章的标题和内容</DialogDescription>
-          </DialogHeader>
-          {editingKnowledge && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-title">标题</Label>
-                <Input
-                  id="edit-title"
-                  value={editingKnowledge.title}
-                  onChange={(e) => setEditingKnowledge({ ...editingKnowledge, title: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-content">内容</Label>
-                <Textarea
-                  id="edit-content"
-                  value={editingKnowledge.content}
-                  onChange={(e) => setEditingKnowledge({ ...editingKnowledge, content: e.target.value })}
-                  rows={15}
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-                  取消
-                </Button>
-                <Button onClick={handleSaveEdit}>
-                  保存
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

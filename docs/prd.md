@@ -18,7 +18,7 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
 ## 2. 用户旅程与阶段流程
 
 ### 2.1 整体流程图
-创建项目 → 明确需求 → 资料查询 → 文章结构 → 段落结构 → 个人素材 → 文章生成 → 内容审校 → 排版导出 → 终版输出
+创建项目 → 明确需求 → 资料查询 → 资料整理 → 文章结构 → 段落结构 → 个人素材 → 文章生成 → 内容审校 → 排版导出 → 终版输出
 
 ### 2.2 详细阶段说明
 
@@ -37,6 +37,7 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
   - 格式模板
 - 项目状态包括：草稿、写作中、审校中、已完成
 - 进度条保存历史内容，支持点击进度条中的节点，跳回到任意节点进行修改
+- 进度条右侧增加需求文档图标按钮，点击后在弹窗中显示需求文档内容，所有阶段均可点击查看
 
 #### 阶段 2：明确需求
 - 用户输入文章选题/写作目标
@@ -46,16 +47,17 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
 - 需求文档在后续阶段起到引领作用，资料查询和文章结构生成应围绕需求文档展开
 - 用户必须确认需求后才能进入下一步
 - 重新点击生成需求文档后，确认按钮需重置为待确认状态
+- **PC端**：需求文档模块右侧增加缩进/展开按钮，支持将需求文档隐藏或展开
+- **移动端**：无需缩进/展开按钮
+- **跳转至资料查询页时**：需求文档不再显示在页面右侧，改为在进度条右侧显示需求文档图标按钮（如图2所示），点击后在弹窗中显示需求文档内容
 
-#### 阶段 3：AI 混合信息搜索与知识库沉淀
+#### 阶段 3：资料查询（Research Retrieval Agent）
 
-**核心流程：双 Agent 协作模式**
+**核心流程：Research Retrieval Agent**
 
-资料查询阶段采用两个独立 Agent 协作完成：
-1. Research Retrieval Agent：负责多源检索、全文抓取与结构化返回
-2. Research Synthesis Agent：负责中文化与可写作转化
+资料查询阶段采用 Research Retrieval Agent 负责多源检索、全文抓取与结构化返回。
 
-**Agent 1：Research Retrieval Agent（资料搜索与全文抓取 Agent）**
+**Research Retrieval Agent（资料搜索与全文抓取 Agent）**
 
 角色定义：
 - 负责根据用户提供的结构化 JSON 需求文档，在多个数据源中检索最贴合主题、最具时效性、最具信息密度的研究与事实材料
@@ -154,6 +156,10 @@ Research Retrieval Agent 输出格式（严格遵守）：
     \"interpreted_topic\": \"...\",
     \"key_dimensions\": [\"...\", \"...\"]
   },
+  \"academic_queries\": [\"...\", \"...\"],
+  \"news_queries\": [\"...\", \"...\"],
+  \"web_queries\": [\"...\", \"...\"],
+  \"user_library_queries\": [\"...\", \"...\"],
   \"sources\": [
     {
       \"source_type\": \"SmartSearch | TheNews | GoogleScholar | UserLibrary | PersonalMaterial\",
@@ -170,17 +176,307 @@ Research Retrieval Agent 输出格式（严格遵守）：
       \"notes\": \"是否存在付费墙 / 转载 / 摘要限制\",
       \"core_relevance\": \"高度相关 / 中度相关\"
     }
-  ]
+  ],
+  \"去重后数量\": {
+    \"academic\": 128,
+    \"news\": 46,
+    \"web\": 92,
+    \"user_library\": 15,
+    \"personal_material\": 8
+  }
 }
 ```
 
 约束：
 - 不允许输出自然语言总结
-- 不允许中文翻译或观点提炼（这是下一个 Agent 的工作）
+- 不允许中文翻译或观点提炼（这是下一个阶段的工作）
 - 不允许基于标题 / snippet / abstract 推断全文观点
 - 不允许常识补全
 
-**Agent 2：Research Synthesis Agent（资料整理 Agent）**
+**资料查询页面设计**
+
+页面整体结构：
+```
+ResearchWorkspacePage
+├─ ResearchHeader（研究概览）
+├─ MainArea
+│  ├─ SearchPlanPanel（左｜搜索计划）
+│  └─ SearchResultPanel（右｜搜索结果）
+│      ├─ ResultFilterBar
+│      ├─ BatchActionBar（选择模式显示）
+│      ├─ ResultSections
+│      │   ├─ AcademicSection（分区分页）
+│      │   ├─ NewsSection（分区分页）
+│      │   ├─ WebSection（分区分页）
+│      │   ├─ UserLibrarySection（分区分页）
+│      │   └─ PersonalMaterialSection（分区分页）
+└─ ResearchProcessDrawer（流程 / 日志）
+```
+
+**页面布局说明**
+
+**顶部状态栏**
+- 保持原有设计不变
+
+**资料查询模块**
+- 标题栏：
+  - 左侧：资料查询标题
+  - 右侧：上次搜索时间（格式：YYYY/MM/DD HH:MM）
+  - 右侧：刷新按钮，支持重新搜索
+
+**左侧：搜索计划面板（SearchPlanPanel）**
+
+内容来源：
+- 从 Research Retrieval Agent 输出的 JSON 中解析以下字段：
+  - search_summary.interpreted_topic（研究主题）
+  - search_summary.key_dimensions（关键维度）
+  - academic_queries（学术调研查询内容）
+  - news_queries（行业资讯查询内容）
+  - web_queries（网页内容查询内容）
+  - user_library_queries（资料库查询内容）
+
+展示结构：
+1. 研究主题（interpreted_topic）
+2. 关键维度（key_dimensions，以列表形式展示）
+3. 各数据源具体搜索内容：
+   - 学术调研：展示 academic_queries 中的内容
+   - 行业资讯：展示 news_queries 中的内容
+   - 网页内容：展示 web_queries 中的内容
+   - 资料库：展示 user_library_queries 中的内容
+
+**右侧：搜索结果面板（SearchResultPanel）**
+
+**第一行：数据源筛选 Tab 标签**
+- Tab 选项：全部、学术、资讯、网页、资料库
+- 点击后筛选对应数据源的查询结果
+
+**第二行：搜索与筛选工具栏**
+- 左侧：小搜索框，支持在当前选中的数据源中额外搜索内容
+- 右侧：时间窗口筛选，支持按时间筛选查询结果
+
+**第三行：结果统计与批量操作**
+- 左侧：找到 xxx 条相关结果
+- 右侧：批量操作按钮
+  - 全选/勾选
+  - 收藏
+  - 删除
+
+**搜索结果展示区域**
+- 展示方式：保持原有卡片形式
+- 交互优化：
+  - 删除右侧的小标签
+  - 点击标题或中间文字，直接在弹窗中显示相应搜索内容
+- 内容状态标识：完整正文、仅摘要、内容不足、无法访问
+
+**分页规则**
+- 每个数据源独立分页
+- 初始加载每个数据源最多展示 10 条结果
+- 支持加载更多
+
+**ResearchHeader（研究概览）**
+- 字段映射：
+  - search_summary.interpreted_topic
+  - search_summary.key_dimensions
+- 作用：告诉用户AI在研究什么
+- 与分页、筛选无直接耦合
+
+**ResultFilterBar（全局筛选）**
+- 新增一条分页相关原则（UI 不显式展示）：所有筛选 / 排序只重置当前 ResultSection 的分页状态，不影响其他来源
+- UI 内容：
+  - 来源：[✓ 学术] [✓ 资讯] [✓ 网页] [✓ 资料库]
+  - 内容完整度：[✓ 全文] [✓ 摘要] [✓ 不可用]
+  - 排序：相关性 ↓ | 时间 | 内容质量
+  - [✓ 显示已移除]
+
+**分区分页（Section Pagination）**
+- ResultSections 结构：
+  ```
+  ResultSections
+  ├─ ResultSection(type=\"academic\")
+  │   ├─ SectionHeader
+  │   ├─ VirtualResultList
+  │   └─ LoadMoreFooter
+  ├─ ResultSection(type=\"news\")
+  │   └─ ...
+  ├─ ResultSection(type=\"web\")
+  │   └─ ...
+  ├─ ResultSection(type=\"user_library\")
+  │   └─ ...
+  └─ ResultSection(type=\"personal_material\")
+      └─ ...
+  ```
+
+- SectionHeader（分页感知）
+  - 数据映射：去重后数量.academic
+  - UI 示例：
+    ```
+    📚 学术来源
+    已加载 10 / 共 128 篇
+    ```
+
+- 分页状态模型（前端必须有）：
+  ```typescript
+  interface SectionPaginationState {
+    total: number          // 去重后的总数
+    loaded: number         // 当前已加载
+    pageSize: number       // 每次加载数量（如 10）
+    loading: boolean
+    hasMore: boolean
+  }
+  ```
+  - 整体状态：
+    ```typescript
+    paginationState = {
+      academic: { total: 128, loaded: 10, pageSize: 10, hasMore: true },
+      news:     { total: 46,  loaded: 10, pageSize: 10, hasMore: true },
+      web:      { total: 92,  loaded: 10, pageSize: 10, hasMore: true },
+      user_library: { total: 15, loaded: 10, pageSize: 10, hasMore: true },
+      personal_material: { total: 8, loaded: 8, pageSize: 10, hasMore: false }
+    }
+    ```
+
+- Load More Footer（分页触发点）
+  - UI 规则：
+    - hasMore = true → 显示按钮
+    - loading = true → 显示 loading
+    - hasMore = false → 显示已加载全部
+  - UI 示例：
+    ```
+    [加载更多学术文献]
+    ```
+    加载中：
+    ```
+    ⏳ 正在加载更多学术文献…
+    ```
+    完成：
+    ```
+    ✓ 已加载全部学术文献
+    ```
+
+**ResultCard（分页下的行为规则）**
+
+重要规则一：分页不影响选择状态
+```typescript
+SelectionState {
+  enabled: boolean
+  selectedIds: string[]   // 全局，不随分页变化
+}
+```
+- 第一屏选 5 篇
+- 加载更多再选 3 篇
+- 一次性收藏 / 移除
+- ✅ 完全允许
+
+重要规则二：分页 + 已移除内容
+- removed = true 的文章：
+  - 默认不计入分页 loaded
+  - 勾选显示已移除后：
+    - 插入当前 section 底部
+    - 不影响 total / loaded
+
+**虚拟列表（Virtual List，必须）**
+- 分页 ≠ 性能优化，虚拟列表才是
+- 使用位置：
+  ```
+  ResultSection
+  └─ VirtualResultList
+     └─ ResultCard
+  ```
+- 设计原则：
+  - 每个 Section 独立虚拟化
+  - 与 Load More 配合
+  - 滚动位置独立保存
+
+**分页与筛选 / 排序的联动规则**
+
+1. 切换筛选条件
+   ```
+   onFilterChange:
+     pagination.loaded = pageSize
+     pagination.hasMore = true
+   ```
+   - 只影响当前 section
+   - selectedIds 不清空
+
+2. 切换排序方式
+   ```
+   onSortChange:
+     reset current section pagination
+   ```
+   - 排序影响加载顺序
+   - 不影响已选状态
+
+**BatchActionBar（分页感知但不分页）**
+- UI：
+  ```
+  已选中 8 篇（跨分页）
+  [⭐ 收藏]   [🗑 从本次研究中移除]   [取消选择]
+  ```
+- Batch 操作是跨分页、跨 section 的
+
+**ResearchProcessDrawer（新增分页相关记录）**
+- 在流程中补充：
+  ```
+  📄 分页加载记录
+  ✓ 学术来源：加载至 30 篇
+  ✓ 网络来源：加载至 20 篇
+  ```
+- 为 debug & 行为分析服务
+
+**字段 → UI → 分页映射总表**
+
+| 字段 / 状态 | UI 位置 | 分页影响 |
+|------------|---------|----------|
+| 去重后数量 | SectionHeader | total |
+| full_text / abstract | ResultCard | ❌ |
+| paragraph_count | ResultCard | ❌ |
+| removed | ResultCard | 不计入 loaded |
+| collected | ResultCard ⭐ | ❌ |
+| selectedIds | BatchAction | 跨分页 |
+| pageSize | SectionFooter | ✅ |
+| hasMore | Load More | ✅ |
+
+**自动搜索流程**
+- 从明确需求页跳转到资料查询页时，系统自动开始搜索内容
+- 系统自动调用 Research Retrieval Agent 进行多源检索
+- 搜索计划生成后，系统继续调用 Research Synthesis Agent 生成搜索结果
+- 搜索过程实时展示当前正在搜索的数据源及搜索状态：
+  - 正在搜索 Google Scholar...
+  - 正在搜索 TheNews...
+  - 正在搜索 Smart Search...
+  - 正在搜索个人素材库...
+  - 正在搜索参考文章库...
+- 每个数据源搜索完成后，实时更新状态为已完成，并显示搜索到的结果数量
+- 所有数据源搜索完成后，展示完整的搜索结果
+
+**用户操作**
+- 用户可勾选认可的信息
+- 信息保存至 _knowledge_base/ 文件夹，文件名格式：主题-时间.md
+- 必须包含：信息收集时间、信息来源、下次更新建议
+- 资料查询增加按钮一键收藏到参考文章库
+- 每个数据源最多展示 10 条结果，总计最多展示 50 条结果（5个数据源 × 10条）
+
+**用户额外查询**
+- 若用户需要额外查询补充内容，可在搜索框中输入关键词进行补充搜索
+- 补充搜索结果同样以卡片形式展示，并标识来源
+- 补充搜索同样展示实时搜索进度
+
+**知识库沉淀**
+- 所有勾选的信息长期保存
+- 支持关键词检索
+- 后续项目可复用
+
+**页面跳转**
+- 用户筛选完成后，点击确认按钮
+- 系统将文章 requirements 以及 Research Retrieval Agent 的结果带到下一页（资料整理页面）
+
+#### 阶段 4：资料整理（Research Synthesis Agent）
+
+**核心流程：Research Synthesis Agent**
+
+资料整理阶段采用 Research Synthesis Agent 负责中文化与可写作转化。
+
+**Research Synthesis Agent（资料整理 Agent）**
 
 角色定义：
 - 负责将 Research Retrieval Agent 输出的多源资料，转化为中文、结构化、可直接用于写作的研究素材包
@@ -271,43 +567,26 @@ Research Synthesis Agent 输出格式（严格）：
 - 不允许基于标题 / snippet / abstract 推断全文观点
 - 不允许常识补全
 
-**资料查询页面展示**
-- 点击智能搜索按钮后，系统立即展示搜索进度界面
-- 搜索进度界面实时显示当前正在搜索的数据源及搜索状态：
-  - 正在搜索 Google Scholar...
-  - 正在搜索 TheNews...
-  - 正在搜索 Smart Search...
-  - 正在搜索个人素材库...
-  - 正在搜索参考文章库...
-- 每个数据源搜索完成后，实时更新状态为已完成，并显示搜索到的结果数量
-- 所有数据源搜索完成后，展示完整的搜索结果
-- 搜索结果以卡片形式展示，包含来源、发布时间、摘要或正文片段
-- 明确标识内容来源：Google Scholar、TheNews、Smart Search、个人素材库、参考文章库
-- 明确标识内容状态：完整正文、仅摘要、内容不足、无法访问
-- 用户可勾选认可的信息
-- 信息保存至 _knowledge_base/ 文件夹，文件名格式：主题-时间.md
-- 必须包含：信息收集时间、信息来源、下次更新建议
-- 资料查询中整理观点、论据或案例
-- 资料查询增加按钮一键收藏到参考文章库
-- 每个数据源最多展示 10 条结果，总计最多展示 50 条结果（5个数据源 × 10条）
+**资料整理页面设计**
+- 用户在资料查询页面筛选完成后，点击生成综合摘要按钮
+- 系统运行 Research Synthesis Agent，将运行过程用一句话一个阶段的形式显化给用户（给用户生成时间的心理预期）
+- 运行过程展示示例：
+  - 正在中文化英文资料...
+  - 正在提炼核心观点与数据...
+  - 正在进行结构化归类...
+  - 正在标注可引用性...
+  - 综合摘要生成完成
+- 页面需展示 Research Synthesis Agent 的输出结果
+- 用户可查看、编辑整理后的资料
+- 用户确认后进入下一阶段（文章结构生成）
 
-**用户额外查询**
-- 若用户需要额外查询补充内容，可在搜索框中输入关键词进行补充搜索
-- 补充搜索结果同样以卡片形式展示，并标识来源
-- 补充搜索同样展示实时搜索进度
-
-**知识库沉淀**
-- 所有勾选的信息长期保存
-- 支持关键词检索
-- 后续项目可复用
-
-#### 阶段 4：文章结构生成
+#### 阶段 5：文章结构生成
 
 **核心目标**
 - 回答：这篇文章整体想证明什么？论证路径是什么？
 - 用于约束后续所有段落的生成
 - 围绕需求文档展开，确保文章结构与需求文档一致
-- 参考资料查询时 Research Synthesis Agent 生成的可引用版本综合摘要中的数据和观点
+- 参考资料整理时 Research Synthesis Agent 生成的可引用版本综合摘要中的数据和观点
 
 **特点**
 - 粒度大、频率低
@@ -324,7 +603,7 @@ Research Synthesis Agent 输出格式（严格）：
 - 需求文档内容：
 - 写作目标 / 主题：
 - 目标读者：
-- 综合摘要（资料查询阶段 Research Synthesis Agent 生成）：
+- 综合摘要（资料整理阶段 Research Synthesis Agent 生成）：
 - 参考文章摘要（如有）：
 - 作者已有观点或素材（如有）：
 
@@ -334,7 +613,7 @@ Research Synthesis Agent 输出格式（严格）：
 3. 说明每个论证块的作用（为什么需要这一块）
 4. 标注论证块之间的关系（并列 / 递进 / 因果 / 对比）
 5. 确保文章结构与需求文档一致
-6. 参考资料查询时 Research Synthesis Agent 生成的可引用版本综合摘要中的数据和观点
+6. 参考资料整理时 Research Synthesis Agent 生成的可引用版本综合摘要中的数据和观点
 
 【输出格式】
 - 核心论点：
@@ -351,7 +630,7 @@ Research Synthesis Agent 输出格式（严格）：
 - 不引用案例、数据或研究
 - 输出应稳定、抽象、可编辑
 - 必须围绕需求文档展开
-- 必须参考资料查询时 Research Synthesis Agent 生成的可引用版本综合摘要
+- 必须参考资料整理时 Research Synthesis Agent 生成的可引用版本综合摘要
 ```
 
 **输出示例**
@@ -371,7 +650,7 @@ Research Synthesis Agent 输出格式（严格）：
 - 最后一个论证块必须复述总论点或总结升华或展望未来，表现出论文已结尾
 - 用户必须确认论证结构后才能进入下一步（段落结构）
 
-#### 阶段 5：段落结构
+#### 阶段 6：段落结构
 
 **核心设计原则**
 - 文章级定方向，段落级做推理
@@ -381,7 +660,7 @@ Research Synthesis Agent 输出格式（严格）：
 
 **输入来源**
 - 上一步文章结构的输出（论证块内容）
-- 资料查询结果（包括 Research Synthesis Agent 生成的综合摘要）
+- 资料整理结果（包括 Research Synthesis Agent 生成的综合摘要）
 - 个人素材库
 - 参考文章库
 
@@ -512,7 +791,7 @@ sub_claim：
 - 每个段落之间的顺序要保证观点递进或平行
 - 文章结构通顺
 
-#### 阶段 6：参考文章/个人素材（可选）
+#### 阶段 7：参考文章/个人素材（可选）
 - 用户选择是否添加参考文章或个人素材
 - 参考文章支持：
   - 写入链接，从 URL 中提取原文
@@ -537,7 +816,7 @@ sub_claim：
 - 所有素材长期保存
 - 系统自动打关键词，后续项目可复用
 
-#### 阶段 7：协作文档生成全文
+#### 阶段 8：协作文档生成全文
 
 **生成初稿 Prompt（不可修改）**
 ```
@@ -612,7 +891,7 @@ sub_claim：
 - 点击段落 → 注释自动定位
 - 删除段落时 → 注释同步删除
 
-#### 阶段 8：内容审校（三遍审校合并为一个节点）
+#### 阶段 9：内容审校（三遍审校合并为一个节点）
 
 **页面布局**
 - 左侧：展示上一步生成的文章内容
@@ -649,7 +928,7 @@ sub_claim：
 - 审校过程中保持原文语种不变
 - 使用细节打磨提示词（Rhythm Prompt）进行句子与段落层面的精修
 
-#### 阶段 9：排版导出
+#### 阶段 10：排版导出
 
 **页面布局**
 - 顶部：文件名输入框
@@ -678,7 +957,7 @@ sub_claim：
 4. 系统根据选择的模板导出文档
 5. 用户下载最终文件
 
-#### 阶段 10：终稿完成与资产沉淀
+#### 阶段 11：终稿完成与资产沉淀
 - 沉淀完整写作过程资产
 - 素材库支持关键词检索
 - 后续项目可自动推荐相关素材
@@ -691,6 +970,7 @@ sub_claim：
 - 项目状态管理
 - 进度条保存历史内容，支持点击进度条中的节点，跳回到任意节点进行修改
 - 排版导出与其他页面使用同一进度条，状态显示为排版导出
+- 进度条右侧增加需求文档图标按钮，点击后在弹窗中显示需求文档内容，所有阶段均可点击查看
 
 ### 3.2 需求输入与需求文档生成
 - 结构化需求输入
@@ -699,6 +979,9 @@ sub_claim：
 - 需求确认机制
 - 重新生成需求文档后，确认按钮重置为待确认状态
 - 需求文档在后续阶段起到引领作用，资料查询和文章结构生成应围绕需求文档展开
+- **PC端**：需求文档模块右侧增加缩进/展开按钮，支持将需求文档隐藏或展开
+- **移动端**：无需缩进/展开按钮
+- **跳转至资料查询页时**：需求文档不再显示在页面右侧，改为在进度条右侧显示需求文档图标按钮（如图2所示），点击后在弹窗中显示需求文档内容
 
 ### 3.3 双 Agent 协作的混合信息搜索与知识库
 
@@ -727,7 +1010,12 @@ sub_claim：
 {
   \"search_summary\": {
     \"interpreted_topic\": \"...\",
-    \"key_dimensions\": [\"...\", \"...\"]  },
+    \"key_dimensions\": [\"...\", \"...\"]
+  },
+  \"academic_queries\": [\"...\", \"...\"],
+  \"news_queries\": [\"...\", \"...\"],
+  \"web_queries\": [\"...\", \"...\"],
+  \"user_library_queries\": [\"...\", \"...\"],
   \"sources\": [
     {
       \"source_type\": \"SmartSearch | TheNews | GoogleScholar | UserLibrary | PersonalMaterial\",
@@ -744,7 +1032,14 @@ sub_claim：
       \"notes\": \"是否存在付费墙 / 转载 / 摘要限制\",
       \"core_relevance\": \"高度相关 / 中度相关\"
     }
-  ]
+  ],
+  \"去重后数量\": {
+    \"academic\": 128,
+    \"news\": 46,
+    \"web\": 92,
+    \"user_library\": 15,
+    \"personal_material\": 8
+  }
 }
 ```
 
@@ -788,7 +1083,9 @@ sub_claim：
 ```
 
 **知识库管理**
-- 点击智能搜索按钮后，系统立即展示搜索进度界面
+- 从明确需求页跳转到资料查询页时，系统自动开始搜索内容
+- 系统自动调用 Research Retrieval Agent 进行多源检索
+- 搜索计划生成后，系统继续调用 Research Synthesis Agent 生成搜索结果
 - 搜索进度界面实时显示当前正在搜索的数据源及搜索状态
 - 每个数据源搜索完成后，实时更新状态为已完成，并显示搜索到的结果数量
 - 所有数据源搜索完成后，展示完整的搜索结果
@@ -831,7 +1128,7 @@ sub_claim：
 
 **输入来源**
 - 上一步文章结构的输出（论证块内容）
-- 资料查询结果（包括 Research Synthesis Agent 生成的综合摘要）
+- 资料整理结果（包括 Research Synthesis Agent 生成的综合摘要）
 - 个人素材库
 - 参考文章库
 
@@ -1266,6 +1563,10 @@ Step 4：结果去重 & 相关度过滤
     \"interpreted_topic\": \"...\",
     \"key_dimensions\": [\"...\", \"...\"]
   },
+  \"academic_queries\": [\"...\", \"...\"],
+  \"news_queries\": [\"...\", \"...\"],
+  \"web_queries\": [\"...\", \"...\"],
+  \"user_library_queries\": [\"...\", \"...\"],
   \"sources\": [
     {
       \"source_type\": \"SmartSearch | TheNews | GoogleScholar | UserLibrary | PersonalMaterial\",
@@ -1282,7 +1583,14 @@ Step 4：结果去重 & 相关度过滤
       \"notes\": \"是否存在付费墙 / 转载 / 摘要限制\",
       \"core_relevance\": \"高度相关 / 中度相关\"
     }
-  ]
+  ],
+  \"去重后数量\": {
+    \"academic\": 128,
+    \"news\": 46,
+    \"web\": 92,
+    \"user_library\": 15,
+    \"personal_material\": 8
+  }
 }
 
 【约束】
@@ -1402,7 +1710,7 @@ Step 4：结果去重 & 相关度过滤
 - 需求文档内容：
 - 写作目标 / 主题：
 - 目标读者：
-- 综合摘要（资料查询阶段 Research Synthesis Agent 生成）：
+- 综合摘要（资料整理阶段 Research Synthesis Agent 生成）：
 - 参考文章摘要（如有）：
 - 作者已有观点或素材（如有）：
 
@@ -1412,7 +1720,7 @@ Step 4：结果去重 & 相关度过滤
 3. 说明每个论证块的作用（为什么需要这一块）
 4. 标注论证块之间的关系（并列 / 递进 / 因果 / 对比）
 5. 确保文章结构与需求文档一致
-6. 参考资料查询时 Research Synthesis Agent 生成的可引用版本综合摘要中的数据和观点
+6. 参考资料整理时 Research Synthesis Agent 生成的可引用版本综合摘要中的数据和观点
 
 【输出格式】
 - 核心论点：
@@ -1429,7 +1737,7 @@ Step 4：结果去重 & 相关度过滤
 - 不引用案例、数据或研究
 - 输出应稳定、抽象、可编辑
 - 必须围绕需求文档展开
-- 必须参考资料查询时 Research Synthesis Agent 生成的可引用版本综合摘要
+- 必须参考资料整理时 Research Synthesis Agent 生成的可引用版本综合摘要
 ```
 
 ### 4.3 段落结构 Prompt 规范
@@ -1849,6 +2157,8 @@ sub_claim：
 
 ### 6.2 用户确认节点
 - 需求确认
+- 资料查询确认（用户筛选完成后点击确认按钮）
+- 资料整理确认（用户查看 Research Synthesis Agent 输出结果后确认）
 - 文章结构确认
 - 段落结构确认（连贯性校验后确认初稿）
 - 三遍审校完成确认
@@ -1874,7 +2184,8 @@ sub_claim：
 - 每个数据源最多展示 10 条结果，总计最多展示 50 条结果（5个数据源 × 10条）
 
 ### 6.5 提示词使用规则
-- 资料查询阶段：使用 Research Retrieval Agent Prompt 和 Research Synthesis Agent Prompt
+- 资料查询阶段：使用 Research Retrieval Agent Prompt
+- 资料整理阶段：使用 Research Synthesis Agent Prompt
 - 文章结构生成：使用文章结构生成 Prompt，必须参考 Research Synthesis Agent 生成的可引用版本综合摘要中的数据和观点
 - 段落级论据生成：使用段落级论据生成 Prompt（不可修改）
 - 论据级支撑材料生成：使用论据级支撑材料生成 Prompt（不可修改）
@@ -1897,11 +2208,10 @@ sub_claim：
 - 文章生成时，禁止使用外部文章中的案例
 
 ### 6.7 资料查询阶段规则
-- 点击智能搜索时，系统根据需求文档自动进行搜索
-- 调用 Research Retrieval Agent 进行多源检索（Google Scholar、TheNews、Smart Search、个人素材库、参考文章库）
+- 从明确需求页跳转到资料查询页时，系统自动开始搜索内容
+- 系统自动调用 Research Retrieval Agent 进行多源检索（Google Scholar、TheNews、Smart Search、个人素材库、参考文章库）
+- 搜索计划生成后，系统继续调用 Research Synthesis Agent 生成搜索结果
 - Research Retrieval Agent 输出结构化 JSON 格式的搜索结果
-- 调用 Research Synthesis Agent 进行中文化、信息提炼、结构化归类、标注可引用性
-- Research Synthesis Agent 输出可直接用于写作的研究素材包
 - 搜索结果以卡片形式展示，明确标识来源
 - 明确标识内容状态（完整正文、仅摘要、内容不足、无法访问）
 - 搜索结果优先展示关联性+实时性最高的 Top 10 条结果
@@ -1909,20 +2219,39 @@ sub_claim：
 - 若用户需要额外查询补充内容，可在搜索框中输入关键词进行补充搜索
 - 每个数据源最多展示 10 条结果，总计最多展示 50 条结果（5个数据源 × 10条）
 - **搜索过程实时展示**：
-  - 点击智能搜索按钮后，系统立即展示搜索进度界面
+  - 系统自动开始搜索后，立即展示搜索进度界面
   - 搜索进度界面实时显示当前正在搜索的数据源及搜索状态
   - 每个数据源搜索完成后，实时更新状态为已完成，并显示搜索到的结果数量
   - 所有数据源搜索完成后，展示完整的搜索结果
+- **用户筛选完成后**：
+  - 用户点击确认按钮
+  - 系统将文章 requirements 以及 Research Retrieval Agent 的结果带到下一页（资料整理页面）
 
-### 6.8 配置信息存储规则
+### 6.8 资料整理阶段规则
+- 接收上一阶段传递的文章 requirements 以及 Research Retrieval Agent 的结果
+- 用户在资料查询页面筛选完成后，点击生成综合摘要按钮
+- 系统运行 Research Synthesis Agent，将运行过程用一句话一个阶段的形式显化给用户（给用户生成时间的心理预期）
+- 运行过程展示示例：
+  - 正在中文化英文资料...
+  - 正在提炼核心观点与数据...
+  - 正在进行结构化归类...
+  - 正在标注可引用性...
+  - 综合摘要生成完成
+- Research Synthesis Agent 输出可直接用于写作的研究素材包
+- 页面需展示 Research Synthesis Agent 的输出结果
+- 用户可查看、编辑整理后的资料
+- 用户确认后进入下一阶段（文章结构生成）
+
+### 6.9 配置信息存储规则
 - 管理员在管理面板中配置的 LLM 服务 API 密钥，系统自动将配置信息存储至 Supabase Edge Function 的 Secrets 中
 - 管理员在管理面板中配置的搜索服务 API 密钥（Google Scholar via SerpApi、TheNews、Smart Search），系统自动将配置信息存储至 Supabase Edge Function 的 Secrets 中
 - 后端服务调用 LLM 服务或搜索服务时，从 Supabase Edge Function 的 Secrets 中读取相应的 API 密钥
 - 配置信息存储至 Secrets 后，管理面板中不再明文显示完整 API 密钥，仅显示部分字符（如前4位和后4位）
 
 ## 7. 状态机
-init → confirm_brief → knowledge_selected → article_structure_confirmed → paragraph_structure_completed → drafting → content_review → layout_export → completed
+init → confirm_brief → knowledge_selected → synthesis_confirmed → article_structure_confirmed → paragraph_structure_completed → drafting → content_review → layout_export → completed
 
 ## 8. 参考文件
 1. 管理面板配置截图：image.png
 2. 项目进度条示例：image-2.png
+3. 资料查询页面布局示例：image.png、image-2.png、image-3.png
