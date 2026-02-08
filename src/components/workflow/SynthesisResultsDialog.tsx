@@ -20,8 +20,8 @@ export default function SynthesisResultsDialog({
   const parseContent = (item: any): string => {
     if (typeof item === 'string') return item;
     if (item && typeof item === 'object') {
-      return item.data_point || item.point || item.text || item.description || 
-             item.gap || item.contradiction || JSON.stringify(item);
+      return item.insight || item.data_point || item.point || item.text || 
+             item.description || item.gap || item.contradiction || JSON.stringify(item);
     }
     return String(item);
   };
@@ -36,16 +36,26 @@ export default function SynthesisResultsDialog({
         <ScrollArea className="max-h-[calc(90vh-8rem)] pr-4">
           <div className="space-y-6">
             {/* 综合洞察 */}
-            {synthesisResults.synthesis && (
+            {synthesisResults.synthesized_insights && synthesisResults.synthesized_insights.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Lightbulb className="w-5 h-5 text-blue-500" />
                   <h3 className="text-lg font-bold">综合洞察</h3>
                 </div>
-                <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg">
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {synthesisResults.synthesis}
-                  </p>
+                <div className="space-y-3">
+                  {synthesisResults.synthesized_insights.map((insight: any, idx: number) => {
+                    const content = parseContent(insight);
+                    return (
+                      <div 
+                        key={idx} 
+                        className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg border-l-4 border-blue-500"
+                      >
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                          {content}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -74,7 +84,7 @@ export default function SynthesisResultsDialog({
                         className="bg-green-50 dark:bg-green-950 p-4 rounded-lg border-l-4 border-green-500"
                       >
                         <p 
-                          className="text-sm leading-relaxed"
+                          className="text-sm leading-relaxed whitespace-pre-wrap break-words"
                           dangerouslySetInnerHTML={{ __html: formattedContent }}
                         />
                       </div>
@@ -108,7 +118,7 @@ export default function SynthesisResultsDialog({
                         className="bg-yellow-50 dark:bg-yellow-950 p-4 rounded-lg border-l-4 border-yellow-500"
                       >
                         <p 
-                          className="text-sm leading-relaxed"
+                          className="text-sm leading-relaxed whitespace-pre-wrap break-words"
                           dangerouslySetInnerHTML={{ __html: formattedContent }}
                         />
                       </div>
@@ -119,7 +129,7 @@ export default function SynthesisResultsDialog({
             )}
 
             {/* 如果没有任何内容 */}
-            {!synthesisResults.synthesis && 
+            {(!synthesisResults.synthesized_insights || synthesisResults.synthesized_insights.length === 0) && 
              (!synthesisResults.key_data_points || synthesisResults.key_data_points.length === 0) &&
              (!synthesisResults.contradictions_or_gaps || synthesisResults.contradictions_or_gaps.length === 0) && (
               <div className="text-center py-12 text-muted-foreground">
