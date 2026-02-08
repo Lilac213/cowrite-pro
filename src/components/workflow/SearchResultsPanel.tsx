@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 import { 
   Globe, 
   BookOpen, 
@@ -13,8 +14,7 @@ import {
   Search as SearchIcon, 
   Database,
   Bookmark,
-  Trash2,
-  MoreVertical
+  Trash2
 } from 'lucide-react';
 import type { KnowledgeBase } from '@/types';
 import ResultDetailDialog from './ResultDetailDialog';
@@ -41,6 +41,7 @@ export default function SearchResultsPanel({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedResult, setSelectedResult] = useState<KnowledgeBase | null>(null);
+  const { toast } = useToast();
 
   // 过滤结果
   const filteredResults = useMemo(() => {
@@ -96,7 +97,11 @@ export default function SearchResultsPanel({
       }
 
       filtered = filtered.filter(result => {
-        const resultDate = new Date(result.published_at || result.collected_at);
+        // 优先使用 published_at，如果没有则使用 collected_at
+        const dateStr = result.published_at || result.collected_at;
+        if (!dateStr) return false;
+        
+        const resultDate = new Date(dateStr);
         return resultDate >= filterDate;
       });
     }
@@ -126,14 +131,28 @@ export default function SearchResultsPanel({
 
   // 批量收藏
   const handleBatchFavorite = () => {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.size === 0) {
+      toast({
+        title: '请先选择资料',
+        description: '请勾选要收藏的资料',
+        variant: 'destructive',
+      });
+      return;
+    }
     onBatchFavorite(Array.from(selectedIds), true);
     setSelectedIds(new Set());
   };
 
   // 批量删除
   const handleBatchDelete = () => {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.size === 0) {
+      toast({
+        title: '请先选择资料',
+        description: '请勾选要删除的资料',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (confirm(`确定要删除选中的 ${selectedIds.size} 条结果吗？`)) {
       onDelete(Array.from(selectedIds));
       setSelectedIds(new Set());
@@ -217,7 +236,7 @@ export default function SearchResultsPanel({
       </div>
 
       {/* 结果统计和批量操作 */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <Checkbox
@@ -230,26 +249,24 @@ export default function SearchResultsPanel({
             </span>
           </div>
         </div>
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBatchFavorite}
-            >
-              <Bookmark className="w-4 h-4 mr-1" />
-              收藏
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBatchDelete}
-            >
-              <Trash2 className="w-4 h-4 mr-1" />
-              删除
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleBatchFavorite}
+          >
+            <Bookmark className="w-4 h-4 mr-1" />
+            收藏
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleBatchDelete}
+          >
+            <Trash2 className="w-4 h-4 mr-1" />
+            删除
+          </Button>
+        </div>
       </div>
 
       {/* 搜索结果列表 */}

@@ -558,13 +558,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       }
       await loadKnowledge();
       toast({
-        title: '批量收藏成功',
+        title: '✅ 批量收藏成功',
         description: `已收藏 ${ids.length} 条资料`,
       });
     } catch (error) {
       console.error('批量收藏失败:', error);
       toast({
-        title: '批量收藏失败',
+        title: '❌ 批量收藏失败',
+        description: '操作失败，请重试',
         variant: 'destructive',
       });
     }
@@ -578,13 +579,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       }
       await loadKnowledge();
       toast({
-        title: '批量删除成功',
+        title: '✅ 批量删除成功',
         description: `已删除 ${ids.length} 条资料`,
       });
     } catch (error) {
       console.error('批量删除失败:', error);
       toast({
-        title: '批量删除失败',
+        title: '❌ 批量删除失败',
+        description: '操作失败，请重试',
         variant: 'destructive',
       });
     }
@@ -707,26 +709,32 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         </CardContent>
       </Card>
 
-      {/* 两栏布局：搜索计划 + 搜索结果 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[600px]">
-        {/* 左侧：搜索计划 */}
-        <div className="lg:col-span-1">
-          <SearchPlanPanel 
-            searchSummary={searchSummary} 
-            isSearching={searching}
-          />
-        </div>
+      {/* 搜索计划和搜索结果 - 合并到一个卡片 */}
+      <Card>
+        <CardContent className="p-4 md:p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+            {/* 左侧：搜索计划 */}
+            <div className="lg:col-span-1 border-b lg:border-b-0 lg:border-r pb-4 lg:pb-0 lg:pr-6">
+              <h3 className="text-base font-semibold mb-4">搜索计划</h3>
+              <SearchPlanPanel 
+                searchSummary={searchSummary} 
+                isSearching={searching}
+              />
+            </div>
 
-        {/* 右侧：搜索结果 */}
-        <div className="lg:col-span-2">
-          <SearchResultsPanel
-            results={knowledge}
-            onToggleFavorite={handleToggleSelect}
-            onDelete={handleBatchDelete}
-            onBatchFavorite={handleBatchFavorite}
-          />
-        </div>
-      </div>
+            {/* 右侧：搜索结果 */}
+            <div className="lg:col-span-2">
+              <h3 className="text-base font-semibold mb-4">搜索结果</h3>
+              <SearchResultsPanel
+                results={knowledge}
+                onToggleFavorite={handleToggleSelect}
+                onDelete={handleBatchDelete}
+                onBatchFavorite={handleBatchFavorite}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 操作按钮 */}
       {knowledge.length > 0 && (
@@ -825,11 +833,23 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               <div>
                 <h4 className="text-sm font-semibold mb-2">关键数据点</h4>
                 <div className="space-y-2">
-                  {synthesisResults.key_data_points.map((point: any, idx: number) => (
-                    <div key={idx} className="p-3 bg-green-50 dark:bg-green-950 rounded-lg">
-                      <p className="text-sm">{typeof point === 'string' ? point : point.data_point || JSON.stringify(point)}</p>
-                    </div>
-                  ))}
+                  {synthesisResults.key_data_points.map((point: any, idx: number) => {
+                    // 解析 JSON 内容
+                    let displayText = '';
+                    if (typeof point === 'string') {
+                      displayText = point;
+                    } else if (point && typeof point === 'object') {
+                      displayText = point.data_point || point.point || point.text || JSON.stringify(point);
+                    } else {
+                      displayText = String(point);
+                    }
+                    
+                    return (
+                      <div key={idx} className="p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                        <p className="text-sm">{displayText}</p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -841,211 +861,24 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               <div>
                 <h4 className="text-sm font-semibold mb-2">矛盾或研究空白</h4>
                 <div className="space-y-2">
-                  {synthesisResults.contradictions_or_gaps.map((item: any, idx: number) => (
-                    <div key={idx} className="p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg">
-                      <p className="text-sm">{typeof item === 'string' ? item : item.gap || JSON.stringify(item)}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 写作级综合摘要 */}
-      {writingSummary && (
-        <Card>
-          <CardHeader>
-            <CardTitle>写作级研究摘要</CardTitle>
-            <CardDescription>
-              基于需求文档和已选择的高质量来源生成的结构化写作素材
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* 需求文档对齐 */}
-            {writingSummary.requirement_alignment && (
-              <div className="p-4 bg-primary/10 rounded-lg border-2 border-primary/20">
-                <h4 className="text-sm font-semibold text-primary mb-3">需求文档对齐</h4>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <span className="font-medium">主题：</span>
-                    <span className="ml-2">{writingSummary.requirement_alignment.topic}</span>
-                  </div>
-                  {writingSummary.requirement_alignment.core_viewpoints && writingSummary.requirement_alignment.core_viewpoints.length > 0 && (
-                    <div>
-                      <span className="font-medium">核心观点：</span>
-                      <ul className="ml-4 mt-1 space-y-1">
-                        {writingSummary.requirement_alignment.core_viewpoints.map((vp: string, idx: number) => (
-                          <li key={idx}>• {vp}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {writingSummary.requirement_alignment.key_points && writingSummary.requirement_alignment.key_points.length > 0 && (
-                    <div>
-                      <span className="font-medium">关键要点：</span>
-                      <ul className="ml-4 mt-1 space-y-1">
-                        {writingSummary.requirement_alignment.key_points.map((kp: string, idx: number) => (
-                          <li key={idx}>• {kp}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 背景总结 */}
-            {writingSummary.background_summary && (
-              <div className="p-4 bg-muted rounded-lg">
-                <h4 className="text-sm font-semibold mb-2">背景总结</h4>
-                <p className="text-sm">{writingSummary.background_summary}</p>
-              </div>
-            )}
-
-            <Separator />
-
-            {/* 支持数据 */}
-            {writingSummary.supporting_data && writingSummary.supporting_data.length > 0 && (
-              <div className="p-4 bg-cyan-50 dark:bg-cyan-950 rounded-lg">
-                <h4 className="text-sm font-semibold text-cyan-700 dark:text-cyan-300 mb-3">支持数据</h4>
-                <div className="space-y-3">
-                  {writingSummary.supporting_data.map((data: any, idx: number) => (
-                    <div key={idx} className="border-l-2 border-cyan-500 pl-3">
-                      <p className="text-sm font-medium">{data.data_point}</p>
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          来源：{data.source}
-                        </Badge>
-                        {data.relevance_to_requirement && (
-                          <Badge variant="secondary" className="text-xs">
-                            关联：{data.relevance_to_requirement}
-                          </Badge>
-                        )}
+                  {synthesisResults.contradictions_or_gaps.map((item: any, idx: number) => {
+                    // 解析 JSON 内容
+                    let displayText = '';
+                    if (typeof item === 'string') {
+                      displayText = item;
+                    } else if (item && typeof item === 'object') {
+                      displayText = item.gap || item.contradiction || item.text || item.description || JSON.stringify(item);
+                    } else {
+                      displayText = String(item);
+                    }
+                    
+                    return (
+                      <div key={idx} className="p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg">
+                        <p className="text-sm">{displayText}</p>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              </div>
-            )}
-
-            {/* 支持观点 */}
-            {writingSummary.supporting_viewpoints && writingSummary.supporting_viewpoints.length > 0 && (
-              <div className="p-4 bg-indigo-50 dark:bg-indigo-950 rounded-lg">
-                <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-300 mb-3">支持观点</h4>
-                <div className="space-y-3">
-                  {writingSummary.supporting_viewpoints.map((vp: any, idx: number) => (
-                    <div key={idx} className="border-l-2 border-indigo-500 pl-3">
-                      <p className="text-sm font-medium">{vp.viewpoint}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{vp.evidence}</p>
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          来源：{vp.source}
-                        </Badge>
-                        {vp.supports_requirement && (
-                          <Badge variant="secondary" className="text-xs">
-                            支持：{vp.supports_requirement}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 学术洞察 */}
-            {writingSummary.academic_insights && writingSummary.academic_insights.length > 0 && (
-              <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-3">学术洞察</h4>
-                <div className="space-y-2">
-                  {writingSummary.academic_insights.map((insight: any, idx: number) => (
-                    <div key={idx} className="flex gap-2">
-                      <span className="text-blue-500 mt-1">•</span>
-                      <div className="flex-1">
-                        <p className="text-sm">{insight.point}</p>
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            来源：{insight.evidence_source}
-                          </Badge>
-                          {insight.relevance && (
-                            <Badge variant="secondary" className="text-xs">
-                              {insight.relevance}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 产业洞察 */}
-            {writingSummary.industry_insights && writingSummary.industry_insights.length > 0 && (
-              <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg">
-                <h4 className="text-sm font-semibold text-green-700 dark:text-green-300 mb-3">产业洞察</h4>
-                <div className="space-y-2">
-                  {writingSummary.industry_insights.map((insight: any, idx: number) => (
-                    <div key={idx} className="flex gap-2">
-                      <span className="text-green-500 mt-1">•</span>
-                      <div className="flex-1">
-                        <p className="text-sm">{insight.point}</p>
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            来源：{insight.evidence_source}
-                          </Badge>
-                          {insight.relevance && (
-                            <Badge variant="secondary" className="text-xs">
-                              {insight.relevance}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 开放问题或争议 */}
-            {writingSummary.open_questions_or_debates && writingSummary.open_questions_or_debates.length > 0 && (
-              <div className="p-4 bg-amber-50 dark:bg-amber-950 rounded-lg">
-                <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-300 mb-3">开放问题或争议</h4>
-                <ul className="space-y-1 text-sm">
-                  {writingSummary.open_questions_or_debates.map((question: string, idx: number) => (
-                    <li key={idx} className="flex gap-2">
-                      <span className="text-amber-500">•</span>
-                      <span>{question}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* 建议写作角度 */}
-            {writingSummary.suggested_writing_angles && writingSummary.suggested_writing_angles.length > 0 && (
-              <div className="p-4 bg-purple-50 dark:bg-purple-950 rounded-lg">
-                <h4 className="text-sm font-semibold text-purple-700 dark:text-purple-300 mb-3">建议写作角度（基于需求文档）</h4>
-                <ul className="space-y-1 text-sm">
-                  {writingSummary.suggested_writing_angles.map((angle: string, idx: number) => (
-                    <li key={idx} className="flex gap-2">
-                      <span className="text-purple-500">•</span>
-                      <span>{angle}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* 可直接引用版本 */}
-            {writingSummary.ready_to_cite && (
-              <div className="p-4 bg-emerald-50 dark:bg-emerald-950 rounded-lg border-2 border-emerald-500/20">
-                <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-3">
-                  可直接引用版本（用于文章结构生成）
-                </h4>
-                <p className="text-sm whitespace-pre-wrap">{writingSummary.ready_to_cite}</p>
               </div>
             )}
           </CardContent>

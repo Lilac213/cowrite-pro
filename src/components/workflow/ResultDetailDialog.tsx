@@ -30,11 +30,11 @@ export default function ResultDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh]">
+      <DialogContent className="max-w-6xl max-h-[90vh] w-[95vw]">
         <DialogHeader>
           <div className="flex items-start justify-between gap-4">
-            <DialogTitle className="text-xl flex-1">{result.title}</DialogTitle>
-            <div className="flex items-center gap-2">
+            <DialogTitle className="text-xl flex-1 pr-4">{result.title}</DialogTitle>
+            <div className="flex items-center gap-2 shrink-0">
               {onToggleFavorite && (
                 <Button
                   variant="ghost"
@@ -71,7 +71,7 @@ export default function ResultDetailDialog({
           </div>
         </DialogHeader>
         
-        <ScrollArea className="max-h-[60vh] pr-4">
+        <ScrollArea className="max-h-[70vh] pr-4">
           <div className="space-y-4">
             {/* 关键词 */}
             {result.keywords && result.keywords.length > 0 && (
@@ -90,7 +90,7 @@ export default function ResultDetailDialog({
             {/* 内容 */}
             <div>
               <h4 className="text-sm font-semibold mb-2">内容</h4>
-              <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted p-4 rounded-md">
+              <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted p-4 rounded-md max-h-[400px] overflow-y-auto">
                 {result.full_text || result.content}
               </div>
             </div>
