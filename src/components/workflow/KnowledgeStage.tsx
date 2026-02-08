@@ -23,12 +23,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Search, Sparkles, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Search, Sparkles, CheckCircle2, RefreshCw, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
 import SearchPlanPanel from './SearchPlanPanel';
 import SearchResultsPanel from './SearchResultsPanel';
 import SynthesisResultsDialog from './SynthesisResultsDialog';
+import SearchLogsDialog from './SearchLogsDialog';
 
 interface KnowledgeStageProps {
   projectId: string;
@@ -55,12 +56,27 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [synthesisResults, setSynthesisResults] = useState<any>(null);
   const [lastSearchTime, setLastSearchTime] = useState<string>('');
   const [showSynthesisDialog, setShowSynthesisDialog] = useState(false);
+  const [showLogsDialog, setShowLogsDialog] = useState(false);
+  const [projectTitle, setProjectTitle] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
     loadKnowledge();
+    loadProjectTitle();
     autoSearchFromBrief();
   }, [projectId]);
+
+  // 加载项目标题
+  const loadProjectTitle = async () => {
+    try {
+      const brief = await getBrief(projectId);
+      if (brief && brief.topic) {
+        setProjectTitle(brief.topic);
+      }
+    } catch (error) {
+      console.error('加载项目标题失败:', error);
+    }
+  };
 
   // 根据需求文档自动搜索
   const autoSearchFromBrief = async () => {
@@ -764,123 +780,34 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         </Card>
       )}
 
-      {/* 显示搜索日志 */}
+      {/* 搜索分析 - 固定底部日志栏 */}
       {searchLogs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>搜索分析</CardTitle>
-            <CardDescription>实时搜索日志</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1 max-h-96 overflow-y-auto bg-muted p-4 rounded-lg font-mono text-xs">
-              {searchLogs.map((log, index) => (
-                <div key={index} className="text-foreground whitespace-pre-wrap break-words">
-                  {log}
+        <div 
+          className="fixed bottom-0 left-0 right-0 bg-background border-t border-border shadow-lg z-50 cursor-pointer hover:bg-accent/50 transition-colors"
+          onClick={() => setShowLogsDialog(true)}
+        >
+          <div className="container mx-auto px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-sm font-medium">LATEST LOG</span>
                 </div>
-              ))}
+                <Separator orientation="vertical" className="h-4" />
+                <span className="text-sm text-muted-foreground">
+                  {new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+                <span className="text-sm">
+                  {searchProgress?.message || searchLogs[searchLogs.length - 1]?.substring(0, 50) || '正在解析搜索结果内容...'}
+                </span>
+              </div>
+              <Button variant="ghost" size="sm">
+                <FileText className="w-4 h-4 mr-2" />
+                日志详情
+              </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 显示综合分析日志 */}
-      {synthesisLogs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>综合分析日志</CardTitle>
-            <CardDescription>Research Synthesis Agent 处理过程</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1 max-h-96 overflow-y-auto bg-muted p-4 rounded-lg font-mono text-xs">
-              {synthesisLogs.map((log, index) => (
-                <div key={index} className="text-foreground whitespace-pre-wrap break-words">
-                  {log}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 显示综合分析结果 */}
-      {synthesisResults && (
-        <Card>
-          <CardHeader>
-            <CardTitle>综合分析结果</CardTitle>
-            <CardDescription>结构化的写作素材</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* 综合洞察 */}
-            {synthesisResults.synthesized_insights && synthesisResults.synthesized_insights.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">综合洞察</h4>
-                <div className="space-y-2">
-                  {synthesisResults.synthesized_insights.map((insight: any, idx: number) => (
-                    <div key={idx} className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                      <p className="text-sm">{typeof insight === 'string' ? insight : insight.insight || JSON.stringify(insight)}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <Separator />
-
-            {/* 关键数据点 */}
-            {synthesisResults.key_data_points && synthesisResults.key_data_points.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">关键数据点</h4>
-                <div className="space-y-2">
-                  {synthesisResults.key_data_points.map((point: any, idx: number) => {
-                    // 解析 JSON 内容
-                    let displayText = '';
-                    if (typeof point === 'string') {
-                      displayText = point;
-                    } else if (point && typeof point === 'object') {
-                      displayText = point.data_point || point.point || point.text || JSON.stringify(point);
-                    } else {
-                      displayText = String(point);
-                    }
-                    
-                    return (
-                      <div key={idx} className="p-3 bg-green-50 dark:bg-green-950 rounded-lg">
-                        <p className="text-sm">{displayText}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <Separator />
-
-            {/* 矛盾或空白 */}
-            {synthesisResults.contradictions_or_gaps && synthesisResults.contradictions_or_gaps.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">矛盾或研究空白</h4>
-                <div className="space-y-2">
-                  {synthesisResults.contradictions_or_gaps.map((item: any, idx: number) => {
-                    // 解析 JSON 内容
-                    let displayText = '';
-                    if (typeof item === 'string') {
-                      displayText = item;
-                    } else if (item && typeof item === 'object') {
-                      displayText = item.gap || item.contradiction || item.text || item.description || JSON.stringify(item);
-                    } else {
-                      displayText = String(item);
-                    }
-                    
-                    return (
-                      <div key={idx} className="p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg">
-                        <p className="text-sm">{displayText}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* 资料整理结果弹窗 */}
@@ -888,6 +815,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         open={showSynthesisDialog}
         onOpenChange={setShowSynthesisDialog}
         synthesisResults={synthesisResults}
+      />
+
+      {/* 搜索日志弹窗 */}
+      <SearchLogsDialog
+        open={showLogsDialog}
+        onOpenChange={setShowLogsDialog}
+        projectTitle={projectTitle}
+        logs={searchLogs}
       />
     </div>
   );

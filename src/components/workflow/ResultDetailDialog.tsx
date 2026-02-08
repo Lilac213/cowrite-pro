@@ -71,7 +71,7 @@ export default function ResultDetailDialog({
           </div>
         </DialogHeader>
         
-        <ScrollArea className="max-h-[70vh] pr-4">
+        <ScrollArea className="max-h-[calc(90vh-12rem)] pr-4">
           <div className="space-y-4">
             {/* 关键词 */}
             {result.keywords && result.keywords.length > 0 && (

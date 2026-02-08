@@ -28,12 +28,12 @@ export default function SynthesisResultsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] w-[95vw]">
+      <DialogContent className="max-w-5xl w-[95vw]">
         <DialogHeader>
           <DialogTitle className="text-2xl">资料整理结果</DialogTitle>
         </DialogHeader>
         
-        <ScrollArea className="max-h-[75vh] pr-4">
+        <ScrollArea className="max-h-[calc(90vh-8rem)] pr-4">
           <div className="space-y-6">
             {/* 综合洞察 */}
             {synthesisResults.synthesis && (
