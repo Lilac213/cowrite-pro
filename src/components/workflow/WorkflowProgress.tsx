@@ -1,7 +1,5 @@
 import { Progress } from '@/components/ui/progress';
-import { Button } from '@/components/ui/button';
-import { FileText } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import RequirementsDocDialog from './RequirementsDocDialog';
 
 const stages = [
@@ -33,27 +31,22 @@ export default function WorkflowProgress({
   const currentIndex = stages.findIndex((s) => s.key === currentStage);
   const [showRequirementsDialog, setShowRequirementsDialog] = useState(false);
 
-  // 只在明确需求阶段之后显示需求文档图标
-  const showRequirementsIcon = currentIndex >= 1 && requirementsDoc;
+  // 监听打开需求文档弹窗的事件
+  useEffect(() => {
+    const handleOpenDialog = () => {
+      setShowRequirementsDialog(true);
+    };
+    window.addEventListener('openRequirementsDialog', handleOpenDialog);
+    return () => {
+      window.removeEventListener('openRequirementsDialog', handleOpenDialog);
+    };
+  }, []);
 
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center text-sm text-muted-foreground">
         <span>进度</span>
-        <div className="flex items-center gap-4">
-          <span>{current.progress}%</span>
-          {showRequirementsIcon && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowRequirementsDialog(true)}
-              className="h-8"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              需求文档
-            </Button>
-          )}
-        </div>
+        <span>{current.progress}%</span>
       </div>
       <Progress value={current.progress} />
       <div className="flex justify-between text-xs text-muted-foreground mt-4">

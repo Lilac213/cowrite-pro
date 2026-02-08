@@ -841,36 +841,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         </CardContent>
       </Card>
 
-      {/* 操作按钮 */}
-      {knowledge.length > 0 && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex justify-between items-center">
-              <div className="text-sm text-muted-foreground">
-                已选择 {knowledge.filter((k) => k.selected).length} / {knowledge.length} 条资料
-              </div>
-              <div className="flex gap-2">
-                <Button 
-                  onClick={handleSynthesize} 
-                  disabled={synthesizing || knowledge.filter((k) => k.selected).length === 0}
-                  variant="outline"
-                >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  {synthesizing ? '生成中...' : '生成综合摘要'}
-                </Button>
-                <Button 
-                  onClick={handleConfirm} 
-                  disabled={confirming || !writingSummary}
-                >
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  {confirming ? '确认中...' : '确认并进入下一步'}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* 搜索分析 - 固定底部日志栏 */}
       {searchLogs.length > 0 && (
         <div 

@@ -15,7 +15,8 @@ import {
   Database,
   Bookmark,
   Trash2,
-  ArrowRight
+  ArrowRight,
+  Sparkles
 } from 'lucide-react';
 import type { KnowledgeBase } from '@/types';
 import ResultDetailDialog from './ResultDetailDialog';
@@ -359,18 +360,30 @@ export default function SearchResultsPanel({
 
       {/* 资料整理和进入下一步按钮 */}
       {filteredResults.length > 0 && (
-        <div className="flex justify-end gap-2 mt-4">
-          {onOrganize && (
-            <Button onClick={onOrganize} variant="outline">
-              资料整理
-            </Button>
-          )}
-          {onNextStep && (
-            <Button onClick={onNextStep}>
-              <ArrowRight className="h-4 w-4 mr-2" />
-              进入下一步
-            </Button>
-          )}
+        <div className="mt-6 pt-6 border-t border-border">
+          <div className="flex justify-end gap-3">
+            {onOrganize && (
+              <Button 
+                onClick={onOrganize} 
+                variant="outline"
+                size="lg"
+                className="min-w-[140px]"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                资料整理
+              </Button>
+            )}
+            {onNextStep && (
+              <Button 
+                onClick={onNextStep}
+                size="lg"
+                className="min-w-[140px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+              >
+                进入下一步
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            )}
+          </div>
         </div>
       )}
 

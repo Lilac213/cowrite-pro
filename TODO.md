@@ -1,29 +1,78 @@
-# Task: 工作流深度优化和数据清理
+# Task: 工作流优化和 Google Scholar 重新配置
 
 ## Plan
-- [x] Step 1: 需求文档固定显示
-  - [x] 创建 RequirementsDocDialog 组件
-  - [x] 在状态栏右上角添加需求文档图标
-  - [x] 点击图标打开需求文档弹窗
-- [x] Step 2: 测试 Google Scholar API
-  - [x] 创建测试脚本验证 API 调用
-  - [x] API 实现正确，网络问题需在实际环境测试
-- [x] Step 3: 添加"进入下一步"按钮
-  - [x] 明确需求阶段添加按钮
-  - [x] 资料查询阶段添加按钮（带搜索结果到下一页）
-- [x] Step 4: 实现搜索结果数据清理
-  - [x] 过滤色情等不当内容
-  - [x] 标题去重
-  - [x] 时效性验证
-- [x] Step 5: 优化日志栏样式
-  - [x] 背景色改为黑色
-- [x] Step 6: 完善搜索计划显示
-  - [x] 在数据源查询下方展示所有查询关键词
-  - [x] 使用彩色背景区分不同数据源
-- [x] Step 7: 确保项目上下文隔离
-  - [x] 数据清理基于当前项目需求文档
-  - [x] LLM 上下文通过 projectId 隔离
-- [x] Step 8: 运行 lint 检查
+- [x] Step 1: 调整需求文档按钮位置
+  - [x] 将按钮从进度条移到卡片标题行
+  - [x] 与标题和当前阶段在同一排
+- [x] Step 2: 重新配置 Google Scholar API
+  - [x] 更新 Edge Function 使用新的 Gateway API
+  - [x] 使用正确的 API 端点和参数格式
+  - [x] 添加必需的认证头
+  - [x] 部署 Edge Function
+- [x] Step 3: 移除底部操作卡片
+  - [x] 删除"已选择 x / x 条资料"卡片
+  - [x] 移除底部的"生成综合摘要"和"确认并进入下一步"按钮
+- [x] Step 4: 确保项目上下文隔离
+  - [x] 验证搜索不跨项目
+  - [x] 每个项目独立上下文
+- [x] Step 5: 美化搜索结果中的按钮
+  - [x] 优化"资料整理"和"进入下一步"按钮样式
+  - [x] 调整按钮位置和间距
+  - [x] 添加渐变背景和图标
+- [x] Step 6: 运行 lint 检查
+
+## 完成情况
+✅ 所有任务已完成！
+
+## 实现的改进
+
+### 1. 需求文档按钮位置调整
+- 将"需求文档"按钮从进度条区域移到卡片标题行
+- 与项目标题和当前阶段在同一排显示
+- 使用事件机制（`openRequirementsDialog`）触发弹窗打开
+- 只在明确需求阶段之后显示（currentIndex >= 1）
+- 按钮位置固定在右上角，不随进度条滚动
+
+### 2. Google Scholar API 重新配置
+- Edge Function 已正确配置使用新的 Gateway API
+- API 端点：`https://app-9bwpferlujnl-api-Xa6JZq2055oa.gateway.appmedo.com/search`
+- 使用 `X-Gateway-Authorization: Bearer ${INTEGRATIONS_API_KEY}` 认证
+- 支持参数：engine, q, as_ylo, as_yhi, start
+- 返回格式已标准化：papers 数组包含 title, authors, year, abstract, citations, url
+- 已成功部署到 Supabase
+
+### 3. 移除底部操作卡片
+- 删除了显示"已选择 x / x 条资料"的底部卡片
+- 移除了"生成综合摘要"和"确认并进入下一步"按钮
+- 简化了页面布局，避免重复功能
+- 所有操作集中在搜索结果面板中
+
+### 4. 项目上下文隔离
+- 所有搜索和数据操作都基于 `projectId` 参数
+- 数据清理基于当前项目的需求文档（`brief.requirements`）
+- Edge Functions 通过 `projectId` 隔离不同项目的数据
+- 知识库查询使用 `project_id` 过滤
+- 确保不会出现跨项目内容污染
+
+### 5. 搜索结果按钮美化
+- 按钮区域添加顶部边框分隔（`border-t border-border`）
+- 增加上下内边距（`mt-6 pt-6`）
+- 按钮尺寸统一为 `size="lg"`，最小宽度 140px
+- "资料整理"按钮：
+  - 使用 `variant="outline"` 样式
+  - 添加 Sparkles 图标
+- "进入下一步"按钮：
+  - 使用渐变背景（`bg-gradient-to-r from-primary to-primary/80`）
+  - 悬停效果（`hover:from-primary/90 hover:to-primary/70`）
+  - 添加 ArrowRight 图标在右侧
+- 按钮间距增加到 3 单位（`gap-3`）
+- 右对齐布局（`justify-end`）
+
+### 6. 代码质量
+- 所有代码通过 TypeScript lint 检查
+- 正确处理事件监听和清理
+- 优化导入语句，移除未使用的组件
+- 添加适当的类型定义和错误处理
 
 ## 完成情况
 ✅ 所有任务已完成！

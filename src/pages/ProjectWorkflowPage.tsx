@@ -5,7 +5,7 @@ import { getProject, updateProject, saveProjectHistory, getProjectHistoryByStage
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import BriefStage from '@/components/workflow/BriefStage';
 import KnowledgeStage from '@/components/workflow/KnowledgeStage';
@@ -175,8 +175,26 @@ export default function ProjectWorkflowPage() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>{project.title}</CardTitle>
-          <CardDescription>当前阶段：{currentStage.label}</CardDescription>
+          <div className="flex items-start justify-between">
+            <div className="space-y-1.5">
+              <CardTitle>{project.title}</CardTitle>
+              <CardDescription>当前阶段：{currentStage.label}</CardDescription>
+            </div>
+            {requirementsDoc && stages.findIndex((s) => s.key === project.status) >= 1 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const event = new CustomEvent('openRequirementsDialog');
+                  window.dispatchEvent(event);
+                }}
+                className="shrink-0"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                需求文档
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <WorkflowProgress 
