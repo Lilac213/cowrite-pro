@@ -14,7 +14,8 @@ import {
   Search as SearchIcon, 
   Database,
   Bookmark,
-  Trash2
+  Trash2,
+  ArrowRight
 } from 'lucide-react';
 import type { KnowledgeBase } from '@/types';
 import ResultDetailDialog from './ResultDetailDialog';
@@ -25,6 +26,7 @@ interface SearchResultsPanelProps {
   onDelete: (ids: string[]) => void;
   onBatchFavorite: (ids: string[], selected: boolean) => void;
   onOrganize?: () => void;
+  onNextStep?: () => void;
 }
 
 type SourceType = 'all' | 'academic' | 'news' | 'web' | 'library';
@@ -35,7 +37,8 @@ export default function SearchResultsPanel({
   onToggleFavorite, 
   onDelete,
   onBatchFavorite,
-  onOrganize
+  onOrganize,
+  onNextStep
 }: SearchResultsPanelProps) {
   const [sourceFilter, setSourceFilter] = useState<SourceType>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -354,12 +357,20 @@ export default function SearchResultsPanel({
         )}
       </div>
 
-      {/* 资料整理按钮 */}
-      {onOrganize && filteredResults.length > 0 && (
-        <div className="flex justify-end mt-4">
-          <Button onClick={onOrganize} variant="default">
-            资料整理
-          </Button>
+      {/* 资料整理和进入下一步按钮 */}
+      {filteredResults.length > 0 && (
+        <div className="flex justify-end gap-2 mt-4">
+          {onOrganize && (
+            <Button onClick={onOrganize} variant="outline">
+              资料整理
+            </Button>
+          )}
+          {onNextStep && (
+            <Button onClick={onNextStep}>
+              <ArrowRight className="h-4 w-4 mr-2" />
+              进入下一步
+            </Button>
+          )}
         </div>
       )}
 

@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { CheckCircle2, ArrowRight } from 'lucide-react';
 
 interface BriefStageProps {
   projectId: string;
@@ -216,9 +217,14 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
               rows={15}
               className="font-mono text-sm"
             />
-            <div className="flex justify-end">
-              <Button onClick={handleConfirm} disabled={confirming || brief?.confirmed}>
+            <div className="flex justify-end gap-2">
+              <Button onClick={handleConfirm} disabled={confirming || brief?.confirmed} variant="outline">
+                <CheckCircle2 className="h-4 w-4 mr-2" />
                 {confirming ? '确认中...' : brief?.confirmed ? '已确认' : '确认需求'}
+              </Button>
+              <Button onClick={handleConfirm} disabled={confirming || !brief?.confirmed}>
+                <ArrowRight className="h-4 w-4 mr-2" />
+                进入下一步
               </Button>
             </div>
           </CardContent>

@@ -87,15 +87,15 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <BookOpen className="w-4 h-4 text-blue-500" />
-              <span>学术调研</span>
+              <span>学术调研 (Google Scholar)</span>
             </div>
-            <ul className="space-y-1 ml-6">
+            <div className="ml-6 space-y-1">
               {searchSummary.academic_queries.map((query, index) => (
-                <li key={index} className="text-sm text-muted-foreground">
-                  • {extractQueryText(query)}
-                </li>
+                <div key={index} className="text-sm bg-blue-50 dark:bg-blue-950 px-3 py-1.5 rounded">
+                  {extractQueryText(query)}
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         )}
 
@@ -104,15 +104,15 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Newspaper className="w-4 h-4 text-orange-500" />
-              <span>行业资讯</span>
+              <span>行业资讯 (TheNews)</span>
             </div>
-            <ul className="space-y-1 ml-6">
+            <div className="ml-6 space-y-1">
               {searchSummary.news_queries.map((query, index) => (
-                <li key={index} className="text-sm text-muted-foreground">
-                  • {extractQueryText(query)}
-                </li>
+                <div key={index} className="text-sm bg-orange-50 dark:bg-orange-950 px-3 py-1.5 rounded">
+                  {extractQueryText(query)}
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         )}
 
@@ -121,15 +121,15 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Globe className="w-4 h-4 text-green-500" />
-              <span>网页内容</span>
+              <span>网页内容 (Smart Search)</span>
             </div>
-            <ul className="space-y-1 ml-6">
+            <div className="ml-6 space-y-1">
               {searchSummary.web_queries.map((query, index) => (
-                <li key={index} className="text-sm text-muted-foreground">
-                  • {extractQueryText(query)}
-                </li>
+                <div key={index} className="text-sm bg-green-50 dark:bg-green-950 px-3 py-1.5 rounded">
+                  {extractQueryText(query)}
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         )}
 
@@ -140,13 +140,13 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
               <Database className="w-4 h-4 text-purple-500" />
               <span>资料库</span>
             </div>
-            <ul className="space-y-1 ml-6">
+            <div className="ml-6 space-y-1">
               {searchSummary.user_library_queries.map((query, index) => (
-                <li key={index} className="text-sm text-muted-foreground">
-                  • {extractQueryText(query)}
-                </li>
+                <div key={index} className="text-sm bg-purple-50 dark:bg-purple-950 px-3 py-1.5 rounded">
+                  {extractQueryText(query)}
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         )}
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { getProject, updateProject, saveProjectHistory, getProjectHistoryByStage } from '@/db/api';
+import { getProject, updateProject, saveProjectHistory, getProjectHistoryByStage, getBrief } from '@/db/api';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,12 +32,14 @@ export default function ProjectWorkflowPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [requirementsDoc, setRequirementsDoc] = useState<string>('');
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
     loadProject();
+    loadRequirementsDoc();
   }, [projectId, user]);
 
   // 当项目状态变为 layout_export 时，导航到导出页面
@@ -69,6 +71,21 @@ export default function ProjectWorkflowPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRequirementsDoc = async () => {
+    if (!projectId) return;
+    try {
+      const brief = await getBrief(projectId);
+      if (brief && brief.requirements) {
+        const doc = typeof brief.requirements === 'string' 
+          ? brief.requirements 
+          : JSON.stringify(brief.requirements, null, 2);
+        setRequirementsDoc(doc);
+      }
+    } catch (error) {
+      console.error('加载需求文档失败:', error);
     }
   };
 
@@ -166,6 +183,7 @@ export default function ProjectWorkflowPage() {
             currentStage={project.status} 
             onStageClick={handleStageClick}
             clickable={true}
+            requirementsDoc={requirementsDoc}
           />
         </CardContent>
       </Card>

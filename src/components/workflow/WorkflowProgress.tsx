@@ -1,4 +1,8 @@
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
+import { FileText } from 'lucide-react';
+import { useState } from 'react';
+import RequirementsDocDialog from './RequirementsDocDialog';
 
 const stages = [
   { key: 'init', label: '开始', progress: 0 },
@@ -16,17 +20,40 @@ interface WorkflowProgressProps {
   currentStage: string;
   onStageClick?: (stageKey: string) => void;
   clickable?: boolean;
+  requirementsDoc?: string;
 }
 
-export default function WorkflowProgress({ currentStage, onStageClick, clickable = false }: WorkflowProgressProps) {
+export default function WorkflowProgress({ 
+  currentStage, 
+  onStageClick, 
+  clickable = false,
+  requirementsDoc 
+}: WorkflowProgressProps) {
   const current = stages.find((s) => s.key === currentStage) || stages[0];
   const currentIndex = stages.findIndex((s) => s.key === currentStage);
+  const [showRequirementsDialog, setShowRequirementsDialog] = useState(false);
+
+  // 只在明确需求阶段之后显示需求文档图标
+  const showRequirementsIcon = currentIndex >= 1 && requirementsDoc;
 
   return (
     <div className="space-y-2">
-      <div className="flex justify-between text-sm text-muted-foreground">
+      <div className="flex justify-between items-center text-sm text-muted-foreground">
         <span>进度</span>
-        <span>{current.progress}%</span>
+        <div className="flex items-center gap-4">
+          <span>{current.progress}%</span>
+          {showRequirementsIcon && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRequirementsDialog(true)}
+              className="h-8"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              需求文档
+            </Button>
+          )}
+        </div>
       </div>
       <Progress value={current.progress} />
       <div className="flex justify-between text-xs text-muted-foreground mt-4">
@@ -55,6 +82,15 @@ export default function WorkflowProgress({ currentStage, onStageClick, clickable
           );
         })}
       </div>
+
+      {/* 需求文档弹窗 */}
+      {requirementsDoc && (
+        <RequirementsDocDialog
+          open={showRequirementsDialog}
+          onOpenChange={setShowRequirementsDialog}
+          requirementsDoc={requirementsDoc}
+        />
+      )}
     </div>
   );
 }

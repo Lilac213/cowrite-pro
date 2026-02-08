@@ -23,7 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Search, Sparkles, CheckCircle2, RefreshCw, FileText } from 'lucide-react';
+import { Search, Sparkles, CheckCircle2, RefreshCw, FileText, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
 import SearchPlanPanel from './SearchPlanPanel';
@@ -59,6 +59,65 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [showLogsDialog, setShowLogsDialog] = useState(false);
   const [projectTitle, setProjectTitle] = useState('');
   const { toast } = useToast();
+
+  // 数据清理函数
+  const cleanSearchResults = (results: KnowledgeBase[], requirementsDoc: string): KnowledgeBase[] => {
+    // 1. 过滤不当内容
+    const inappropriateKeywords = [
+      '黄色', '色情', '情欲', '性爱', '裸体', '成人', 'porn', 'sex', 'xxx',
+      '赌博', '博彩', '彩票', '六合彩', 'gambling', 'casino',
+      '毒品', '大麻', 'drug', 'marijuana'
+    ];
+
+    const filtered = results.filter(result => {
+      const content = `${result.title} ${result.content || ''}`.toLowerCase();
+      return !inappropriateKeywords.some(keyword => content.includes(keyword.toLowerCase()));
+    });
+
+    // 2. 标题去重 - 保留内容更完整的
+    const titleMap = new Map<string, KnowledgeBase>();
+    filtered.forEach(result => {
+      const normalizedTitle = result.title.trim().toLowerCase();
+      const existing = titleMap.get(normalizedTitle);
+      
+      if (!existing) {
+        titleMap.set(normalizedTitle, result);
+      } else {
+        // 保留内容更完整的（extracted_content 更多的）
+        const existingContentLength = existing.extracted_content?.length || 0;
+        const currentContentLength = result.extracted_content?.length || 0;
+        if (currentContentLength > existingContentLength) {
+          titleMap.set(normalizedTitle, result);
+        }
+      }
+    });
+
+    const deduplicated = Array.from(titleMap.values());
+
+    // 3. 时效性验证 - 从需求文档中提取时间限制
+    try {
+      const reqDoc = JSON.parse(requirementsDoc);
+      const yearStart = reqDoc.year_start || reqDoc.time_range?.start;
+      const yearEnd = reqDoc.year_end || reqDoc.time_range?.end;
+
+      if (yearStart || yearEnd) {
+        return deduplicated.filter(result => {
+          if (!result.published_at) return true; // 没有时间信息的保留
+          
+          const year = new Date(result.published_at).getFullYear();
+          if (!year) return true;
+
+          if (yearStart && year < parseInt(yearStart)) return false;
+          if (yearEnd && year > parseInt(yearEnd)) return false;
+          return true;
+        });
+      }
+    } catch (error) {
+      console.error('解析需求文档时间限制失败:', error);
+    }
+
+    return deduplicated;
+  };
 
   useEffect(() => {
     loadKnowledge();
@@ -117,7 +176,18 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const loadKnowledge = async () => {
     try {
       const data = await getKnowledgeBase(projectId);
-      setKnowledge(data);
+      
+      // 应用数据清理
+      const brief = await getBrief(projectId);
+      if (brief && brief.requirements) {
+        const requirementsDoc = typeof brief.requirements === 'string' 
+          ? brief.requirements 
+          : JSON.stringify(brief.requirements);
+        const cleaned = cleanSearchResults(data, requirementsDoc);
+        setKnowledge(cleaned);
+      } else {
+        setKnowledge(data);
+      }
     } catch (error) {
       console.error('加载知识库失败:', error);
     }
@@ -438,6 +508,26 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     }
   };
 
+  // 处理进入下一步（从搜索结果直接进入）
+  const handleNextStep = async () => {
+    try {
+      await updateProject(projectId, { 
+        status: 'outline_confirmed'
+      });
+      
+      toast({
+        title: '已进入下一阶段',
+        description: '开始文章结构设计',
+      });
+      onComplete();
+    } catch (error) {
+      toast({
+        title: '操作失败',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleToggleSelect = async (id: string, selected: boolean) => {
     try {
       await updateKnowledgeBase(id, { selected });
@@ -744,6 +834,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 onDelete={handleBatchDelete}
                 onBatchFavorite={handleBatchFavorite}
                 onOrganize={handleOrganize}
+                onNextStep={handleNextStep}
               />
             </div>
           </div>
@@ -783,7 +874,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       {/* 搜索分析 - 固定底部日志栏 */}
       {searchLogs.length > 0 && (
         <div 
-          className="fixed bottom-0 left-0 right-0 bg-background border-t border-border shadow-lg z-50 cursor-pointer hover:bg-accent/50 transition-colors"
+          className="fixed bottom-0 left-0 right-0 bg-black text-white border-t border-gray-800 shadow-lg z-50 cursor-pointer hover:bg-gray-900 transition-colors"
           onClick={() => setShowLogsDialog(true)}
         >
           <div className="container mx-auto px-4 py-3">
@@ -791,17 +882,17 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-sm font-medium">LATEST LOG</span>
+                  <span className="text-sm font-medium text-gray-300">LATEST LOG</span>
                 </div>
-                <Separator orientation="vertical" className="h-4" />
-                <span className="text-sm text-muted-foreground">
+                <Separator orientation="vertical" className="h-4 bg-gray-700" />
+                <span className="text-sm text-gray-400">
                   {new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </span>
-                <span className="text-sm">
+                <span className="text-sm text-gray-200">
                   {searchProgress?.message || searchLogs[searchLogs.length - 1]?.substring(0, 50) || '正在解析搜索结果内容...'}
                 </span>
               </div>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800">
                 <FileText className="w-4 h-4 mr-2" />
                 日志详情
               </Button>
