@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
 import SearchPlanPanel from './SearchPlanPanel';
 import SearchResultsPanel from './SearchResultsPanel';
+import SynthesisResultsDialog from './SynthesisResultsDialog';
 
 interface KnowledgeStageProps {
   projectId: string;
@@ -53,6 +54,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [synthesisLogs, setSynthesisLogs] = useState<string[]>([]);
   const [synthesisResults, setSynthesisResults] = useState<any>(null);
   const [lastSearchTime, setLastSearchTime] = useState<string>('');
+  const [showSynthesisDialog, setShowSynthesisDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -604,6 +606,19 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     }
   };
 
+  // 资料整理 - 打开综合分析结果弹窗
+  const handleOrganize = () => {
+    if (!synthesisResults) {
+      toast({
+        title: '暂无整理结果',
+        description: '请先进行资料综合分析',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setShowSynthesisDialog(true);
+  };
+
   // 解析搜索计划
   const searchSummary = retrievalResults?.search_summary ? {
     interpreted_topic: retrievalResults.search_summary.interpreted_topic,
@@ -616,7 +631,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
   return (
     <div className="space-y-4">
-      {/* 标题栏 */}
+      {/* 标题栏 - 移除搜索框 */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -642,27 +657,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
-            <Input
-              placeholder="例如：人工智能在医学影像中的应用"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSearch();
-                }
-              }}
-            />
-            <Button onClick={() => handleSearch()} disabled={searching || !query.trim()}>
-              <Search className="h-4 w-4 mr-2" />
-              {searching ? '搜索中...' : '开始搜索'}
-            </Button>
-          </div>
 
-          {/* 搜索进度显示 */}
-          {searchProgress && (
-            <Card className={`mt-4 border-2 ${
+        {/* 搜索进度显示 */}
+        {searchProgress && (
+          <CardContent>
+            <Card className={`border-2 ${
               searchProgress.stage === '失败' 
                 ? 'border-destructive bg-destructive/5' 
                 : searchProgress.stage === '完成'
@@ -705,14 +704,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 </div>
               </CardContent>
             </Card>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        )}
 
-      {/* 搜索计划和搜索结果 - 合并到一个卡片 */}
-      <Card>
-        <CardContent className="p-4 md:p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+        {/* 搜索计划和搜索结果 - 直接放在资料查询卡片下 */}
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 min-h-[400px]">
             {/* 左侧：搜索计划 */}
             <div className="lg:col-span-1 border-b lg:border-b-0 lg:border-r pb-4 lg:pb-0 lg:pr-6">
               <h3 className="text-base font-semibold mb-4">搜索计划</h3>
@@ -730,6 +727,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 onToggleFavorite={handleToggleSelect}
                 onDelete={handleBatchDelete}
                 onBatchFavorite={handleBatchFavorite}
+                onOrganize={handleOrganize}
               />
             </div>
           </div>
@@ -884,6 +882,13 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           </CardContent>
         </Card>
       )}
+
+      {/* 资料整理结果弹窗 */}
+      <SynthesisResultsDialog
+        open={showSynthesisDialog}
+        onOpenChange={setShowSynthesisDialog}
+        synthesisResults={synthesisResults}
+      />
     </div>
   );
 }

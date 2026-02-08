@@ -24,6 +24,7 @@ interface SearchResultsPanelProps {
   onToggleFavorite: (id: string, selected: boolean) => void;
   onDelete: (ids: string[]) => void;
   onBatchFavorite: (ids: string[], selected: boolean) => void;
+  onOrganize?: () => void;
 }
 
 type SourceType = 'all' | 'academic' | 'news' | 'web' | 'library';
@@ -33,7 +34,8 @@ export default function SearchResultsPanel({
   results, 
   onToggleFavorite, 
   onDelete,
-  onBatchFavorite 
+  onBatchFavorite,
+  onOrganize
 }: SearchResultsPanelProps) {
   const [sourceFilter, setSourceFilter] = useState<SourceType>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -351,6 +353,15 @@ export default function SearchResultsPanel({
           ))
         )}
       </div>
+
+      {/* 资料整理按钮 */}
+      {onOrganize && filteredResults.length > 0 && (
+        <div className="flex justify-end mt-4">
+          <Button onClick={onOrganize} variant="default">
+            资料整理
+          </Button>
+        </div>
+      )}
 
       {/* 详情弹窗 */}
       <ResultDetailDialog

@@ -87,14 +87,6 @@ export default function ResultDetailDialog({
               </div>
             )}
 
-            {/* 内容 */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">内容</h4>
-              <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted p-4 rounded-md max-h-[400px] overflow-y-auto">
-                {result.full_text || result.content}
-              </div>
-            </div>
-
             {/* 提取的内容片段 */}
             {result.extracted_content && result.extracted_content.length > 0 && (
               <div>
