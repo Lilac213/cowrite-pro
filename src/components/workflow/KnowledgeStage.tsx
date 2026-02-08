@@ -849,13 +849,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       {/* 底部操作按钮 */}
       {knowledge.length > 0 && (
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="py-4">
             <div className="flex justify-end gap-4">
               <Button 
                 onClick={handleOrganize} 
                 variant="outline"
-                size="lg"
-                className="min-w-[160px]"
+                className="min-w-[140px]"
                 disabled={!synthesisResults}
               >
                 <Sparkles className="h-4 w-4 mr-2" />
@@ -863,8 +862,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               </Button>
               <Button 
                 onClick={handleNextStep}
-                size="lg"
-                className="min-w-[160px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                className="min-w-[140px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
               >
                 进入下一步
                 <ArrowRight className="h-4 w-4 ml-2" />

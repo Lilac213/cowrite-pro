@@ -757,7 +757,13 @@ Output Format:
     const finalResponse = {
       success: true,
       data: {
-        search_summary: searchPlan.search_summary,
+        search_summary: {
+          ...searchPlan.search_summary,
+          academic_queries: searchPlan.academic_queries || [],
+          news_queries: searchPlan.news_queries || [],
+          web_queries: searchPlan.web_queries || [],
+          user_library_queries: searchPlan.user_library_queries || []
+        },
         ...finalResults
       },
       stats: {

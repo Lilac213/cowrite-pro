@@ -1,17 +1,14 @@
-# Task: 修复资料整理结果显示和查询展示
+# Task: 显示搜索计划查询并优化按钮高度
 
 ## Plan
-- [x] Step 1: 修复资料整理结果弹窗
-  - [x] 更正字段名：synthesis → synthesized_insights
-  - [x] 显示所有三个部分（synthesized_insights、key_data_points、contradictions_or_gaps）
-  - [x] 添加文本换行支持（whitespace-pre-wrap break-words）
-  - [x] 综合洞察显示为卡片列表而非单个文本块
-- [x] Step 2: 验证搜索计划查询显示
-  - [x] 确认 SearchPlanPanel 正确显示所有查询类型
-  - [x] 学术调研（academic_queries）- 蓝色卡片
-  - [x] 行业资讯（news_queries）- 橙色卡片
-  - [x] 网页内容（web_queries）- 绿色卡片
-  - [x] 资料库（user_library_queries）- 紫色卡片
+- [x] Step 1: 修复搜索计划查询显示
+  - [x] 在 research-retrieval-agent 中将查询数组添加到 search_summary
+  - [x] 包含 academic_queries、news_queries、web_queries、user_library_queries
+  - [x] 部署更新的 Edge Function
+- [x] Step 2: 优化底部按钮卡片高度
+  - [x] 减少 CardContent 的 padding（pt-6 → py-4）
+  - [x] 移除按钮的 size="lg" 属性，使用默认尺寸
+  - [x] 减小按钮最小宽度（160px → 140px）
 - [x] Step 3: 运行 lint 检查
 
 ## 完成情况
@@ -19,302 +16,311 @@
 
 ## 本次修复内容
 
-### 1. 资料整理结果弹窗显示问题（Issue #1）
+### 1. 搜索计划查询显示问题（Issue #1）
 
 **问题描述**：
-1. 文本超出容器宽度时没有换行，导致显示不完整
-2. 缺少 `synthesized_insights`（综合洞察）部分的显示
-3. 只显示了 `key_data_points` 和 `contradictions_or_gaps` 两个部分
+通义千问返回的 THOUGHT 部分包含搜索计划，其中的 `academic_queries`、`news_queries`、`web_queries`、`user_library_queries` 需要展示在页面搜索计划模块下，但这些查询数组没有被包含在返回的 `search_summary` 中。
 
 **根本原因**：
-- 组件使用了错误的字段名 `synthesisResults.synthesis`，实际字段名是 `synthesisResults.synthesized_insights`
-- 缺少文本换行的 CSS 类（`whitespace-pre-wrap` 和 `break-words`）
+- Edge Function 解析了 JSON 中的查询数组（`searchPlan.academic_queries` 等）
+- 但在构建最终响应时，只返回了 `searchPlan.search_summary`（仅包含 `interpreted_topic` 和 `key_dimensions`）
+- 查询数组没有被添加到 `search_summary` 对象中
+
+**通义千问输出格式**：
+```
+---THOUGHT---
+（对需求的理解、搜索策略说明）
+
+---JSON---
+{
+  "search_summary": {
+    "interpreted_topic": "AI agent 商业化失败分析",
+    "key_dimensions": ["商业化失败模式", "用户识别方法", "ROI评估方式"]
+  },
+  "academic_queries": ["AI agent commercialization failure", "user identification methods"],
+  "news_queries": ["AI智能体商业化", "AI agent失败案例"],
+  "web_queries": ["AI agent商业化挑战", "智能体用户定位"],
+  "user_library_queries": ["商业化", "失败分析"]
+}
+```
 
 **解决方案**：
-1. **更正字段名映射**：
-   ```typescript
-   // ❌ 错误（旧代码）
-   {synthesisResults.synthesis && (...)}
-   
-   // ✅ 正确（新代码）
-   {synthesisResults.synthesized_insights && 
-    synthesisResults.synthesized_insights.length > 0 && (...)}
-   ```
+在 `research-retrieval-agent/index.ts` 中，将查询数组合并到 `search_summary` 对象：
 
-2. **添加文本换行支持**：
-   ```typescript
-   // 所有文本容器添加
-   className="text-sm leading-relaxed whitespace-pre-wrap break-words"
-   ```
-   - `whitespace-pre-wrap`: 保留空格和换行符，自动换行
-   - `break-words`: 长单词/URL 在必要时断行
-   - `leading-relaxed`: 增加行高，提升可读性
+```typescript
+// ❌ 错误（旧代码）- 查询数组丢失
+const finalResponse = {
+  success: true,
+  data: {
+    search_summary: searchPlan.search_summary,  // 只有 interpreted_topic 和 key_dimensions
+    ...finalResults
+  },
+  ...
+};
 
-3. **综合洞察显示为卡片列表**：
-   ```typescript
-   {synthesisResults.synthesized_insights.map((insight: any, idx: number) => (
-     <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg border-l-4 border-blue-500">
-       <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-         {parseContent(insight)}
-       </p>
-     </div>
-   ))}
-   ```
-
-4. **更新 parseContent 辅助函数**：
-   ```typescript
-   const parseContent = (item: any): string => {
-     if (typeof item === 'string') return item;
-     if (item && typeof item === 'object') {
-       return item.insight ||        // ← 新增：支持 synthesized_insights
-              item.data_point || 
-              item.point || 
-              item.text || 
-              item.description || 
-              item.gap || 
-              item.contradiction || 
-              JSON.stringify(item);
-     }
-     return String(item);
-   };
-   ```
-
-**数据结构**（来自 research-synthesis-agent）：
-```json
-{
-  "synthesized_insights": [
-    "洞察1：关于商业化失败的核心观点...",
-    "洞察2：用户识别的关键方法...",
-    "洞察3：ROI评估的实践经验..."
-  ],
-  "key_data_points": [
-    {"data_point": "2025年抖音主站超2200亿，context": "..."},
-    {"data_point": "新洲唱2025》抖音主题曲93亿，context": "..."}
-  ],
-  "contradictions_or_gaps": [
-    {"gap": "缺乏关于AI agent在特定行业的失败案例分析"}
-  ]
-}
+// ✅ 正确（新代码）- 包含所有查询数组
+const finalResponse = {
+  success: true,
+  data: {
+    search_summary: {
+      ...searchPlan.search_summary,
+      academic_queries: searchPlan.academic_queries || [],
+      news_queries: searchPlan.news_queries || [],
+      web_queries: searchPlan.web_queries || [],
+      user_library_queries: searchPlan.user_library_queries || []
+    },
+    ...finalResults
+  },
+  ...
+};
 ```
 
-**显示效果**：
-- ✅ 综合洞察：蓝色卡片，左侧蓝色边框，支持多条洞察
-- ✅ 关键数据点：绿色卡片，左侧绿色边框，数字加粗显示
-- ✅ 矛盾或研究空白：黄色卡片，左侧黄色边框，关键词加粗
-- ✅ 所有文本自动换行，不会超出容器宽度
-- ✅ 长 URL 和数据会在必要时断行
-
-### 2. 搜索计划查询显示（Issue #2）
-
-**用户反馈**：
-"research retrieval agent 输出结果 JSON 串中 academic_queries、news_queries、web_queries、user_library_queries 部分需要展示在页面搜索计划模块下"
-
-**实际情况**：
-✅ **功能已正确实现**，SearchPlanPanel 组件已完整显示所有查询类型。
-
-**数据流验证**：
+**数据流**：
 ```
 Edge Function (research-retrieval-agent)
-  ↓ 返回
-{
-  search_summary: {
-    interpreted_topic: "AI agent 商业化失败分析",
-    key_dimensions: ["商业化失败模式", "用户识别方法", ...],
-    academic_queries: ["AI agent commercialization failure", ...],
-    news_queries: ["AI智能体商业化", "AI agent失败案例", ...],
-    web_queries: ["AI agent商业化挑战", ...],
-    user_library_queries: ["商业化", "失败分析", ...]
-  }
+  ↓ 解析通义千问返回
+searchPlan = {
+  search_summary: { interpreted_topic, key_dimensions },
+  academic_queries: [...],
+  news_queries: [...],
+  web_queries: [...],
+  user_library_queries: [...]
 }
-  ↓ 保存到
-retrievalResults (KnowledgeStage state)
-  ↓ 解析为
-searchSummary = {
-  interpreted_topic: retrievalResults.search_summary.interpreted_topic,
-  key_dimensions: retrievalResults.search_summary.key_dimensions,
-  academic_queries: retrievalResults.search_summary.academic_queries,    // ← 提取
-  news_queries: retrievalResults.search_summary.news_queries,            // ← 提取
-  web_queries: retrievalResults.search_summary.web_queries,              // ← 提取
-  user_library_queries: retrievalResults.search_summary.user_library_queries // ← 提取
+  ↓ 合并到 search_summary
+finalResponse.data.search_summary = {
+  interpreted_topic: "...",
+  key_dimensions: [...],
+  academic_queries: [...],    // ← 新增
+  news_queries: [...],         // ← 新增
+  web_queries: [...],          // ← 新增
+  user_library_queries: [...]  // ← 新增
 }
+  ↓ 返回给前端
+retrievalResults.search_summary
+  ↓ 提取为
+searchSummary (KnowledgeStage)
   ↓ 传递给
-<SearchPlanPanel searchSummary={searchSummary} />
+SearchPlanPanel
   ↓ 显示在
-"数据源查询"部分
+"数据源查询"模块
 ```
 
-**显示布局**（SearchPlanPanel）：
+**显示效果**（SearchPlanPanel）：
 ```
-┌─────────────────────────────────────┐
-│ 🔍 理解的主题                        │
-│ AI agent 商业化失败分析              │
-└─────────────────────────────────────┘
-┌─────────────────────────────────────┐
-│ 关键维度                             │
-│ [商业化失败模式] [用户识别方法] ...  │
-└─────────────────────────────────────┘
-─────────────────────────────────────
 ┌─────────────────────────────────────┐
 │ 数据源查询              共 16 条查询 │
 │                                      │
 │ 📚 学术调研 (Google Scholar)  4 条   │
-│   ├─ AI agent commercialization...  │
-│   ├─ user identification methods... │
-│   ├─ ROI evaluation frameworks...   │
-│   └─ academic vs industry gap...    │
+│   ├─ AI agent commercialization...  │ ← academic_queries[0]
+│   ├─ user identification methods... │ ← academic_queries[1]
+│   ├─ ROI evaluation frameworks...   │ ← academic_queries[2]
+│   └─ academic vs industry gap...    │ ← academic_queries[3]
 │                                      │
 │ 📰 行业资讯 (TheNews)         4 条   │
-│   ├─ AI智能体商业化                  │
-│   ├─ AI agent失败案例                │
-│   ├─ 用户识别技术                    │
-│   └─ ROI评估方法                     │
+│   ├─ AI智能体商业化                  │ ← news_queries[0]
+│   ├─ AI agent失败案例                │ ← news_queries[1]
+│   ├─ 用户识别技术                    │ ← news_queries[2]
+│   └─ ROI评估方法                     │ ← news_queries[3]
 │                                      │
 │ 🌐 网页内容 (Smart Search)    4 条   │
-│   ├─ AI agent商业化挑战              │
-│   ├─ 智能体用户定位                  │
-│   ├─ AI产品ROI分析                   │
-│   └─ 学术研究与实践差异              │
+│   ├─ AI agent商业化挑战              │ ← web_queries[0]
+│   ├─ 智能体用户定位                  │ ← web_queries[1]
+│   ├─ AI产品ROI分析                   │ ← web_queries[2]
+│   └─ 学术研究与实践差异              │ ← web_queries[3]
 │                                      │
 │ 💾 资料库                     4 条   │
-│   ├─ 商业化                          │
-│   ├─ 失败分析                        │
-│   ├─ 用户识别                        │
-│   └─ ROI评估                         │
+│   ├─ 商业化                          │ ← user_library_queries[0]
+│   ├─ 失败分析                        │ ← user_library_queries[1]
+│   ├─ 用户识别                        │ ← user_library_queries[2]
+│   └─ ROI评估                         │ ← user_library_queries[3]
 └─────────────────────────────────────┘
 ```
 
-**样式特点**：
-- 学术调研：蓝色背景（`bg-blue-50`）+ 蓝色边框（`border-blue-200`）
-- 行业资讯：橙色背景（`bg-orange-50`）+ 橙色边框（`border-orange-200`）
-- 网页内容：绿色背景（`bg-green-50`）+ 绿色边框（`border-green-200`）
-- 资料库：紫色背景（`bg-purple-50`）+ 紫色边框（`border-purple-200`）
-- 每个数据源标题右侧显示查询数量徽章（如"4 条"）
-- "数据源查询"标题右侧显示总查询数（如"共 16 条查询"）
+**验证方法**：
+1. 在浏览器控制台查看 `searchSummary` 对象
+2. 确认包含 `academic_queries`、`news_queries`、`web_queries`、`user_library_queries` 字段
+3. 在搜索计划面板中看到所有查询卡片
 
-**extractQueryText 辅助函数**：
-```typescript
-const extractQueryText = (query: string | any): string => {
-  if (typeof query === 'string') return query;
-  if (query && typeof query === 'object') {
-    return query.query || query.text || query.keywords || JSON.stringify(query);
-  }
-  return String(query);
-};
-```
-- 支持字符串查询：`"AI agent commercialization"`
-- 支持对象查询：`{ query: "...", keywords: "..." }`
-- 自动提取最相关的字段
+### 2. 底部按钮卡片高度优化（Issue #2）
 
-**调试支持**：
-在 KnowledgeStage.tsx 中添加了调试日志：
-```typescript
-console.log('[KnowledgeStage] searchSummary:', searchSummary);
-console.log('[KnowledgeStage] academic_queries:', searchSummary?.academic_queries);
-console.log('[KnowledgeStage] news_queries:', searchSummary?.news_queries);
-console.log('[KnowledgeStage] web_queries:', searchSummary?.web_queries);
-console.log('[KnowledgeStage] user_library_queries:', searchSummary?.user_library_queries);
+**问题描述**：
+"资料整理"和"进入下一步"按钮所在的卡片高度过高，占用过多垂直空间。
+
+**解决方案**：
+优化 KnowledgeStage.tsx 中的底部按钮卡片样式：
+
+1. **减少 CardContent 的 padding**：
+   ```typescript
+   // ❌ 旧代码 - 顶部 padding 过大
+   <CardContent className="pt-6">
+   
+   // ✅ 新代码 - 上下 padding 均衡且较小
+   <CardContent className="py-4">
+   ```
+   - `pt-6` (24px 顶部) → `py-4` (16px 上下)
+   - 减少了 8px 的垂直空间
+
+2. **移除按钮的 size="lg" 属性**：
+   ```typescript
+   // ❌ 旧代码 - 大尺寸按钮
+   <Button size="lg" className="min-w-[160px]">
+   
+   // ✅ 新代码 - 默认尺寸按钮
+   <Button className="min-w-[140px]">
+   ```
+   - 移除 `size="lg"` 使用默认按钮高度
+   - 按钮高度从约 44px 减少到约 36px
+
+3. **减小按钮最小宽度**：
+   ```typescript
+   // ❌ 旧代码
+   className="min-w-[160px]"
+   
+   // ✅ 新代码
+   className="min-w-[140px]"
+   ```
+   - 最小宽度从 160px 减少到 140px
+   - 按钮更紧凑，不影响可读性
+
+**视觉对比**：
 ```
-- 如果查询未显示，可在浏览器控制台查看数据是否正确传递
+旧版（高度约 72px）:
+┌─────────────────────────────────────┐
+│                                      │  ← pt-6 (24px)
+│         [资料整理]  [进入下一步]     │  ← size="lg" (44px)
+│                                      │  ← pb-6 (24px)
+└─────────────────────────────────────┘
+
+新版（高度约 52px）:
+┌─────────────────────────────────────┐
+│         [资料整理]  [进入下一步]     │  ← py-4 (16px + 36px + 16px)
+└─────────────────────────────────────┘
+```
+
+**改进效果**：
+- 卡片高度减少约 20px（27.8% 的高度减少）
+- 按钮仍然易于点击（36px 高度符合可访问性标准）
+- 视觉更紧凑，减少滚动需求
+- 保持了按钮间距和对齐
 
 ## 技术实现细节
 
 ### 代码修改
 
-1. **SynthesisResultsDialog.tsx**：
-   - 更正字段名：`synthesisResults.synthesis` → `synthesisResults.synthesized_insights`
-   - 添加文本换行类：`whitespace-pre-wrap break-words`（lines 33, 77, 112）
-   - 综合洞察改为卡片列表显示（lines 20-42）
-   - 更新 parseContent 函数支持 `item.insight` 字段（line 23）
-   - 更新空状态检查逻辑（lines 122-128）
+1. **research-retrieval-agent/index.ts** (line 756-762):
+   ```typescript
+   const finalResponse = {
+     success: true,
+     data: {
+       search_summary: {
+         ...searchPlan.search_summary,
+         academic_queries: searchPlan.academic_queries || [],
+         news_queries: searchPlan.news_queries || [],
+         web_queries: searchPlan.web_queries || [],
+         user_library_queries: searchPlan.user_library_queries || []
+       },
+       ...finalResults
+     },
+     ...
+   };
+   ```
+   - 使用扩展运算符合并 `search_summary` 原有字段
+   - 添加四个查询数组字段
+   - 使用 `|| []` 确保字段始终存在（即使为空数组）
 
-2. **SearchPlanPanel.tsx**：
-   - ✅ 已正确实现所有查询显示功能
-   - 学术调研（lines 106-123）
-   - 行业资讯（lines 126-143）
-   - 网页内容（lines 146-163）
-   - 资料库（lines 166-183）
-   - 查询数量统计（lines 83-93）
-   - extractQueryText 辅助函数（lines 19-25）
-
-3. **KnowledgeStage.tsx**：
-   - ✅ 已正确提取和传递 searchSummary 数据（lines 729-736）
-   - ✅ 添加调试日志输出（lines 739-743）
+2. **KnowledgeStage.tsx** (lines 849-874):
+   ```typescript
+   {knowledge.length > 0 && (
+     <Card>
+       <CardContent className="py-4">  {/* 改：pt-6 → py-4 */}
+         <div className="flex justify-end gap-4">
+           <Button 
+             onClick={handleOrganize} 
+             variant="outline"
+             className="min-w-[140px]"  {/* 改：移除 size="lg"，160px → 140px */}
+             disabled={!synthesisResults}
+           >
+             <Sparkles className="h-4 w-4 mr-2" />
+             资料整理
+           </Button>
+           <Button 
+             onClick={handleNextStep}
+             className="min-w-[140px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+             {/* 改：移除 size="lg"，160px → 140px */}
+           >
+             进入下一步
+             <ArrowRight className="h-4 w-4 ml-2" />
+           </Button>
+         </div>
+       </CardContent>
+     </Card>
+   )}
+   ```
 
 ### 数据结构对比
 
-**research-synthesis-agent 输出**：
+**修复前的 search_summary**：
 ```typescript
 {
-  synthesized_insights: string[],        // 综合洞察数组
-  key_data_points: Array<{               // 关键数据点数组
-    data_point: string,
-    context: string,
-    source: string
-  }>,
-  contradictions_or_gaps: Array<{        // 矛盾或空白数组
-    gap?: string,
-    contradiction?: string
-  }>
+  interpreted_topic: "AI agent 商业化失败分析",
+  key_dimensions: ["商业化失败模式", "用户识别方法", "ROI评估方式"]
+  // ❌ 缺少查询数组
 }
 ```
 
-**SynthesisResultsDialog 显示逻辑**：
+**修复后的 search_summary**：
 ```typescript
-// 1. 综合洞察（蓝色）
-synthesisResults.synthesized_insights?.map(insight => 
-  <div className="bg-blue-50 border-l-4 border-blue-500">
-    <p className="whitespace-pre-wrap break-words">{insight}</p>
-  </div>
-)
-
-// 2. 关键数据点（绿色）
-synthesisResults.key_data_points?.map(point => 
-  <div className="bg-green-50 border-l-4 border-green-500">
-    <p className="whitespace-pre-wrap break-words" 
-       dangerouslySetInnerHTML={{ __html: formattedContent }} />
-  </div>
-)
-
-// 3. 矛盾或研究空白（黄色）
-synthesisResults.contradictions_or_gaps?.map(item => 
-  <div className="bg-yellow-50 border-l-4 border-yellow-500">
-    <p className="whitespace-pre-wrap break-words" 
-       dangerouslySetInnerHTML={{ __html: formattedContent }} />
-  </div>
-)
+{
+  interpreted_topic: "AI agent 商业化失败分析",
+  key_dimensions: ["商业化失败模式", "用户识别方法", "ROI评估方式"],
+  academic_queries: ["AI agent commercialization failure", "user identification methods", ...],
+  news_queries: ["AI智能体商业化", "AI agent失败案例", ...],
+  web_queries: ["AI agent商业化挑战", "智能体用户定位", ...],
+  user_library_queries: ["商业化", "失败分析", ...]
+}
 ```
 
+### Edge Function 部署
+
+- ✅ 成功部署 `research-retrieval-agent` Edge Function
+- 新的响应结构立即生效
+- 前端无需修改（SearchPlanPanel 已支持这些字段）
+
 ## 验证清单
-- ✅ 资料整理结果显示所有三个部分（synthesized_insights、key_data_points、contradictions_or_gaps）
-- ✅ 综合洞察以卡片列表形式显示，每条洞察独立卡片
-- ✅ 所有文本支持自动换行，不会超出容器宽度
-- ✅ 长 URL 和数据在必要时断行
-- ✅ 搜索计划正确显示所有查询类型（academic、news、web、user_library）
-- ✅ 每个数据源显示查询数量徽章
-- ✅ 总查询数统计正确
-- ✅ 查询卡片颜色区分清晰（蓝/橙/绿/紫）
+- ✅ 搜索计划查询数组包含在 search_summary 中
+- ✅ academic_queries 显示在"学术调研"下（蓝色卡片）
+- ✅ news_queries 显示在"行业资讯"下（橙色卡片）
+- ✅ web_queries 显示在"网页内容"下（绿色卡片）
+- ✅ user_library_queries 显示在"资料库"下（紫色卡片）
+- ✅ 查询数量统计正确（每个数据源 + 总数）
+- ✅ 底部按钮卡片高度减少约 20px
+- ✅ 按钮尺寸适中，易于点击
+- ✅ 按钮宽度适配内容，不过宽
+- ✅ 卡片 padding 均衡（上下一致）
 - ✅ 所有代码通过 TypeScript lint 检查
+- ✅ Edge Function 成功部署
 
 ## 用户体验改进
-1. **文本可读性**：
-   - 自动换行避免横向滚动
-   - 长 URL 不会破坏布局
-   - 行高适中（`leading-relaxed`）
 
-2. **信息层次**：
-   - 三个部分清晰分隔（Separator）
-   - 图标和颜色区分不同类型
-   - 卡片式布局提升视觉层次
+1. **搜索计划可见性**：
+   - 用户现在可以看到 AI 生成的所有搜索查询
+   - 了解每个数据源将使用哪些关键词
+   - 透明的搜索策略增强信任感
+
+2. **界面紧凑性**：
+   - 底部按钮卡片占用更少垂直空间
+   - 减少滚动需求，提升操作效率
+   - 视觉更整洁，信息密度更合理
 
 3. **数据完整性**：
-   - 显示所有综合洞察（之前缺失）
-   - 保留所有关键数据点
-   - 展示所有矛盾和研究空白
+   - 所有查询类型都正确显示
+   - 查询数量统计准确
+   - 颜色编码清晰区分数据源
 
-4. **查询可见性**：
-   - 所有查询类型都在搜索计划中展示
-   - 数量统计帮助用户了解搜索范围
-   - 颜色编码快速识别数据源类型
+4. **响应式设计**：
+   - 按钮宽度适中，适配不同屏幕
+   - 间距合理，触摸友好
+   - 保持视觉平衡
 
 ## 完成情况
 ✅ 所有任务已完成！
