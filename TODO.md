@@ -19,10 +19,45 @@
   - [x] 优化"资料整理"和"进入下一步"按钮样式
   - [x] 调整按钮位置和间距
   - [x] 添加渐变背景和图标
-- [x] Step 6: 运行 lint 检查
+- [x] Step 6: 验证查询显示和按钮可见性
+  - [x] 确认 SearchPlanPanel 正确显示所有查询
+  - [x] 确认 SearchResultsPanel 底部显示两个按钮
+- [x] Step 7: 运行 lint 检查
 
 ## 完成情况
 ✅ 所有任务已完成！
+
+## 功能说明
+
+### 1. 查询显示（数据源查询）
+SearchPlanPanel 组件已正确实现查询显示功能：
+- **学术调研 (Google Scholar)**: 显示 `academic_queries`，蓝色背景
+- **行业资讯 (TheNews)**: 显示 `news_queries`，橙色背景
+- **网页内容 (Smart Search)**: 显示 `web_queries`，绿色背景
+- **资料库**: 显示 `user_library_queries`，紫色背景
+
+数据流：
+1. `agentDrivenResearchWorkflow` 返回 `search_summary` 对象
+2. `retrievalResults.search_summary` 包含所有查询数组
+3. `searchSummary` 传递给 `SearchPlanPanel`
+4. 组件在"数据源查询"标题下展示所有查询
+
+### 2. 搜索结果按钮
+SearchResultsPanel 组件底部显示两个按钮：
+- **资料整理**: 
+  - 条件：`onOrganize` 存在且 `filteredResults.length > 0`
+  - 功能：打开综合分析结果弹窗（需要先运行综合分析）
+  - 样式：outline 变体，Sparkles 图标
+- **进入下一步**:
+  - 条件：`onNextStep` 存在且 `filteredResults.length > 0`
+  - 功能：直接进入文章结构阶段
+  - 样式：渐变背景，ArrowRight 图标
+
+按钮位置：
+- 在所有搜索结果卡片之后
+- 顶部有分隔线（`border-t border-border`）
+- 右对齐布局（`justify-end`）
+- 按钮间距 3 单位（`gap-3`）
 
 ## 实现的改进
 
