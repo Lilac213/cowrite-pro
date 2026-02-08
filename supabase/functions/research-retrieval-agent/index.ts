@@ -214,8 +214,19 @@ Output Format:
               'X-Gateway-Authorization': `Bearer ${integrationsApiKey}`
             }
           })
-          .then(res => res.json())
+          .then(async res => {
+            if (!res.ok) {
+              const errorText = await res.text();
+              addLog(`[Google Scholar] API 请求失败 (${res.status}): ${errorText}`);
+              throw new Error(`HTTP ${res.status}: ${errorText}`);
+            }
+            return res.json();
+          })
           .then(data => {
+            if (data.error) {
+              addLog(`[Google Scholar] API 返回错误: ${data.error}`);
+              return;
+            }
             if (data.organic_results && data.organic_results.length > 0) {
               const mapped = data.organic_results.slice(0, 5).map((item: any) => ({
                 title: item.title || '',
@@ -227,9 +238,14 @@ Output Format:
               }));
               rawResults.academic_sources.push(...mapped);
               addLog(`[Google Scholar] 找到 ${mapped.length} 条结果`);
+            } else {
+              addLog(`[Google Scholar] 未找到结果`);
             }
           })
-          .catch(err => console.error('[Google Scholar] 搜索失败:', err))
+          .catch(err => {
+            addLog(`[Google Scholar] 搜索异常: ${err.message}`);
+            console.error('[Google Scholar] 搜索失败:', err);
+          })
         );
       }
     }
@@ -245,8 +261,19 @@ Output Format:
           fetch(newsUrl, {
             headers: { 'X-Gateway-Authorization': `Bearer ${integrationsApiKey}` }
           })
-          .then(res => res.json())
+          .then(async res => {
+            if (!res.ok) {
+              const errorText = await res.text();
+              addLog(`[TheNews] API 请求失败 (${res.status}): ${errorText}`);
+              throw new Error(`HTTP ${res.status}: ${errorText}`);
+            }
+            return res.json();
+          })
           .then(data => {
+            if (data.error) {
+              addLog(`[TheNews] API 返回错误: ${data.error}`);
+              return;
+            }
             if (data.data && data.data.length > 0) {
               const mapped = data.data.map((item: any) => ({
                 title: item.title || '',
@@ -257,9 +284,14 @@ Output Format:
               }));
               rawResults.news_sources.push(...mapped);
               addLog(`[TheNews] 找到 ${mapped.length} 条结果`);
+            } else {
+              addLog(`[TheNews] 未找到结果`);
             }
           })
-          .catch(err => console.error('[TheNews] 搜索失败:', err))
+          .catch(err => {
+            addLog(`[TheNews] 搜索异常: ${err.message}`);
+            console.error('[TheNews] 搜索失败:', err);
+          })
         );
       }
     }
@@ -275,8 +307,19 @@ Output Format:
           fetch(smartUrl, {
             headers: { 'X-Gateway-Authorization': `Bearer ${integrationsApiKey}` }
           })
-          .then(res => res.json())
+          .then(async res => {
+            if (!res.ok) {
+              const errorText = await res.text();
+              addLog(`[Smart Search] API 请求失败 (${res.status}): ${errorText}`);
+              throw new Error(`HTTP ${res.status}: ${errorText}`);
+            }
+            return res.json();
+          })
           .then(data => {
+            if (data.error) {
+              addLog(`[Smart Search] API 返回错误: ${data.error}`);
+              return;
+            }
             if (data.webPages?.value && data.webPages.value.length > 0) {
               const mapped = data.webPages.value.map((item: any) => ({
                 title: item.name || '',
@@ -287,9 +330,14 @@ Output Format:
               }));
               rawResults.web_sources.push(...mapped);
               addLog(`[Smart Search] 找到 ${mapped.length} 条结果`);
+            } else {
+              addLog(`[Smart Search] 未找到结果`);
             }
           })
-          .catch(err => console.error('[Smart Search] 搜索失败:', err))
+          .catch(err => {
+            addLog(`[Smart Search] 搜索异常: ${err.message}`);
+            console.error('[Smart Search] 搜索失败:', err);
+          })
         );
       }
     }

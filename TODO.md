@@ -22,7 +22,13 @@
 - [x] Step 6: 验证查询显示和按钮可见性
   - [x] 确认 SearchPlanPanel 正确显示所有查询
   - [x] 确认 SearchResultsPanel 底部显示两个按钮
-- [x] Step 7: 运行 lint 检查
+- [x] Step 7: 改进搜索计划显示和错误处理
+  - [x] 增强 SearchPlanPanel 查询显示
+  - [x] 添加查询数量统计徽章
+  - [x] 改进查询卡片样式（边框、内边距）
+  - [x] 添加 API 错误日志记录
+  - [x] 部署更新的 Edge Function
+- [x] Step 8: 运行 lint 检查
 
 ## 完成情况
 ✅ 所有任务已完成！
@@ -31,10 +37,16 @@
 
 ### 1. 查询显示（数据源查询）
 SearchPlanPanel 组件已正确实现查询显示功能：
-- **学术调研 (Google Scholar)**: 显示 `academic_queries`，蓝色背景
-- **行业资讯 (TheNews)**: 显示 `news_queries`，橙色背景
-- **网页内容 (Smart Search)**: 显示 `web_queries`，绿色背景
-- **资料库**: 显示 `user_library_queries`，紫色背景
+- **学术调研 (Google Scholar)**: 显示 `academic_queries`，蓝色背景 + 边框
+- **行业资讯 (TheNews)**: 显示 `news_queries`，橙色背景 + 边框
+- **网页内容 (Smart Search)**: 显示 `web_queries`，绿色背景 + 边框
+- **资料库**: 显示 `user_library_queries`，紫色背景 + 边框
+
+**新增功能**：
+- 每个数据源标题右侧显示查询数量徽章（如"4 条"）
+- "数据源查询"标题右侧显示总查询数量（如"共 16 条查询"）
+- 查询卡片增加边框和更大内边距，提升可读性
+- 当没有任何查询时显示"暂无查询计划"提示
 
 数据流：
 1. `agentDrivenResearchWorkflow` 返回 `search_summary` 对象
@@ -58,6 +70,37 @@ SearchResultsPanel 组件底部显示两个按钮：
 - 顶部有分隔线（`border-t border-border`）
 - 右对齐布局（`justify-end`）
 - 按钮间距 3 单位（`gap-3`）
+
+### 3. API 错误处理改进
+**research-retrieval-agent Edge Function** 已增强错误处理：
+- **Google Scholar API**:
+  - 检查 HTTP 响应状态码
+  - 记录详细错误信息到日志
+  - 捕获并记录异常消息
+  - 当 API 返回错误时记录到日志
+  - 当未找到结果时记录提示
+  
+- **TheNews API**:
+  - 同样的错误处理机制
+  - HTTP 状态码检查
+  - 错误日志记录
+  
+- **Smart Search API**:
+  - 完整的错误处理流程
+  - 详细的日志记录
+
+**日志输出示例**：
+```
+[Google Scholar] 查询: "AI agent commercialization failure analysis"
+[Google Scholar] API 请求失败 (429): Rate limit exceeded
+[Google Scholar] 搜索异常: HTTP 429: Rate limit exceeded
+```
+
+这样用户可以在搜索日志中看到具体的 API 失败原因，包括：
+- IP 被封（HTTP 403）
+- 速率限制（HTTP 429）
+- 服务不可用（HTTP 503）
+- 其他 API 错误
 
 ## 实现的改进
 
@@ -103,11 +146,57 @@ SearchResultsPanel 组件底部显示两个按钮：
 - 按钮间距增加到 3 单位（`gap-3`）
 - 右对齐布局（`justify-end`）
 
-### 6. 代码质量
+### 6. 搜索计划显示增强
+- **查询卡片样式改进**：
+  - 增加边框（`border border-{color}-200 dark:border-{color}-800`）
+  - 增加内边距（`py-2` 替代 `py-1.5`）
+  - 保持颜色区分（蓝色/橙色/绿色/紫色）
+  
+- **数量统计徽章**：
+  - 每个数据源标题右侧显示查询数量（如"4 条"）
+  - "数据源查询"标题右侧显示总数（如"共 16 条查询"）
+  - 使用 `Badge` 组件，`ml-auto` 右对齐
+  
+- **空状态提示**：
+  - 当所有查询数组都为空时显示"暂无查询计划"
+  - 居中显示，使用 muted 颜色
+
+### 7. API 错误处理和日志记录
+- **research-retrieval-agent Edge Function**：
+  - Google Scholar、TheNews、Smart Search 三个 API 都增加了完整的错误处理
+  - 检查 HTTP 响应状态码（`if (!res.ok)`）
+  - 提取错误文本并记录到日志（`addLog`）
+  - 捕获异常并记录详细信息
+  - 当 API 返回错误对象时记录
+  - 当未找到结果时也记录提示
+  
+- **日志可见性**：
+  - 所有日志通过 `addLog` 函数记录
+  - 日志返回到前端并显示在搜索日志弹窗中
+  - 用户可以点击底部日志栏查看完整日志
+  - 日志包含时间戳和详细错误信息
+
+### 8. 代码质量
 - 所有代码通过 TypeScript lint 检查
 - 正确处理事件监听和清理
 - 优化导入语句，移除未使用的组件
 - 添加适当的类型定义和错误处理
+- Edge Function 已重新部署
+
+## 关于 Google Scholar API 问题
+
+如果 Google Scholar API 被封，日志中会显示类似以下信息：
+- `[Google Scholar] API 请求失败 (403): Forbidden` - IP 被封
+- `[Google Scholar] API 请求失败 (429): Too Many Requests` - 速率限制
+- `[Google Scholar] 搜索异常: HTTP 503: Service Unavailable` - 服务不可用
+
+用户可以通过点击底部的搜索日志查看详细的 API 调用情况，包括：
+1. 每个查询的具体关键词
+2. API 调用是否成功
+3. 找到的结果数量
+4. 具体的错误信息（如果失败）
+
+这样可以快速诊断是否是 IP 被封或其他 API 问题。
 
 ## 完成情况
 ✅ 所有任务已完成！

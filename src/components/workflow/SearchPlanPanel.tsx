@@ -80,7 +80,27 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
 
       {/* 各数据源查询计划 */}
       <div className="space-y-4">
-        <h4 className="text-sm font-semibold">数据源查询</h4>
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-semibold">数据源查询</h4>
+          <Badge variant="outline" className="text-xs">
+            共 {
+              (searchSummary?.academic_queries?.length || 0) +
+              (searchSummary?.news_queries?.length || 0) +
+              (searchSummary?.web_queries?.length || 0) +
+              (searchSummary?.user_library_queries?.length || 0)
+            } 条查询
+          </Badge>
+        </div>
+
+        {/* 如果没有任何查询 */}
+        {!searchSummary?.academic_queries?.length && 
+         !searchSummary?.news_queries?.length && 
+         !searchSummary?.web_queries?.length && 
+         !searchSummary?.user_library_queries?.length && (
+          <div className="text-center py-6 text-muted-foreground text-sm">
+            <p>暂无查询计划</p>
+          </div>
+        )}
 
         {/* 学术调研 */}
         {searchSummary?.academic_queries && searchSummary.academic_queries.length > 0 && (
@@ -88,10 +108,13 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
             <div className="flex items-center gap-2 text-sm font-medium">
               <BookOpen className="w-4 h-4 text-blue-500" />
               <span>学术调研 (Google Scholar)</span>
+              <Badge variant="secondary" className="ml-auto text-xs">
+                {searchSummary.academic_queries.length} 条
+              </Badge>
             </div>
             <div className="ml-6 space-y-1">
               {searchSummary.academic_queries.map((query, index) => (
-                <div key={index} className="text-sm bg-blue-50 dark:bg-blue-950 px-3 py-1.5 rounded">
+                <div key={index} className="text-sm bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border border-blue-200 dark:border-blue-800">
                   {extractQueryText(query)}
                 </div>
               ))}
@@ -105,10 +128,13 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
             <div className="flex items-center gap-2 text-sm font-medium">
               <Newspaper className="w-4 h-4 text-orange-500" />
               <span>行业资讯 (TheNews)</span>
+              <Badge variant="secondary" className="ml-auto text-xs">
+                {searchSummary.news_queries.length} 条
+              </Badge>
             </div>
             <div className="ml-6 space-y-1">
               {searchSummary.news_queries.map((query, index) => (
-                <div key={index} className="text-sm bg-orange-50 dark:bg-orange-950 px-3 py-1.5 rounded">
+                <div key={index} className="text-sm bg-orange-50 dark:bg-orange-950 px-3 py-2 rounded border border-orange-200 dark:border-orange-800">
                   {extractQueryText(query)}
                 </div>
               ))}
@@ -122,10 +148,13 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
             <div className="flex items-center gap-2 text-sm font-medium">
               <Globe className="w-4 h-4 text-green-500" />
               <span>网页内容 (Smart Search)</span>
+              <Badge variant="secondary" className="ml-auto text-xs">
+                {searchSummary.web_queries.length} 条
+              </Badge>
             </div>
             <div className="ml-6 space-y-1">
               {searchSummary.web_queries.map((query, index) => (
-                <div key={index} className="text-sm bg-green-50 dark:bg-green-950 px-3 py-1.5 rounded">
+                <div key={index} className="text-sm bg-green-50 dark:bg-green-950 px-3 py-2 rounded border border-green-200 dark:border-green-800">
                   {extractQueryText(query)}
                 </div>
               ))}
@@ -139,10 +168,13 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
             <div className="flex items-center gap-2 text-sm font-medium">
               <Database className="w-4 h-4 text-purple-500" />
               <span>资料库</span>
+              <Badge variant="secondary" className="ml-auto text-xs">
+                {searchSummary.user_library_queries.length} 条
+              </Badge>
             </div>
             <div className="ml-6 space-y-1">
               {searchSummary.user_library_queries.map((query, index) => (
-                <div key={index} className="text-sm bg-purple-50 dark:bg-purple-950 px-3 py-1.5 rounded">
+                <div key={index} className="text-sm bg-purple-50 dark:bg-purple-950 px-3 py-2 rounded border border-purple-200 dark:border-purple-800">
                   {extractQueryText(query)}
                 </div>
               ))}
