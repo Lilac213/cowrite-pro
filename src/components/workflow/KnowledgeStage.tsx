@@ -24,6 +24,8 @@ import {
   updateWritingSessionStage,
   getRetrievedMaterials,
   getSelectedMaterials,
+  updateRetrievedMaterialSelection,
+  batchUpdateRetrievedMaterialSelection,
 } from '@/db/api';
 import type { KnowledgeBase, WritingSession, ResearchInsight, ResearchGap, SynthesisResult, RetrievedMaterial } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -731,10 +733,31 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
   const handleToggleSelect = async (id: string, selected: boolean) => {
     try {
-      await updateKnowledgeBase(id, { selected });
+      // 同时更新 retrieved_materials 表
+      // 注意：knowledge 中的 id 对应 retrieved_materials 中的 id
+      await updateRetrievedMaterialSelection(id, selected);
+      
+      // 更新本地状态
+      setRetrievedMaterials(prev => 
+        prev.map(m => m.id === id ? { ...m, is_selected: selected } : m)
+      );
+      
+      // 尝试更新 knowledge_base 表（如果存在）
+      try {
+        await updateKnowledgeBase(id, { selected });
+      } catch (kbError) {
+        // knowledge_base 中可能还不存在该记录，忽略错误
+        console.log('[handleToggleSelect] knowledge_base 更新跳过（记录可能不存在）:', id);
+      }
+      
       await loadKnowledge();
     } catch (error) {
       console.error('更新选中状态失败:', error);
+      toast({
+        title: '更新失败',
+        description: '请稍后重试',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -861,10 +884,34 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
   // 批量收藏
   const handleBatchFavorite = async (ids: string[], selected: boolean) => {
+    if (!writingSession) {
+      toast({
+        title: '会话未初始化',
+        description: '请刷新页面重试',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     try {
+      // 批量更新 retrieved_materials 表
+      await batchUpdateRetrievedMaterialSelection(writingSession.id, ids, selected);
+      
+      // 更新本地状态
+      setRetrievedMaterials(prev => 
+        prev.map(m => ids.includes(m.id) ? { ...m, is_selected: selected } : m)
+      );
+      
+      // 尝试更新 knowledge_base 表（如果存在）
       for (const id of ids) {
-        await updateKnowledgeBase(id, { selected });
+        try {
+          await updateKnowledgeBase(id, { selected });
+        } catch (kbError) {
+          // knowledge_base 中可能还不存在该记录，忽略错误
+          console.log('[handleBatchFavorite] knowledge_base 更新跳过（记录可能不存在）:', id);
+        }
       }
+      
       await loadKnowledge();
       toast({
         title: '✅ 批量收藏成功',

@@ -2166,4 +2166,39 @@ export async function batchSaveRetrievedMaterials(
   return (Array.isArray(data) ? data : []) as RetrievedMaterial[];
 }
 
+// 更新检索资料的选中状态
+export async function updateRetrievedMaterialSelection(
+  materialId: string,
+  isSelected: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from('retrieved_materials')
+    .update({ is_selected: isSelected })
+    .eq('id', materialId);
+
+  if (error) {
+    console.error('[updateRetrievedMaterialSelection] 更新失败:', error);
+    throw error;
+  }
+  console.log('[updateRetrievedMaterialSelection] 更新成功:', materialId, isSelected);
+}
+
+// 批量更新检索资料的选中状态
+export async function batchUpdateRetrievedMaterialSelection(
+  sessionId: string,
+  materialIds: string[],
+  isSelected: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from('retrieved_materials')
+    .update({ is_selected: isSelected })
+    .eq('session_id', sessionId)
+    .in('id', materialIds);
+
+  if (error) {
+    console.error('[batchUpdateRetrievedMaterialSelection] 批量更新失败:', error);
+    throw error;
+  }
+  console.log('[batchUpdateRetrievedMaterialSelection] 批量更新成功:', materialIds.length, '条资料');
+}
 

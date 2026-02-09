@@ -20,6 +20,13 @@
   - [x] 更新"资料整理"按钮逻辑
   - [x] 移除不必要的确认步骤
 
+- [x] 修复资料选择同步问题
+  - [x] 添加 updateRetrievedMaterialSelection 函数
+  - [x] 添加 batchUpdateRetrievedMaterialSelection 函数
+  - [x] 更新 handleToggleSelect 同步 retrieved_materials 表
+  - [x] 更新 handleBatchFavorite 同步 retrieved_materials 表
+  - [x] 确保选择状态在数据库和 UI 之间正确同步
+
 ## 实现详情
 
 ### 1. 改进资料整理日志
@@ -342,6 +349,163 @@ SearchResultsPanel 已经支持：
     请先进行资料搜索
   </span>
 )}
+```
+
+### 4. 修复资料选择同步问题
+
+#### 问题描述
+用户在 SearchResultsPanel 中勾选资料后，点击"资料整理"按钮时提示"至少选择一条资料才能继续"。
+
+**根本原因**：
+1. SearchResultsPanel 的选择操作调用 `handleToggleSelect`
+2. `handleToggleSelect` 只更新了 `knowledge_base` 表的 `selected` 字段
+3. 但 `handleOrganize` 调用 `getSelectedMaterials(sessionId)` 查询的是 `retrieved_materials` 表的 `is_selected` 字段
+4. 两个表的选择状态没有同步，导致查询结果为空
+
+#### 解决方案
+
+##### 1. 添加 API 函数
+在 `api.ts` 中添加：
+
+```typescript
+// 更新检索资料的选中状态
+export async function updateRetrievedMaterialSelection(
+  materialId: string,
+  isSelected: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from('retrieved_materials')
+    .update({ is_selected: isSelected })
+    .eq('id', materialId);
+
+  if (error) {
+    console.error('[updateRetrievedMaterialSelection] 更新失败:', error);
+    throw error;
+  }
+  console.log('[updateRetrievedMaterialSelection] 更新成功:', materialId, isSelected);
+}
+
+// 批量更新检索资料的选中状态
+export async function batchUpdateRetrievedMaterialSelection(
+  sessionId: string,
+  materialIds: string[],
+  isSelected: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from('retrieved_materials')
+    .update({ is_selected: isSelected })
+    .eq('session_id', sessionId)
+    .in('id', materialIds);
+
+  if (error) {
+    console.error('[batchUpdateRetrievedMaterialSelection] 批量更新失败:', error);
+    throw error;
+  }
+  console.log('[batchUpdateRetrievedMaterialSelection] 批量更新成功:', materialIds.length, '条资料');
+}
+```
+
+##### 2. 更新 handleToggleSelect
+```typescript
+const handleToggleSelect = async (id: string, selected: boolean) => {
+  try {
+    // 同时更新 retrieved_materials 表
+    await updateRetrievedMaterialSelection(id, selected);
+    
+    // 更新本地状态
+    setRetrievedMaterials(prev => 
+      prev.map(m => m.id === id ? { ...m, is_selected: selected } : m)
+    );
+    
+    // 尝试更新 knowledge_base 表（如果存在）
+    try {
+      await updateKnowledgeBase(id, { selected });
+    } catch (kbError) {
+      // knowledge_base 中可能还不存在该记录，忽略错误
+      console.log('[handleToggleSelect] knowledge_base 更新跳过（记录可能不存在）:', id);
+    }
+    
+    await loadKnowledge();
+  } catch (error) {
+    console.error('更新选中状态失败:', error);
+    toast({
+      title: '更新失败',
+      description: '请稍后重试',
+      variant: 'destructive',
+    });
+  }
+};
+```
+
+##### 3. 更新 handleBatchFavorite
+```typescript
+const handleBatchFavorite = async (ids: string[], selected: boolean) => {
+  if (!writingSession) {
+    toast({
+      title: '会话未初始化',
+      description: '请刷新页面重试',
+      variant: 'destructive',
+    });
+    return;
+  }
+  
+  try {
+    // 批量更新 retrieved_materials 表
+    await batchUpdateRetrievedMaterialSelection(writingSession.id, ids, selected);
+    
+    // 更新本地状态
+    setRetrievedMaterials(prev => 
+      prev.map(m => ids.includes(m.id) ? { ...m, is_selected: selected } : m)
+    );
+    
+    // 尝试更新 knowledge_base 表（如果存在）
+    for (const id of ids) {
+      try {
+        await updateKnowledgeBase(id, { selected });
+      } catch (kbError) {
+        console.log('[handleBatchFavorite] knowledge_base 更新跳过（记录可能不存在）:', id);
+      }
+    }
+    
+    await loadKnowledge();
+    toast({
+      title: '✅ 批量收藏成功',
+      description: `已收藏 ${ids.length} 条资料`,
+    });
+  } catch (error) {
+    console.error('批量收藏失败:', error);
+    toast({
+      title: '❌ 批量收藏失败',
+      description: '操作失败，请重试',
+      variant: 'destructive',
+    });
+  }
+};
+```
+
+#### 关键改进
+1. **优先更新 retrieved_materials**：这是 `getSelectedMaterials` 查询的表
+2. **同步更新本地状态**：立即更新 `retrievedMaterials` 状态，提供即时反馈
+3. **容错处理**：knowledge_base 表中可能还没有记录（用户还没点击"资料整理"），所以用 try-catch 包裹，忽略错误
+4. **批量操作优化**：使用 `batchUpdateRetrievedMaterialSelection` 一次性更新多条记录
+
+#### 数据流
+```
+用户勾选 → handleToggleSelect
+           ↓
+    1. 更新 retrieved_materials.is_selected (数据库)
+           ↓
+    2. 更新 retrievedMaterials 状态 (本地)
+           ↓
+    3. 尝试更新 knowledge_base.selected (数据库，可选)
+           ↓
+    4. 重新加载 knowledge 显示
+           ↓
+用户点击"资料整理" → handleOrganize
+           ↓
+    getSelectedMaterials(sessionId) → 查询 retrieved_materials.is_selected = true
+           ↓
+    返回选中的资料 ✅
 ```
 
 ## 用户体验改进
