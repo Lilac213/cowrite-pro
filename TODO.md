@@ -1,106 +1,124 @@
 # 任务：修复资料选择和替换搜索API
 
-# 任务：修复 research-synthesis-agent 调用失败
+# 任务：修复 research-synthesis-agent 时间戳错误
 
 ## 当前任务
-- [x] 调试 research-synthesis-agent 失败原因
-  - [x] 添加详细的错误日志
-  - [x] 检查 API 密钥配置
-  - [x] 同步 QIANWEN_API_KEY 到 Edge Function 环境
-  - [x] 重新部署 Edge Functions
+- [x] 修复时间戳格式错误
+  - [x] 识别问题：year 字段（如 "2025"）被直接传递给 timestamp 类型字段
+  - [x] 修复 KnowledgeStage.tsx 中的两处时间戳转换
+  - [x] 更新 research-synthesis-agent 的时效性说明
+  - [x] 重新部署 Edge Function
 
 ## 问题分析
 
 ### 错误现象
-用户点击"资料整理"按钮后，调用 research-synthesis-agent Edge Function 失败，错误提示："LLM API 调用失败"
+用户点击"资料整理"按钮后，调用失败，错误提示：
+```
+{code: "22007", details: null, hint: null, message: "invalid input syntax for type timestamp with time zone: \"2025\""}
+```
 
 ### 根本原因
-1. **API 密钥未同步**：虽然 `llm_api_key` 已在 `system_config` 表中配置，但没有同步到 Edge Function 的环境变量中
-2. **错误信息不详细**：原有错误处理只返回 "LLM API 调用失败"，无法定位具体问题
-
-### 解决方案
-
-#### 1. 改进错误日志
-在 research-synthesis-agent/index.ts 中：
+在 `KnowledgeStage.tsx` 中，当 `RetrievedMaterial` 的 `published_at` 字段为空时，代码会回退到使用 `year` 字段：
 
 ```typescript
-// 添加 API 密钥检查日志
-const apiKey = Deno.env.get("QIANWEN_API_KEY");
-if (!apiKey) {
-  console.error("QIANWEN_API_KEY 未配置");
-  return new Response(
-    JSON.stringify({ error: "API密钥未配置，请在系统设置中配置通义千问 API 密钥，并点击'同步配置'按钮" }),
-    { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
-}
+published_at: material.published_at || material.year,
+```
 
-console.log("API密钥已配置，长度:", apiKey.length);
+但是 `year` 字段只是一个年份字符串（如 "2025"），而 `knowledge_base` 表的 `published_at` 字段是 `timestamp with time zone` 类型，导致 PostgreSQL 无法解析。
 
-// 改进 LLM API 错误处理
-if (!llmResponse.ok) {
-  const errorText = await llmResponse.text();
-  console.error("LLM API 错误:", {
-    status: llmResponse.status,
-    statusText: llmResponse.statusText,
-    error: errorText
-  });
-  return new Response(
-    JSON.stringify({ 
-      error: `LLM API 调用失败 (${llmResponse.status}): ${errorText.substring(0, 200)}`,
-      details: {
-        status: llmResponse.status,
-        message: errorText
-      }
-    }),
-    { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
+### 用户需求说明
+根据用户反馈，系统应该：
+1. **不强制要求只有当年的资料才能被整理** - 历史资料也可以作为参考
+2. **如果用户在需求中提到了当年** - 需要调用系统时钟，查看当前年份
+3. **查询资料和生成文章时** - 需要记住当前时间
+
+## 解决方案
+
+### 1. 修复时间戳转换逻辑
+
+在 `KnowledgeStage.tsx` 的两处位置（加载资料和保存资料）添加时间戳转换：
+
+```typescript
+// 处理 published_at：如果只有 year，转换为该年的1月1日
+let publishedAt = material.published_at;
+if (!publishedAt && material.year) {
+  // 将年份转换为 ISO 时间戳（该年的1月1日）
+  publishedAt = `${material.year}-01-01T00:00:00Z`;
 }
 ```
 
-#### 2. 同步 API 密钥到 Edge Function 环境
-使用 `supabase_bulk_create_secrets` 工具将 `system_config` 表中的 `llm_api_key` 同步到 Edge Function 环境变量 `QIANWEN_API_KEY`：
+这样：
+- 如果有完整的 `published_at`，直接使用
+- 如果只有 `year`（如 "2025"），转换为 `2025-01-01T00:00:00Z`
+- 如果两者都没有，则为 `undefined`（数据库允许 NULL）
+
+### 2. 更新 research-synthesis-agent 的时效性说明
+
+修改 Edge Function 的 system prompt：
 
 ```typescript
-// 从数据库获取 API 密钥
-SELECT config_value FROM system_config WHERE config_key = 'llm_api_key';
+// 获取当前日期和年份
+const currentDate = new Date();
+const currentYear = currentDate.getFullYear();
+const currentDateStr = currentDate.toISOString().split('T')[0];
 
-// 同步到 Supabase Secrets
-supabase_bulk_create_secrets([
-  { name: "QIANWEN_API_KEY", value: "sk-b502cf1a41924290a2b7405e095f7587" }
-])
+// 构建 system prompt
+const systemPrompt = `🧠 Research Synthesis Agent (User-Gated)
+
+⏰ Current Date: ${currentDateStr}
+⏰ Current Year: ${currentYear}
+
+📅 时效性说明：
+- 历史资料可以作为参考，不强制要求只使用当年资料
+- 如果用户需求中明确提到特定年份（如"${currentYear}年"），应优先使用该年份的资料
+- 对于较旧的资料，应在整理时标注其发布时间，让用户了解时效性
+...
 ```
 
-#### 3. 更新 sync-config-to-secrets Edge Function
-简化同步逻辑，返回准备好的密钥列表：
+这样 LLM 可以：
+- 知道当前的日期和年份
+- 理解不需要强制过滤历史资料
+- 在用户需求提到特定年份时，优先使用该年份的资料
+- 为较旧的资料标注时效性信息
+
+### 3. 数据类型说明
+
+相关的数据类型：
 
 ```typescript
-return new Response(
-  JSON.stringify({
-    success: true,
-    message: '配置已准备同步',
-    secrets: secretsToSync,
-    note: 'QIANWEN_API_KEY 已配置。密钥将在下次部署时同步到 Edge Function 环境。'
-  }),
-  { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-);
+export interface RetrievedMaterial {
+  id: string;
+  session_id: string;
+  source_type: SourceType;
+  title: string;
+  url?: string;
+  abstract?: string;
+  full_text?: string;
+  authors?: string;
+  year?: string;              // 只有年份，如 "2025"
+  citation_count?: number;
+  published_at?: string;      // 完整时间戳，如 "2025-11-13T00:00:00Z"
+  is_selected: boolean;
+  metadata?: any;
+  created_at: string;
+}
 ```
 
-实际的密钥同步由 MeDo 平台的 `supabase_bulk_create_secrets` 工具完成。
-
-#### 4. 重新部署 Edge Functions
-部署更新后的 Edge Functions：
-- research-synthesis-agent
-- sync-config-to-secrets
+`knowledge_base` 表的 `published_at` 字段：
+- 类型：`timestamp with time zone`
+- 默认值：`null`（允许为空）
+- 用途：记录资料的发布时间
 
 ## 验证步骤
-1. 确认 QIANWEN_API_KEY 已同步到 Edge Function 环境
-2. 测试资料整理功能，应该能正常调用 LLM API
-3. 如果仍然失败，查看详细的错误日志定位问题
+1. 确认时间戳转换逻辑正确
+2. 测试资料整理功能，应该能正常保存资料
+3. 检查保存的资料，`published_at` 字段应该是有效的时间戳或 NULL
+4. 验证 LLM 能够正确理解当前时间和时效性要求
 
 ## 相关文件
+- `/src/components/workflow/KnowledgeStage.tsx` - 资料整理组件
 - `/supabase/functions/research-synthesis-agent/index.ts` - 研究综合 Agent
-- `/supabase/functions/sync-config-to-secrets/index.ts` - 配置同步函数
-- `/src/pages/AdminPage.tsx` - 管理页面（同步配置按钮）
+- `/src/types/types.ts` - 类型定义
 
 ## 已完成任务
 - [x] 移除资料查询缓存逻辑，每次进入页面都重新搜索

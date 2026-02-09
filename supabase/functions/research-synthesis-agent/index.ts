@@ -115,14 +115,21 @@ Deno.serve(async (req) => {
       requirementsText = `写作主题: ${project.title}\n`;
     }
 
-    // 获取当前日期
-    const currentDate = new Date().toISOString().split('T')[0];
+    // 获取当前日期和年份
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentDateStr = currentDate.toISOString().split('T')[0];
 
     // 构建 system prompt
     const systemPrompt = `🧠 Research Synthesis Agent (User-Gated)
 
-⏰ Current Date: ${currentDate}
-CRITICAL: Prioritize data from 2025–2026. Older materials must be explicitly marked as historical context.
+⏰ Current Date: ${currentDateStr}
+⏰ Current Year: ${currentYear}
+
+📅 时效性说明：
+- 历史资料可以作为参考，不强制要求只使用当年资料
+- 如果用户需求中明确提到特定年份（如"${currentYear}年"），应优先使用该年份的资料
+- 对于较旧的资料，应在整理时标注其发布时间，让用户了解时效性
 
 Role:
 你是 CoWrite 的 Research Synthesis Agent。

@@ -424,21 +424,30 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           setRetrievedMaterials(loadedMaterials);
           
           // 转换 RetrievedMaterial 为 KnowledgeBase 格式并更新 knowledge 状态
-          const knowledgeItems: KnowledgeBase[] = loadedMaterials.map(material => ({
-            id: material.id,
-            project_id: projectId,
-            title: material.title,
-            content: material.abstract || material.full_text || '',
-            source: material.source_type,
-            source_url: material.url,
-            published_at: material.published_at || material.year,
-            collected_at: material.created_at,
-            selected: material.is_selected,
-            content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
-            extracted_content: material.full_text ? [material.full_text] : [],
-            full_text: material.full_text,
-            created_at: material.created_at,
-          }));
+          const knowledgeItems: KnowledgeBase[] = loadedMaterials.map(material => {
+            // 处理 published_at：如果只有 year，转换为该年的1月1日
+            let publishedAt = material.published_at;
+            if (!publishedAt && material.year) {
+              // 将年份转换为 ISO 时间戳（该年的1月1日）
+              publishedAt = `${material.year}-01-01T00:00:00Z`;
+            }
+            
+            return {
+              id: material.id,
+              project_id: projectId,
+              title: material.title,
+              content: material.abstract || material.full_text || '',
+              source: material.source_type,
+              source_url: material.url,
+              published_at: publishedAt,
+              collected_at: material.created_at,
+              selected: material.is_selected,
+              content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
+              extracted_content: material.full_text ? [material.full_text] : [],
+              full_text: material.full_text,
+              created_at: material.created_at,
+            };
+          });
           setKnowledge(knowledgeItems);
           
           setShowMaterialSelection(true);
@@ -908,13 +917,20 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         }
         
         try {
+          // 处理 published_at：如果只有 year，转换为该年的1月1日
+          let publishedAt = material.published_at;
+          if (!publishedAt && material.year) {
+            // 将年份转换为 ISO 时间戳（该年的1月1日）
+            publishedAt = `${material.year}-01-01T00:00:00Z`;
+          }
+          
           await createKnowledgeBase({
             project_id: projectId,
             title: material.title,
             content: material.abstract || material.full_text || '',
             source: material.source_type,
             source_url: material.url,
-            published_at: material.published_at || material.year,
+            published_at: publishedAt,
             collected_at: material.created_at,
             selected: true,
             content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
