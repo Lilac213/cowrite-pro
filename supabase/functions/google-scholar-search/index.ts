@@ -20,10 +20,10 @@ serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get('INTEGRATIONS_API_KEY');
-    if (!apiKey) {
+    const serpApiKey = Deno.env.get('SERPAPI_KEY');
+    if (!serpApiKey) {
       return new Response(
-        JSON.stringify({ error: 'API密钥未配置' }),
+        JSON.stringify({ error: 'SerpAPI密钥未配置' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -32,19 +32,20 @@ serve(async (req) => {
     const params = new URLSearchParams({
       engine: 'google_scholar',
       q: query,
+      api_key: serpApiKey,
       start: start.toString(),
+      num: '10', // 每页结果数
     });
 
     if (yearStart) params.append('as_ylo', yearStart);
     if (yearEnd) params.append('as_yhi', yearEnd);
 
-    // 调用 Google Scholar API
+    // 调用 SerpAPI Google Scholar
     const response = await fetch(
-      `https://app-9bwpferlujnl-api-Xa6JZq2055oa.gateway.appmedo.com/search?${params.toString()}`,
+      `https://serpapi.com/search?${params.toString()}`,
       {
         headers: {
           'Accept': 'application/json',
-          'X-Gateway-Authorization': `Bearer ${apiKey}`,
         },
       }
     );
@@ -52,7 +53,7 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       return new Response(
-        JSON.stringify({ error: `API请求失败: ${errorText}` }),
+        JSON.stringify({ error: `SerpAPI请求失败: ${errorText}` }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

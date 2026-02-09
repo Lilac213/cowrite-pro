@@ -20,31 +20,37 @@ serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get('INTEGRATIONS_API_KEY');
-    const apiToken = Deno.env.get('THENEWS_API_TOKEN');
-    
-    if (!apiKey || !apiToken) {
+    const serpApiKey = Deno.env.get('SERPAPI_KEY');
+    if (!serpApiKey) {
       return new Response(
-        JSON.stringify({ error: 'API密钥未配置' }),
+        JSON.stringify({ error: 'SerpAPI密钥未配置' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // 构建查询参数
     const params = new URLSearchParams({
-      api_token: apiToken,
-      search: query,
-      language: language,
-      limit: limit.toString(),
-      sort: 'relevance_score',
+      engine: 'google_news',
+      q: query,
+      api_key: serpApiKey,
+      num: limit.toString(),
     });
 
-    // 调用 TheNews All News API
+    // 根据语言设置地区
+    if (language.includes('zh')) {
+      params.append('gl', 'cn'); // 中国
+      params.append('hl', 'zh-cn'); // 中文
+    } else {
+      params.append('gl', 'us'); // 美国
+      params.append('hl', 'en'); // 英文
+    }
+
+    // 调用 SerpAPI Google News
     const response = await fetch(
-      `https://app-9bwpferlujnl-api-W9z3M6eOKQVL.gateway.appmedo.com/v1/news/all?${params.toString()}`,
+      `https://serpapi.com/search?${params.toString()}`,
       {
         headers: {
-          'X-Gateway-Authorization': `Bearer ${apiKey}`,
+          'Accept': 'application/json',
         },
       }
     );
@@ -52,7 +58,7 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       return new Response(
-        JSON.stringify({ error: `API请求失败: ${errorText}` }),
+        JSON.stringify({ error: `SerpAPI请求失败: ${errorText}` }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -60,21 +66,22 @@ serve(async (req) => {
     const data = await response.json();
 
     // 转换为统一格式
+    const newsResults = data.news_results || [];
     const results = {
-      papers: (data.data || []).map((article: any) => ({
+      papers: newsResults.map((article: any) => ({
         title: article.title || '',
-        authors: article.source || 'TheNews',
-        year: article.published_at ? new Date(article.published_at).getFullYear().toString() : '',
-        abstract: article.description || article.snippet || '',
+        authors: article.source?.name || 'Google News',
+        year: article.date ? new Date(article.date).getFullYear().toString() : new Date().getFullYear().toString(),
+        abstract: article.snippet || '',
         citations: 0,
-        url: article.url || '',
-        source: 'TheNews',
-        publishedAt: article.published_at,
+        url: article.link || '',
+        source: 'Google News',
+        publishedAt: article.date,
       })),
-      total: data.meta?.found || 0,
+      total: newsResults.length,
       summary: '',
-      sources: (data.data || []).map((article: any) => ({
-        url: article.url,
+      sources: newsResults.map((article: any) => ({
+        url: article.link,
         title: article.title,
       })),
     };

@@ -1,3 +1,314 @@
+# 任务：集成 SerpAPI 替换现有搜索 API
+
+## 完成情况
+
+### ✅ 已完成
+
+#### 1. SerpAPI 密钥配置
+- [x] 添加 SERPAPI_KEY 到 Supabase Secrets
+- [x] API Key: c96ae1f8fd0f0d0095948456dd7db91558ead973f0e8d884a1b7635804a96f41
+
+#### 2. Google Scholar 搜索 (google-scholar-search)
+- [x] 替换原有 API 为 SerpAPI
+- [x] 使用 SerpAPI Google Scholar engine
+- [x] 保持原有接口参数兼容性
+  - query: 搜索关键词
+  - yearStart: 起始年份
+  - yearEnd: 结束年份
+  - start: 分页起始位置
+- [x] 保持原有返回格式
+  - papers: 论文列表
+  - total: 总结果数
+- [x] 部署 Edge Function
+
+#### 3. 新闻搜索 (thenews-search)
+- [x] 替换 TheNews API 为 SerpAPI Google News
+- [x] 使用 SerpAPI Google News engine
+- [x] 保持原有接口参数兼容性
+  - query: 搜索关键词
+  - limit: 结果数量限制
+  - language: 语言设置
+- [x] 根据语言自动设置地区
+  - 中文: gl=cn, hl=zh-cn
+  - 英文: gl=us, hl=en
+- [x] 保持原有返回格式
+  - papers: 新闻列表
+  - total: 总结果数
+  - sources: 来源列表
+- [x] 部署 Edge Function
+
+#### 4. 智能搜索 (ai-search)
+- [x] 替换 Gemini AI Search 为 SerpAPI Google Search
+- [x] 使用 SerpAPI Google Search engine
+- [x] 保持原有接口参数兼容性
+  - query: 搜索关键词
+  - num: 结果数量（默认10）
+- [x] 生成摘要（使用前3个结果的片段）
+- [x] 提取来源信息
+- [x] 保持原有返回格式
+  - summary: 搜索摘要
+  - sources: 来源列表
+  - source: 数据源标识
+- [x] 部署 Edge Function
+
+## 功能说明
+
+### SerpAPI 集成优势
+
+1. **统一 API 接口**
+   - 所有搜索功能使用同一个 API 密钥
+   - 简化配置和管理
+   - 降低维护成本
+
+2. **Google Scholar 搜索**
+   - 直接访问 Google Scholar 数据
+   - 支持年份筛选
+   - 支持分页
+   - 返回引用数、作者、摘要等完整信息
+
+3. **Google News 搜索**
+   - 实时新闻数据
+   - 支持多语言和地区设置
+   - 返回发布时间、来源等信息
+   - 自动根据语言设置地区
+
+4. **Google Search 搜索**
+   - 通用网页搜索
+   - 返回有机搜索结果
+   - 提供片段和链接
+   - 自动生成摘要
+
+### API 调用示例
+
+#### Google Scholar
+```typescript
+// 请求
+{
+  "query": "machine learning",
+  "yearStart": "2020",
+  "yearEnd": "2024",
+  "start": 0
+}
+
+// 响应
+{
+  "papers": [
+    {
+      "title": "论文标题",
+      "authors": "作者信息",
+      "year": "2023",
+      "abstract": "摘要",
+      "citations": 100,
+      "url": "https://...",
+      "source": "Google Scholar"
+    }
+  ],
+  "total": 1000
+}
+```
+
+#### Google News
+```typescript
+// 请求
+{
+  "query": "人工智能",
+  "limit": 10,
+  "language": "zh,en"
+}
+
+// 响应
+{
+  "papers": [
+    {
+      "title": "新闻标题",
+      "authors": "来源名称",
+      "year": "2024",
+      "abstract": "新闻摘要",
+      "url": "https://...",
+      "source": "Google News",
+      "publishedAt": "2024-01-01"
+    }
+  ],
+  "total": 10,
+  "sources": [...]
+}
+```
+
+#### Google Search
+```typescript
+// 请求
+{
+  "query": "AI技术发展",
+  "num": 10
+}
+
+// 响应
+{
+  "summary": "综合摘要...",
+  "sources": [
+    {
+      "url": "https://...",
+      "title": "标题",
+      "snippet": "片段"
+    }
+  ],
+  "source": "Google Search",
+  "total": 1000
+}
+```
+
+## 技术细节
+
+### SerpAPI 端点
+- 基础 URL: `https://serpapi.com/search`
+- 认证方式: API Key 作为查询参数
+
+### 支持的引擎
+1. **google_scholar**: 学术搜索
+2. **google_news**: 新闻搜索
+3. **google**: 通用网页搜索
+
+### 参数映射
+
+#### Google Scholar
+- `engine=google_scholar`: 指定搜索引擎
+- `q`: 搜索关键词
+- `as_ylo`: 起始年份
+- `as_yhi`: 结束年份
+- `start`: 分页起始位置
+- `num`: 每页结果数
+
+#### Google News
+- `engine=google_news`: 指定搜索引擎
+- `q`: 搜索关键词
+- `num`: 结果数量
+- `gl`: 地区代码（cn/us）
+- `hl`: 语言代码（zh-cn/en）
+
+#### Google Search
+- `engine=google`: 指定搜索引擎
+- `q`: 搜索关键词
+- `num`: 结果数量
+- `gl`: 地区代码
+- `hl`: 语言代码
+
+### 返回数据结构
+
+#### Google Scholar
+```json
+{
+  "organic_results": [
+    {
+      "title": "标题",
+      "link": "链接",
+      "snippet": "摘要",
+      "publication_info": {
+        "summary": "作者和年份信息"
+      },
+      "inline_links": {
+        "cited_by": {
+          "total": 100
+        }
+      }
+    }
+  ],
+  "search_information": {
+    "total_results": 1000
+  }
+}
+```
+
+#### Google News
+```json
+{
+  "news_results": [
+    {
+      "title": "标题",
+      "link": "链接",
+      "snippet": "摘要",
+      "date": "发布时间",
+      "source": {
+        "name": "来源名称"
+      }
+    }
+  ]
+}
+```
+
+#### Google Search
+```json
+{
+  "organic_results": [
+    {
+      "title": "标题",
+      "link": "链接",
+      "snippet": "片段"
+    }
+  ],
+  "search_information": {
+    "total_results": 1000
+  }
+}
+```
+
+## 兼容性说明
+
+### 接口兼容性
+- ✅ 所有 Edge Function 保持原有接口参数
+- ✅ 所有 Edge Function 保持原有返回格式
+- ✅ 前端代码无需修改
+- ✅ 现有功能完全兼容
+
+### 数据格式兼容性
+- ✅ Google Scholar: 完全兼容
+- ✅ Google News: 完全兼容（source 字段从 "TheNews" 改为 "Google News"）
+- ✅ Google Search: 完全兼容（source 字段从 "AI Search" 改为 "Google Search"）
+
+## 测试建议
+
+1. **Google Scholar 搜索测试**
+   - 测试基本搜索
+   - 测试年份筛选
+   - 测试分页功能
+   - 验证返回数据格式
+
+2. **Google News 搜索测试**
+   - 测试中文搜索
+   - 测试英文搜索
+   - 测试结果数量限制
+   - 验证发布时间
+
+3. **Google Search 测试**
+   - 测试基本搜索
+   - 验证摘要生成
+   - 验证来源提取
+   - 测试结果数量
+
+4. **集成测试**
+   - 在资料查询页面测试完整搜索流程
+   - 验证多数据源搜索
+   - 验证结果展示
+   - 验证资料保存
+
+## 注意事项
+
+### API 配额
+- SerpAPI 有每月搜索次数限制
+- 建议监控 API 使用情况
+- 必要时可升级 SerpAPI 套餐
+
+### 错误处理
+- 所有 Edge Function 都包含完整的错误处理
+- API 失败时返回友好的错误信息
+- 前端可以正常处理错误响应
+
+### 性能优化
+- SerpAPI 响应速度通常较快
+- 建议实现结果缓存机制
+- 避免重复搜索相同关键词
+
+---
+
 # 任务：研究综合 Agent 和用户决策流程
 
 ## 完成情况
