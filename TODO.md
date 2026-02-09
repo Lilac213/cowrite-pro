@@ -1,147 +1,106 @@
 # 任务：修复资料选择和替换搜索API
 
-# 任务：修复学术标签筛选、资料整理失败、文章生成失败
+# 任务：修复 research-synthesis-agent 调用失败
 
 ## 当前任务
-- [x] 修复学术标签筛选问题
-  - [x] 更新筛选逻辑，支持 "academic" 和 "scholar" 关键词
-  - [x] 更新筛选逻辑，支持 "web" 和 "search" 关键词
-- [x] 修复资料整理失败问题
-  - [x] 添加重复检查逻辑，避免重复插入
-  - [x] 更新 research-synthesis-agent 使用正确的 API 密钥
-  - [x] 添加详细的错误日志和用户提示
-- [x] 修复文章生成失败问题
-  - [x] 注册 INTEGRATIONS_API_KEY 密钥
-  - [x] 重新部署 research-synthesis-agent
+- [x] 调试 research-synthesis-agent 失败原因
+  - [x] 添加详细的错误日志
+  - [x] 检查 API 密钥配置
+  - [x] 同步 QIANWEN_API_KEY 到 Edge Function 环境
+  - [x] 重新部署 Edge Functions
 
-## 实现细节
+## 问题分析
 
-### 1. 修复学术标签筛选问题
-**问题**：搜索结果中显示 "academic" 标签的内容，但点击"学术"筛选时无法筛选出来
+### 错误现象
+用户点击"资料整理"按钮后，调用 research-synthesis-agent Edge Function 失败，错误提示："LLM API 调用失败"
 
-**原因**：筛选逻辑只检查 "scholar" 关键词，没有检查 "academic"
+### 根本原因
+1. **API 密钥未同步**：虽然 `llm_api_key` 已在 `system_config` 表中配置，但没有同步到 Edge Function 的环境变量中
+2. **错误信息不详细**：原有错误处理只返回 "LLM API 调用失败"，无法定位具体问题
 
-**解决方案**：
-更新 SearchResultsPanel.tsx 的筛选逻辑：
+### 解决方案
+
+#### 1. 改进错误日志
+在 research-synthesis-agent/index.ts 中：
+
 ```typescript
-case 'academic':
-  return source.includes('scholar') || source.includes('academic');
-case 'web':
-  return source.includes('search') || source.includes('web');
-```
-
-### 2. 修复资料整理失败问题
-**问题分析**：
-1. 资料可能被重复插入到 knowledge_base 表，导致唯一约束错误
-2. research-synthesis-agent 使用了错误的 API 密钥（INTEGRATIONS_API_KEY 而不是 QIANWEN_API_KEY）
-3. 错误信息不够详细，用户无法了解具体原因
-
-**解决方案**：
-
-#### 2.1 添加重复检查逻辑
-在 `handleOrganize` 函数中：
-```typescript
-// 先获取已存在的资料
-const existingKnowledge = await getKnowledgeBase(projectId);
-const existingUrls = new Set(existingKnowledge.map(k => k.source_url).filter(Boolean));
-
-let savedCount = 0;
-for (const material of selectedMaterials) {
-  // 跳过已存在的资料（通过 URL 判断）
-  if (material.url && existingUrls.has(material.url)) {
-    console.log('[handleOrganize] 资料已存在，跳过:', material.title);
-    continue;
-  }
-  
-  try {
-    await createKnowledgeBase({ ... });
-    savedCount++;
-  } catch (error) {
-    console.error('[handleOrganize] 保存资料失败:', material.title, error);
-    // 继续保存其他资料
-  }
-}
-
-console.log('[handleOrganize] 资料保存完成，新增:', savedCount, '条');
-```
-
-#### 2.2 更新 API 密钥配置
-修改 research-synthesis-agent/index.ts：
-```typescript
-// 使用 QIANWEN_API_KEY 而不是 INTEGRATIONS_API_KEY
+// 添加 API 密钥检查日志
 const apiKey = Deno.env.get("QIANWEN_API_KEY");
 if (!apiKey) {
+  console.error("QIANWEN_API_KEY 未配置");
   return new Response(
-    JSON.stringify({ error: "API密钥未配置，请在系统设置中配置通义千问 API 密钥" }),
+    JSON.stringify({ error: "API密钥未配置，请在系统设置中配置通义千问 API 密钥，并点击'同步配置'按钮" }),
+    { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+console.log("API密钥已配置，长度:", apiKey.length);
+
+// 改进 LLM API 错误处理
+if (!llmResponse.ok) {
+  const errorText = await llmResponse.text();
+  console.error("LLM API 错误:", {
+    status: llmResponse.status,
+    statusText: llmResponse.statusText,
+    error: errorText
+  });
+  return new Response(
+    JSON.stringify({ 
+      error: `LLM API 调用失败 (${llmResponse.status}): ${errorText.substring(0, 200)}`,
+      details: {
+        status: llmResponse.status,
+        message: errorText
+      }
+    }),
     { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }
 ```
 
-这样可以使用系统设置中配置的通义千问 API 密钥，通过 sync-config-to-secrets 同步到 Edge Function 环境变量。
+#### 2. 同步 API 密钥到 Edge Function 环境
+使用 `supabase_bulk_create_secrets` 工具将 `system_config` 表中的 `llm_api_key` 同步到 Edge Function 环境变量 `QIANWEN_API_KEY`：
 
-#### 2.3 改进错误处理
-在 api.ts 中添加详细日志：
 ```typescript
-export async function callResearchSynthesisAgent(
-  projectId: string,
-  sessionId?: string
-): Promise<SynthesisResult> {
-  console.log('[callResearchSynthesisAgent] 调用参数:', { projectId, sessionId });
-  
-  const { data, error } = await supabase.functions.invoke('research-synthesis-agent', {
-    body: { projectId, sessionId },
-  });
+// 从数据库获取 API 密钥
+SELECT config_value FROM system_config WHERE config_key = 'llm_api_key';
 
-  if (error) {
-    console.error('[callResearchSynthesisAgent] Edge Function 错误:', error);
-    if (error.context) {
-      console.error('[callResearchSynthesisAgent] 错误上下文:', error.context);
-    }
-    throw new Error(error.message || 'Edge Function 调用失败');
-  }
-  
-  console.log('[callResearchSynthesisAgent] 返回数据:', data);
-  return data as SynthesisResult;
-}
+// 同步到 Supabase Secrets
+supabase_bulk_create_secrets([
+  { name: "QIANWEN_API_KEY", value: "sk-b502cf1a41924290a2b7405e095f7587" }
+])
 ```
 
-在 KnowledgeStage.tsx 中提供更友好的错误提示：
+#### 3. 更新 sync-config-to-secrets Edge Function
+简化同步逻辑，返回准备好的密钥列表：
+
 ```typescript
-catch (error: any) {
-  console.error('资料整理失败:', error);
-  
-  // 提供更详细的错误信息
-  let errorMessage = '请稍后重试';
-  if (error.message) {
-    errorMessage = error.message;
-  } else if (error.error) {
-    errorMessage = error.error;
-  }
-  
-  toast({
-    title: '资料整理失败',
-    description: errorMessage,
-    variant: 'destructive',
-  });
-}
+return new Response(
+  JSON.stringify({
+    success: true,
+    message: '配置已准备同步',
+    secrets: secretsToSync,
+    note: 'QIANWEN_API_KEY 已配置。密钥将在下次部署时同步到 Edge Function 环境。'
+  }),
+  { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+);
 ```
 
-### 3. 修复文章生成失败问题
-**问题**：generate-article-structure Edge Function 使用 INTEGRATIONS_API_KEY 访问 Gemini 模型，但该密钥未配置
+实际的密钥同步由 MeDo 平台的 `supabase_bulk_create_secrets` 工具完成。
 
-**解决方案**：
-1. 注册 INTEGRATIONS_API_KEY 密钥，提示用户需要配置
-2. 重新部署 research-synthesis-agent Edge Function
+#### 4. 重新部署 Edge Functions
+部署更新后的 Edge Functions：
+- research-synthesis-agent
+- sync-config-to-secrets
 
-**密钥说明**：
-- `INTEGRATIONS_API_KEY`: MeDo 平台 AI 网关密钥，用于访问 Gemini 等模型。需要联系平台管理员获取。
-- `QIANWEN_API_KEY`: 通义千问 API 密钥，从系统设置同步，用于 SiliconFlow API 调用。
+## 验证步骤
+1. 确认 QIANWEN_API_KEY 已同步到 Edge Function 环境
+2. 测试资料整理功能，应该能正常调用 LLM API
+3. 如果仍然失败，查看详细的错误日志定位问题
 
-## 使用说明
-1. 确保在系统设置中配置了通义千问 API 密钥
-2. 点击"同步配置"按钮，将 API 密钥同步到 Edge Function 环境
-3. 如需使用文章结构生成功能，需要联系平台管理员配置 INTEGRATIONS_API_KEY
+## 相关文件
+- `/supabase/functions/research-synthesis-agent/index.ts` - 研究综合 Agent
+- `/supabase/functions/sync-config-to-secrets/index.ts` - 配置同步函数
+- `/src/pages/AdminPage.tsx` - 管理页面（同步配置按钮）
 
 ## 已完成任务
 - [x] 移除资料查询缓存逻辑，每次进入页面都重新搜索

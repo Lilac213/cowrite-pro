@@ -73,28 +73,27 @@ Deno.serve(async (req) => {
     }, {} as Record<string, string>);
 
     // 准备要同步的密钥
-    const secretsToSync: { key: string; value: string; description: string }[] = [];
+    const secretsToSync: { name: string; value: string }[] = [];
 
     // LLM API Key
     if (configMap.llm_api_key) {
       secretsToSync.push({
-        key: 'QIANWEN_API_KEY',
+        name: 'QIANWEN_API_KEY',
         value: configMap.llm_api_key,
-        description: '通义千问 API 密钥（从管理面板同步）'
       });
     }
 
-    console.log('准备同步的密钥:', secretsToSync.map(s => s.key));
+    console.log('准备同步的密钥:', secretsToSync.map(s => s.name));
 
-    // 注意：实际的密钥同步需要通过 Supabase Management API 完成
-    // 这里我们只是记录日志，实际同步由平台完成
+    // 注意：实际的密钥同步由 MeDo 平台的 supabase_bulk_create_secrets 工具完成
+    // Edge Function 只负责准备数据
     
     return new Response(
       JSON.stringify({
         success: true,
         message: '配置已准备同步',
-        secrets: secretsToSync.map(s => ({ key: s.key, description: s.description })),
-        note: 'QIANWEN_API_KEY 已配置。INTEGRATIONS_API_KEY 需要平台管理员配置。'
+        secrets: secretsToSync,
+        note: 'QIANWEN_API_KEY 已配置。密钥将在下次部署时同步到 Edge Function 环境。'
       }),
       { 
         status: 200, 

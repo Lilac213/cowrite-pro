@@ -27,11 +27,14 @@ Deno.serve(async (req) => {
     // 获取 API 密钥
     const apiKey = Deno.env.get("QIANWEN_API_KEY");
     if (!apiKey) {
+      console.error("QIANWEN_API_KEY 未配置");
       return new Response(
-        JSON.stringify({ error: "API密钥未配置，请在系统设置中配置通义千问 API 密钥" }),
+        JSON.stringify({ error: "API密钥未配置，请在系统设置中配置通义千问 API 密钥，并点击'同步配置'按钮" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    
+    console.log("API密钥已配置，长度:", apiKey.length);
 
     // 获取项目信息
     const { data: project, error: projectError } = await supabase
@@ -236,9 +239,19 @@ ${materialsContent}
 
     if (!llmResponse.ok) {
       const errorText = await llmResponse.text();
-      console.error("LLM API 错误:", errorText);
+      console.error("LLM API 错误:", {
+        status: llmResponse.status,
+        statusText: llmResponse.statusText,
+        error: errorText
+      });
       return new Response(
-        JSON.stringify({ error: "LLM API 调用失败" }),
+        JSON.stringify({ 
+          error: `LLM API 调用失败 (${llmResponse.status}): ${errorText.substring(0, 200)}`,
+          details: {
+            status: llmResponse.status,
+            message: errorText
+          }
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
