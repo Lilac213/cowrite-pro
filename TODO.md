@@ -174,6 +174,38 @@
 
 ## Bug 修复记录
 
+### 2026-02-10: 修复写作会话初始化失败（PGRST116 错误）
+
+**问题**: 
+- 从明确需求页进入资料查询页时没有反应
+- 点击刷新按钮也没有反应
+- 控制台显示错误："初始化写作会话失败"
+- PostgreSQL 错误 PGRST116: "Results contain 2 rows, application/vnd.pgrst.object+json requires 1 row"
+
+**根本原因**:
+- `getOrCreateWritingSession` 函数使用 `.maybeSingle()` 查询 writing_sessions 表
+- 数据库中同一个 project_id 存在多个 writing_sessions 记录
+- `.maybeSingle()` 期望返回 0 或 1 行，但实际返回了 2 行
+- 导致 PostgreSQL 返回 PGRST116 错误
+
+**解决方案**:
+- 在查询中添加 `.order('created_at', { ascending: false })` 按创建时间倒序排序
+- 添加 `.limit(1)` 限制只返回最新的一条记录
+- 这样即使有多个会话，也只会获取最新的那个
+
+**修改文件**:
+- src/db/api.ts
+  - 修改 `getOrCreateWritingSession` 函数
+  - 添加排序和限制条件确保只返回一条记录
+
+**技术细节**:
+- Supabase 的 `.maybeSingle()` 要求查询结果必须是 0 或 1 行
+- 如果结果超过 1 行，会抛出 PGRST116 错误
+- 使用 `.order().limit(1).maybeSingle()` 可以安全地获取最新记录
+- 这种方式比删除旧记录更安全，保留了历史数据
+
+---
+
 ### 2026-02-10: 从明确需求页自动带入需求文档并生成搜索计划
 
 **需求**: 

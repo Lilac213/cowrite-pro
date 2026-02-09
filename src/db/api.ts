@@ -1908,11 +1908,13 @@ export async function getOrder(orderId: string): Promise<Order | null> {
 
 // 获取或创建写作会话
 export async function getOrCreateWritingSession(projectId: string): Promise<WritingSession> {
-  // 先尝试获取现有会话
+  // 先尝试获取现有会话（获取最新的一个）
   const { data: existing, error: fetchError } = await supabase
     .from('writing_sessions')
     .select('*')
     .eq('project_id', projectId)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (fetchError) throw fetchError;
