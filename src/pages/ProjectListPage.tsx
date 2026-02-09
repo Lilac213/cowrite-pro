@@ -62,9 +62,9 @@ export default function ProjectListPage() {
       if (profile) {
         setProjectInfo({
           created: profile.projects_created,
-          limit: profile.project_limit,
+          limit: profile.unlimited_credits ? -1 : profile.available_credits,
         });
-        setCanCreate(profile.projects_created < profile.project_limit);
+        setCanCreate(profile.unlimited_credits || profile.available_credits > 0);
       }
     } catch (error) {
       console.error('检查项目限制失败:', error);
@@ -115,7 +115,7 @@ export default function ProjectListPage() {
       
       toast({
         title: '创建成功',
-        description: `剩余可创建项目：${projectInfo.limit - projectInfo.created - 1}`,
+        description: projectInfo.limit === -1 ? '管理员无限创建' : `剩余点数：${projectInfo.limit - 1}`,
       });
       navigate(`/project/${project.id}`);
     } catch (error: any) {
@@ -201,13 +201,14 @@ export default function ProjectListPage() {
         </Dialog>
       </div>
 
-      {/* 项目限制提示 */}
+      {/* 项目配额提示 - 单行显示 */}
       <Alert className={`mb-6 ${!canCreate ? 'border-destructive' : ''}`}>
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>项目配额</AlertTitle>
         <AlertDescription className="flex items-center justify-between">
           <span>
-            已创建 {projectInfo.created}/{projectInfo.limit} 个项目
+            已创建 {projectInfo.created} 个项目
+            {projectInfo.limit === -1 ? ' (无限)' : ` · 剩余点数 ${projectInfo.limit}`}
             {!canCreate && ' - 已达上限'}
           </span>
           {!canCreate && (

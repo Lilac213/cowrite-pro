@@ -15,6 +15,7 @@ import type {
   SearchResult,
   ReferenceLibrary,
   InvitationCode,
+  Order,
 } from '@/types';
 
 // ============ System Config API ============
@@ -1703,10 +1704,7 @@ function generateInvitationCode(): string {
 }
 
 // 创建邀请码
-export async function createInvitationCode(
-  aiReducerLimit: number,
-  projectLimit: number
-): Promise<InvitationCode> {
+export async function createInvitationCode(credits: number): Promise<InvitationCode> {
   const code = generateInvitationCode();
   
   const { data: { user } } = await supabase.auth.getUser();
@@ -1716,8 +1714,7 @@ export async function createInvitationCode(
     .from('invitation_codes')
     .insert({
       code,
-      ai_reducer_limit: aiReducerLimit,
-      project_limit: projectLimit,
+      credits,
       created_by: user.id,
     })
     .select()
@@ -1751,12 +1748,14 @@ export async function useInvitationCode(code: string, userId: string): Promise<v
   if (fetchError) throw fetchError;
   if (!inviteCode) throw new Error('邀请码不存在或已失效');
 
-  // 更新用户权限
+  // 更新用户点数
+  const profile = await getProfile(userId);
+  if (!profile) throw new Error('用户不存在');
+
   const { error: updateError } = await supabase
     .from('profiles')
     .update({
-      ai_reducer_limit: inviteCode.ai_reducer_limit,
-      project_limit: inviteCode.project_limit,
+      available_credits: profile.available_credits + inviteCode.credits,
       invitation_code: code,
     })
     .eq('id', userId);
@@ -1782,73 +1781,119 @@ export async function deactivateInvitationCode(codeId: string): Promise<void> {
   if (error) throw error;
 }
 
-// 检查用户是否可以使用AI降重工具
+// 检查用户是否可以使用AI降重工具（检查点数）
 export async function checkAIReducerLimit(userId: string): Promise<boolean> {
   const profile = await getProfile(userId);
   if (!profile) return false;
-  return profile.ai_reducer_used < profile.ai_reducer_limit;
+  // 管理员无限点数
+  if (profile.unlimited_credits) return true;
+  // 普通用户检查点数
+  return profile.available_credits > 0;
 }
 
-// 增加AI降重使用次数
+// 增加AI降重使用次数并扣除点数
 export async function incrementAIReducerUsage(userId: string): Promise<void> {
   const profile = await getProfile(userId);
   if (!profile) throw new Error('用户不存在');
   
-  if (profile.ai_reducer_used >= profile.ai_reducer_limit) {
-    throw new Error('AI降重次数不足，请购买点数');
+  // 管理员无限点数，只增加使用次数
+  if (profile.unlimited_credits) {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ ai_reducer_used: profile.ai_reducer_used + 1 })
+      .eq('id', userId);
+    if (error) throw error;
+    return;
+  }
+
+  // 普通用户检查点数
+  if (profile.available_credits <= 0) {
+    throw new Error('点数不足，请购买点数');
   }
 
   const { error } = await supabase
     .from('profiles')
-    .update({ ai_reducer_used: profile.ai_reducer_used + 1 })
-    .eq('id', userId);
-
-  if (error) throw error;
-}
-
-// 检查用户是否可以创建项目
-export async function checkProjectLimit(userId: string): Promise<boolean> {
-  const profile = await getProfile(userId);
-  if (!profile) return false;
-  return profile.projects_created < profile.project_limit;
-}
-
-// 增加项目创建次数
-export async function incrementProjectCount(userId: string): Promise<void> {
-  const profile = await getProfile(userId);
-  if (!profile) throw new Error('用户不存在');
-  
-  if (profile.projects_created >= profile.project_limit) {
-    throw new Error('项目创建数量已达上限，请购买点数');
-  }
-
-  const { error } = await supabase
-    .from('profiles')
-    .update({ projects_created: profile.projects_created + 1 })
-    .eq('id', userId);
-
-  if (error) throw error;
-}
-
-// 购买积分（增加用户积分和对应的使用限制）
-export async function purchaseCredits(
-  userId: string,
-  credits: number,
-  aiReducerIncrease: number,
-  projectIncrease: number
-): Promise<void> {
-  const profile = await getProfile(userId);
-  if (!profile) throw new Error('用户不存在');
-
-  const { error } = await supabase
-    .from('profiles')
-    .update({
-      credits: profile.credits + credits,
-      ai_reducer_limit: profile.ai_reducer_limit + aiReducerIncrease,
-      project_limit: profile.project_limit + projectIncrease,
+    .update({ 
+      ai_reducer_used: profile.ai_reducer_used + 1,
+      available_credits: profile.available_credits - 1,
     })
     .eq('id', userId);
 
   if (error) throw error;
+}
+
+// 检查用户是否可以创建项目（检查点数）
+export async function checkProjectLimit(userId: string): Promise<boolean> {
+  const profile = await getProfile(userId);
+  if (!profile) return false;
+  // 管理员无限点数
+  if (profile.unlimited_credits) return true;
+  // 普通用户检查点数
+  return profile.available_credits > 0;
+}
+
+// 增加项目创建次数并扣除点数
+export async function incrementProjectCount(userId: string): Promise<void> {
+  const profile = await getProfile(userId);
+  if (!profile) throw new Error('用户不存在');
+  
+  // 管理员无限点数，只增加使用次数
+  if (profile.unlimited_credits) {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ projects_created: profile.projects_created + 1 })
+      .eq('id', userId);
+    if (error) throw error;
+    return;
+  }
+
+  // 普通用户检查点数
+  if (profile.available_credits <= 0) {
+    throw new Error('点数不足，请购买点数');
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ 
+      projects_created: profile.projects_created + 1,
+      available_credits: profile.available_credits - 1,
+    })
+    .eq('id', userId);
+
+  if (error) throw error;
+}
+
+// 管理员为用户配置点数
+export async function setUserCredits(userId: string, credits: number): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ available_credits: credits })
+    .eq('id', userId);
+
+  if (error) throw error;
+}
+
+// 获取用户订单列表
+export async function getUserOrders(userId: string): Promise<Order[]> {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as Order[];
+}
+
+// 获取订单详情
+export async function getOrder(orderId: string): Promise<Order | null> {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('id', orderId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as Order | null;
 }
 

@@ -21,11 +21,10 @@ export interface Profile {
   id: string;
   username: string;
   role: UserRole;
-  credits: number;
+  available_credits: number;
+  unlimited_credits: boolean;
   ai_reducer_used: number;
-  ai_reducer_limit: number;
   projects_created: number;
-  project_limit: number;
   invitation_code?: string;
   created_at: string;
   updated_at: string;
@@ -34,11 +33,28 @@ export interface Profile {
 export interface InvitationCode {
   id: string;
   code: string;
-  ai_reducer_limit: number;
-  project_limit: number;
+  credits: number;
   used_count: number;
   is_active: boolean;
   created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type OrderStatus = 'pending' | 'completed' | 'cancelled' | 'refunded';
+
+export interface Order {
+  id: string;
+  user_id: string;
+  items: any[];
+  total_amount: number;
+  currency: string;
+  status: OrderStatus;
+  stripe_session_id?: string;
+  stripe_payment_intent_id?: string;
+  customer_email?: string;
+  customer_name?: string;
+  completed_at?: string;
   created_at: string;
   updated_at: string;
 }

@@ -22,10 +22,10 @@ export default function SettingsPage() {
 
   // 积分套餐配置
   const creditPackages = [
-    { name: '体验包', credits: 16, price: 9.9, aiReducer: 5, projects: 3 },
-    { name: '推荐包', credits: 66, price: 29.9, aiReducer: 20, projects: 10, recommended: true },
-    { name: '进阶包', credits: 166, price: 79.9, aiReducer: 50, projects: 25 },
-    { name: '专业包', credits: 366, price: 149.9, aiReducer: 100, projects: 50 },
+    { name: '体验包', credits: 16, price: 9.9 },
+    { name: '推荐包', credits: 66, price: 29.9, recommended: true },
+    { name: '进阶包', credits: 166, price: 79.9 },
+    { name: '专业包', credits: 366, price: 149.9 },
   ];
 
   const handleChangePassword = async () => {
@@ -86,12 +86,47 @@ export default function SettingsPage() {
     navigate('/login');
   };
 
-  const handlePurchase = (pkg: typeof creditPackages[0]) => {
-    toast({
-      title: '功能开发中',
-      description: `您选择了 ${pkg.name}（¥${pkg.price}），支付功能即将上线`,
-    });
-    setPurchaseDialogOpen(false);
+  const handlePurchase = async (pkg: typeof creditPackages[0]) => {
+    if (!user) {
+      toast({
+        title: '请先登录',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke('create_stripe_checkout', {
+        body: {
+          items: [{
+            name: pkg.name,
+            price: pkg.price,
+            quantity: 1,
+            credits: pkg.credits,
+          }],
+          currency: 'cny',
+          payment_method_types: ['card', 'alipay', 'wechat_pay'],
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.data?.url) {
+        // 在新标签页打开Stripe支付页面
+        window.open(data.data.url, '_blank');
+        setPurchaseDialogOpen(false);
+        toast({
+          title: '跳转支付',
+          description: '正在打开支付页面...',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: '创建支付失败',
+        description: error.message || '请稍后重试',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -121,23 +156,29 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* 使用情况统计 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
-              <div className="p-4 border rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">积分余额</p>
-                <p className="text-2xl font-bold">{profile?.credits || 0} 点</p>
-              </div>
-              <div className="p-4 border rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">AI降重</p>
-                <p className="text-2xl font-bold">
-                  {profile?.ai_reducer_used || 0}/{profile?.ai_reducer_limit || 0}
-                </p>
-              </div>
-              <div className="p-4 border rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">项目数量</p>
-                <p className="text-2xl font-bold">
-                  {profile?.projects_created || 0}/{profile?.project_limit || 0}
-                </p>
+            {/* 使用情况统计 - 单行显示 */}
+            <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="flex items-center gap-6">
+                <div>
+                  <p className="text-sm text-muted-foreground">可用点数</p>
+                  <p className="text-lg font-bold">
+                    {profile?.unlimited_credits ? (
+                      <Badge variant="default">无限</Badge>
+                    ) : (
+                      `${profile?.available_credits || 0} 点`
+                    )}
+                  </p>
+                </div>
+                <div className="h-8 w-px bg-border" />
+                <div>
+                  <p className="text-sm text-muted-foreground">AI降重</p>
+                  <p className="text-lg font-bold">{profile?.ai_reducer_used || 0} 次</p>
+                </div>
+                <div className="h-8 w-px bg-border" />
+                <div>
+                  <p className="text-sm text-muted-foreground">项目数量</p>
+                  <p className="text-lg font-bold">{profile?.projects_created || 0} 个</p>
+                </div>
               </div>
             </div>
 
@@ -184,10 +225,6 @@ export default function SettingsPage() {
                             {pkg.credits} 点
                           </p>
                         </div>
-                        <div className="space-y-2 text-sm text-muted-foreground">
-                          <p>• AI降重 +{pkg.aiReducer} 次</p>
-                          <p>• 项目数 +{pkg.projects} 个</p>
-                        </div>
                         <Button 
                           className="w-full"
                           variant={pkg.recommended ? 'default' : 'outline'}
@@ -198,11 +235,6 @@ export default function SettingsPage() {
                       </CardContent>
                     </Card>
                   ))}
-                </div>
-                <div className="text-center text-sm text-muted-foreground">
-                  <p>💡 参考用量</p>
-                  <p className="mt-1">• 1次AI降重 ≈ 处理1篇文章</p>
-                  <p>• 1个项目 = 1篇完整的写作任务</p>
                 </div>
               </DialogContent>
             </Dialog>

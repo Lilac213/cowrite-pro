@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAllProfiles, updateProfile, getSystemConfig, updateSystemConfig, getAllInvitationCodes, createInvitationCode, deactivateInvitationCode } from '@/db/api';
+import { getAllProfiles, updateProfile, getSystemConfig, updateSystemConfig, getAllInvitationCodes, createInvitationCode, deactivateInvitationCode, setUserCredits } from '@/db/api';
 import type { Profile, SystemConfig, InvitationCode } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
-import { Copy, Plus, Ban } from 'lucide-react';
+import { Copy, Plus, Ban, Edit } from 'lucide-react';
 
 // 同步配置到 Edge Function Secrets
 async function syncConfigToSecrets() {
@@ -42,11 +42,11 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [creditDialogOpen, setCreditDialogOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [newCodeLimits, setNewCodeLimits] = useState({
-    aiReducerLimit: 10,
-    projectLimit: 5,
-  });
+  const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
+  const [newCredits, setNewCredits] = useState(0);
+  const [newCodeCredits, setNewCodeCredits] = useState(100);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -124,10 +124,7 @@ export default function AdminPage() {
   const handleGenerateCode = async () => {
     setGenerating(true);
     try {
-      const newCode = await createInvitationCode(
-        newCodeLimits.aiReducerLimit,
-        newCodeLimits.projectLimit
-      );
+      const newCode = await createInvitationCode(newCodeCredits);
       setInvitationCodes([newCode, ...invitationCodes]);
       setDialogOpen(false);
       toast({
@@ -142,6 +139,32 @@ export default function AdminPage() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const handleSetUserCredits = async () => {
+    if (!selectedUser) return;
+    try {
+      await setUserCredits(selectedUser.id, newCredits);
+      setProfiles(profiles.map(p => 
+        p.id === selectedUser.id ? { ...p, available_credits: newCredits } : p
+      ));
+      setCreditDialogOpen(false);
+      toast({
+        title: '设置成功',
+        description: `已为 ${selectedUser.username} 设置 ${newCredits} 点数`,
+      });
+    } catch (error) {
+      toast({
+        title: '设置失败',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const openCreditDialog = (user: Profile) => {
+    setSelectedUser(user);
+    setNewCredits(user.available_credits);
+    setCreditDialogOpen(true);
   };
 
   const handleCopyCode = (code: string) => {
@@ -348,9 +371,9 @@ export default function AdminPage() {
                   <TableRow>
                     <TableHead>用户名</TableHead>
                     <TableHead>角色</TableHead>
-                    <TableHead>积分</TableHead>
-                    <TableHead>AI降重</TableHead>
-                    <TableHead>项目数</TableHead>
+                    <TableHead>可用点数</TableHead>
+                    <TableHead>AI降重使用</TableHead>
+                    <TableHead>项目创建</TableHead>
                     <TableHead>注册时间</TableHead>
                     <TableHead>操作</TableHead>
                   </TableRow>
@@ -364,29 +387,43 @@ export default function AdminPage() {
                           {profile.role === 'admin' ? '管理员' : '用户'}
                         </Badge>
                       </TableCell>
-                      <TableCell>{profile.credits} 点</TableCell>
                       <TableCell>
-                        {profile.ai_reducer_used}/{profile.ai_reducer_limit}
+                        {profile.unlimited_credits ? (
+                          <Badge variant="default">无限</Badge>
+                        ) : (
+                          `${profile.available_credits} 点`
+                        )}
                       </TableCell>
-                      <TableCell>
-                        {profile.projects_created}/{profile.project_limit}
-                      </TableCell>
+                      <TableCell>{profile.ai_reducer_used} 次</TableCell>
+                      <TableCell>{profile.projects_created} 个</TableCell>
                       <TableCell>
                         {new Date(profile.created_at).toLocaleDateString('zh-CN')}
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={profile.role}
-                          onValueChange={(value: string) => handleRoleChange(profile.id, value as 'user' | 'admin')}
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="user">用户</SelectItem>
-                            <SelectItem value="admin">管理员</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <div className="flex gap-2">
+                          <Select
+                            value={profile.role}
+                            onValueChange={(value: string) => handleRoleChange(profile.id, value as 'user' | 'admin')}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="user">用户</SelectItem>
+                              <SelectItem value="admin">管理员</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {!profile.unlimited_credits && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openCreditDialog(profile)}
+                            >
+                              <Edit className="h-3 w-3 mr-1" />
+                              配置点数
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -394,6 +431,38 @@ export default function AdminPage() {
               </Table>
             </CardContent>
           </Card>
+
+          {/* 配置点数对话框 */}
+          <Dialog open={creditDialogOpen} onOpenChange={setCreditDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>配置用户点数</DialogTitle>
+                <DialogDescription>
+                  为 {selectedUser?.username} 设置可用点数
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="credits">可用点数</Label>
+                  <Input
+                    id="credits"
+                    type="number"
+                    min="0"
+                    value={newCredits}
+                    onChange={(e) => setNewCredits(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCreditDialogOpen(false)}>
+                  取消
+                </Button>
+                <Button onClick={handleSetUserCredits}>
+                  确定
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="invitations">
@@ -420,29 +489,13 @@ export default function AdminPage() {
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                       <div className="space-y-2">
-                        <Label htmlFor="ai-reducer-limit">AI降重工具使用次数</Label>
+                        <Label htmlFor="code-credits">赠送点数</Label>
                         <Input
-                          id="ai-reducer-limit"
+                          id="code-credits"
                           type="number"
                           min="0"
-                          value={newCodeLimits.aiReducerLimit}
-                          onChange={(e) => setNewCodeLimits({
-                            ...newCodeLimits,
-                            aiReducerLimit: parseInt(e.target.value) || 0
-                          })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="project-limit">可创建项目数量</Label>
-                        <Input
-                          id="project-limit"
-                          type="number"
-                          min="0"
-                          value={newCodeLimits.projectLimit}
-                          onChange={(e) => setNewCodeLimits({
-                            ...newCodeLimits,
-                            projectLimit: parseInt(e.target.value) || 0
-                          })}
+                          value={newCodeCredits}
+                          onChange={(e) => setNewCodeCredits(parseInt(e.target.value) || 0)}
                         />
                       </div>
                     </div>
@@ -463,8 +516,7 @@ export default function AdminPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>邀请码</TableHead>
-                    <TableHead>AI降重次数</TableHead>
-                    <TableHead>项目数量</TableHead>
+                    <TableHead>赠送点数</TableHead>
                     <TableHead>使用次数</TableHead>
                     <TableHead>状态</TableHead>
                     <TableHead>创建时间</TableHead>
@@ -475,8 +527,7 @@ export default function AdminPage() {
                   {invitationCodes.map((code) => (
                     <TableRow key={code.id}>
                       <TableCell className="font-mono font-bold">{code.code}</TableCell>
-                      <TableCell>{code.ai_reducer_limit}</TableCell>
-                      <TableCell>{code.project_limit}</TableCell>
+                      <TableCell>{code.credits} 点</TableCell>
                       <TableCell>{code.used_count}</TableCell>
                       <TableCell>
                         <Badge variant={code.is_active ? 'default' : 'secondary'}>

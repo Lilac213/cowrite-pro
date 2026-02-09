@@ -31,9 +31,9 @@ export default function AIReducerPage() {
       if (profile) {
         setUsageInfo({
           used: profile.ai_reducer_used,
-          limit: profile.ai_reducer_limit,
+          limit: profile.unlimited_credits ? -1 : profile.available_credits,
         });
-        setCanUse(profile.ai_reducer_used < profile.ai_reducer_limit);
+        setCanUse(profile.unlimited_credits || profile.available_credits > 0);
       }
     } catch (error) {
       console.error('检查使用限制失败:', error);
@@ -81,7 +81,7 @@ export default function AIReducerPage() {
       
       toast({
         title: '处理成功',
-        description: `剩余次数：${usageInfo.limit - usageInfo.used - 1}`,
+        description: usageInfo.limit === -1 ? '管理员无限使用' : `剩余点数：${usageInfo.limit - 1}`,
       });
     } catch (error: any) {
       toast({
@@ -111,14 +111,15 @@ export default function AIReducerPage() {
         <p className="text-muted-foreground mt-2">降低文章的 AI 检测率</p>
       </div>
 
-      {/* 使用情况提示 */}
+      {/* 使用情况提示 - 单行显示 */}
       <Alert className={`mb-6 ${!canUse ? 'border-destructive' : ''}`}>
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>使用情况</AlertTitle>
         <AlertDescription className="flex items-center justify-between">
           <span>
-            已使用 {usageInfo.used}/{usageInfo.limit} 次
-            {!canUse && ' - 次数已用完'}
+            已使用 {usageInfo.used} 次
+            {usageInfo.limit === -1 ? ' (无限)' : ` · 剩余点数 ${usageInfo.limit}`}
+            {!canUse && ' - 点数已用完'}
           </span>
           {!canUse && (
             <Button 
