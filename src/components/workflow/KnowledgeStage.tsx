@@ -22,8 +22,10 @@ import {
   getResearchGaps,
   isResearchStageComplete,
   updateWritingSessionStage,
+  getRetrievedMaterials,
+  getSelectedMaterials,
 } from '@/db/api';
-import type { KnowledgeBase, WritingSession, ResearchInsight, ResearchGap, SynthesisResult } from '@/types';
+import type { KnowledgeBase, WritingSession, ResearchInsight, ResearchGap, SynthesisResult, RetrievedMaterial } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -37,6 +39,7 @@ import SearchResultsPanel from './SearchResultsPanel';
 import SynthesisResultsDialog from './SynthesisResultsDialog';
 import SearchLogsDialog from './SearchLogsDialog';
 import ResearchSynthesisReview from './ResearchSynthesisReview';
+import MaterialSelectionPanel from './MaterialSelectionPanel';
 
 interface KnowledgeStageProps {
   projectId: string;
@@ -75,6 +78,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     thought: string;
   } | null>(null);
   const [researchStageComplete, setResearchStageComplete] = useState(false);
+  
+  // 新增：资料选择相关状态
+  const [retrievedMaterials, setRetrievedMaterials] = useState<RetrievedMaterial[]>([]);
+  const [showMaterialSelection, setShowMaterialSelection] = useState(false);
+  const [materialsConfirmed, setMaterialsConfirmed] = useState(false);
   
   const { toast } = useToast();
 
@@ -338,11 +346,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       // 清空之前的日志
       setSearchLogs([]);
 
-      // 使用新的 Agent 驱动的研究工作流
+      // 使用新的 Agent 驱动的研究工作流（传入 sessionId）
       const { retrievalResults, synthesisResults } = await agentDrivenResearchWorkflow(
         requirementsDoc,
         projectId,
-        user.id
+        user.id,
+        writingSession?.id // 传入 sessionId
       );
 
       console.log('[KnowledgeStage] agentDrivenResearchWorkflow 返回结果:');
@@ -358,157 +367,36 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       setRetrievalResults(retrievalResults);
       setSynthesisResults(synthesisResults);
 
+      // 加载检索到的资料
+      if (writingSession) {
+        const materials = await getRetrievedMaterials(writingSession.id);
+        setRetrievedMaterials(materials);
+        setShowMaterialSelection(true);
+        setMaterialsConfirmed(false);
+      }
+
       setSearchProgress({ 
-        stage: '资料整理', 
-        message: '正在整理检索结果...',
-        details: `已检索到资料，正在分类整理`
+        stage: '完成', 
+        message: `已检索到 ${retrievedMaterials.length} 条资料，请选择需要的资料`,
       });
 
       toast({
-        title: '✅ Research Synthesis Agent 完成',
-        description: '资料已整理为中文写作素材',
+        title: '✅ 资料检索完成',
+        description: '请选择需要的资料，然后点击"确认选择并整理"',
       });
 
-      // 保存检索结果到知识库
-      const allSources = [
-        ...(retrievalResults.academic_sources || []),
-        ...(retrievalResults.news_sources || []),
-        ...(retrievalResults.web_sources || []),
-        ...(retrievalResults.user_library_sources || []),
-        ...(retrievalResults.personal_sources || []),
-      ];
+      // 注意：不再自动保存到知识库，等待用户选择资料后再保存
+      // 旧的自动保存代码已被注释
 
-      console.log('[KnowledgeStage] 所有来源数量:', allSources.length);
-      console.log('[KnowledgeStage] 来源详情:', {
-        academic: retrievalResults.academic_sources?.length || 0,
-        news: retrievalResults.news_sources?.length || 0,
-        web: retrievalResults.web_sources?.length || 0,
-        user_library: retrievalResults.user_library_sources?.length || 0,
-        personal: retrievalResults.personal_sources?.length || 0,
-      });
-
-      setSearchProgress({ 
-        stage: '保存资料', 
-        message: `正在保存 ${allSources.length} 条资料到知识库...`
-      });
-
-      // 保存到知识库
-      for (const source of allSources) {
-        let title = source.title || '无标题';
-        let content = '';
-        let sourceLabel = '';
-        let sourceUrl = source.url || '';
-        let contentStatus = source.content_status || 'abstract_only';
-        let extractedContent = source.extracted_content || [];
-        let fullText = source.full_text || '';
-
-        // 根据 source_type 构建内容
-        if (source.source_type === 'GoogleScholar') {
-          sourceLabel = 'Google Scholar';
-          content = `作者: ${source.authors || '未知'}\n年份: ${source.year || '未知'}\n引用次数: ${source.citation_count || 0}\n\n`;
-          
-          if (fullText && fullText.length > 100) {
-            content += `全文:\n${fullText}`;
-          } else if (extractedContent.length > 0) {
-            content += `摘要:\n${extractedContent.join('\n\n')}`;
-          } else {
-            content += `摘要:\n${source.abstract || '暂无摘要'}`;
-          }
-          
-          if (source.notes) {
-            content += `\n\n备注: ${source.notes}`;
-          }
-        } else if (source.source_type === 'TheNews') {
-          sourceLabel = 'TheNews';
-          content = `来源: ${source.source || '未知'}\n发布时间: ${source.published_at || '未知'}\n\n`;
-          
-          if (fullText && fullText.length > 100) {
-            content += `全文:\n${fullText}`;
-          } else if (extractedContent.length > 0) {
-            content += `内容:\n${extractedContent.join('\n\n')}`;
-          } else {
-            content += `摘要:\n${source.summary || '暂无内容'}`;
-          }
-          
-          if (source.notes) {
-            content += `\n\n备注: ${source.notes}`;
-          }
-        } else if (source.source_type === 'SmartSearch') {
-          sourceLabel = 'Smart Search';
-          content = `网站: ${source.site_name || '未知'}\n\n`;
-          
-          if (fullText && fullText.length > 100) {
-            content += `全文:\n${fullText}`;
-          } else if (extractedContent.length > 0) {
-            content += `内容:\n${extractedContent.join('\n\n')}`;
-          } else {
-            content += `摘要:\n${source.snippet || '暂无内容'}`;
-          }
-          
-          if (source.notes) {
-            content += `\n\n备注: ${source.notes}`;
-          }
-        } else if (source.source_type === 'UserLibrary') {
-          sourceLabel = '参考文章库';
-          content = fullText || extractedContent.join('\n\n') || '暂无内容';
-        } else if (source.source_type === 'PersonalMaterial') {
-          sourceLabel = '个人素材库';
-          content = fullText || extractedContent.join('\n\n') || '暂无内容';
-          sourceUrl = '';
-        }
-
-        await createKnowledgeBase({
-          project_id: projectId,
-          title: title,
-          content: content,
-          source: sourceLabel,
-          source_url: sourceUrl || undefined,
-          collected_at: new Date().toISOString(),
-          selected: false,
-          keywords: retrievalResults.search_queries?.academic_keywords || [],
-          content_status: contentStatus,
-          extracted_content: extractedContent.length > 0 ? extractedContent : undefined,
-          full_text: fullText || undefined,
-        });
-      }
-
-      // 保存综合结果到项目
+      // 保存综合结果到项目（暂时为空）
       setWorkflowResult({
         retrievalResults,
-        synthesisResults,
+        synthesisResults: null,
       });
 
-      // 将 synthesisResults 保存为 writingSummary
-      setWritingSummary(synthesisResults);
-
-      // 保存到 localStorage 缓存
-      const cacheSaveKey = `research_results_${projectId}`;
-      const cacheData = {
-        retrievalResults,
-        synthesisResults,
-        timestamp: Date.now(),
-      };
-      try {
-        localStorage.setItem(cacheSaveKey, JSON.stringify(cacheData));
-        console.log('[KnowledgeStage] 搜索结果已缓存到 localStorage');
-      } catch (e) {
-        console.error('[KnowledgeStage] 缓存保存失败:', e);
-      }
-
-      await loadKnowledge();
-      
       // 更新最后搜索时间
       setLastSearchTime(new Date().toLocaleString('zh-CN'));
       
-      setSearchProgress({ 
-        stage: '完成', 
-        message: `搜索完成！已从 5 个数据源检索并整理了 ${allSources.length} 条资料`
-      });
-      
-      toast({
-        title: '✅ 搜索完成',
-        description: `已从 5 个数据源检索并整理了 ${allSources.length} 条资料`,
-      });
     } catch (error: any) {
       console.error('搜索失败 - 完整错误对象:', error);
       console.error('错误类型:', typeof error);
@@ -828,8 +716,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     }
   };
 
-  // 刷新搜索
+  // 重新搜索
   const handleRefreshSearch = () => {
+    setShowMaterialSelection(false);
+    setMaterialsConfirmed(false);
+    setRetrievedMaterials([]);
+    // 触发重新搜索
     if (query.trim()) {
       handleSearch();
     } else {
@@ -841,6 +733,47 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   };
 
   // 资料整理 - 调用研究综合 Agent
+  // 处理资料选择确认
+  const handleMaterialSelectionConfirm = async () => {
+    if (!writingSession) {
+      toast({
+        title: '会话未初始化',
+        description: '请刷新页面重试',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // 获取选中的资料
+      const selectedMaterials = await getSelectedMaterials(writingSession.id);
+      
+      if (selectedMaterials.length === 0) {
+        toast({
+          title: '请选择资料',
+          description: '至少选择一条资料才能继续',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      setMaterialsConfirmed(true);
+      setShowMaterialSelection(false);
+
+      toast({
+        title: '✅ 资料选择已确认',
+        description: `已选择 ${selectedMaterials.length} 条资料，现在可以进行整理`,
+      });
+    } catch (error: any) {
+      console.error('确认资料选择失败:', error);
+      toast({
+        title: '确认失败',
+        description: error.message || '请稍后重试',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleOrganize = async () => {
     if (!writingSession) {
       toast({
@@ -947,6 +880,13 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           thought={synthesisReviewData.thought}
           onDecisionsComplete={handleSynthesisReviewComplete}
           onCancel={handleSynthesisReviewCancel}
+        />
+      ) : showMaterialSelection && retrievedMaterials.length > 0 ? (
+        /* 显示资料选择面板 */
+        <MaterialSelectionPanel
+          materials={retrievedMaterials}
+          onConfirm={handleMaterialSelectionConfirm}
+          onRefresh={handleRefreshSearch}
         />
       ) : (
         <>
@@ -1063,9 +1003,17 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                     <CheckCircle2 className="h-4 w-4" />
                     研究阶段已完成，可以进入下一阶段
                   </span>
+                ) : materialsConfirmed ? (
+                  <span>
+                    请点击"资料整理"并完成决策
+                  </span>
+                ) : retrievedMaterials.length > 0 ? (
+                  <span>
+                    请选择需要的资料
+                  </span>
                 ) : (
                   <span>
-                    请先点击"资料整理"并完成决策
+                    请先进行资料搜索
                   </span>
                 )}
               </div>
@@ -1074,7 +1022,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                   onClick={handleOrganize} 
                   variant="outline"
                   className="min-w-[140px]"
-                  disabled={synthesizing || knowledge.length === 0}
+                  disabled={synthesizing || !materialsConfirmed}
                 >
                   <Sparkles className="h-4 w-4 mr-2" />
                   {synthesizing ? '整理中...' : '资料整理'}

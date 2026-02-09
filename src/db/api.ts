@@ -22,6 +22,8 @@ import type {
   ResearchGap,
   UserDecision,
   SynthesisResult,
+  RetrievedMaterial,
+  SourceType,
 } from '@/types';
 
 // ============ System Config API ============
@@ -1181,10 +1183,11 @@ ${JSON.stringify(selectedKnowledge, null, 2)}`;
  * Research Retrieval Agent - 资料检索 Agent
  * 负责在 5 个数据源中检索相关资料
  */
-export async function researchRetrievalAgent(requirementsDoc: any, projectId?: string, userId?: string) {
+export async function researchRetrievalAgent(requirementsDoc: any, projectId?: string, userId?: string, sessionId?: string) {
   console.log('[researchRetrievalAgent] 开始调用，需求文档:', requirementsDoc);
   console.log('[researchRetrievalAgent] projectId:', projectId);
   console.log('[researchRetrievalAgent] userId:', userId);
+  console.log('[researchRetrievalAgent] sessionId:', sessionId);
   console.log('[researchRetrievalAgent] Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
   console.log('[researchRetrievalAgent] Supabase Anon Key exists:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
   
@@ -1192,7 +1195,7 @@ export async function researchRetrievalAgent(requirementsDoc: any, projectId?: s
     console.log('[researchRetrievalAgent] 准备调用 Edge Function...');
     
     const { data, error } = await supabase.functions.invoke('research-retrieval-agent', {
-      body: { requirementsDoc, projectId, userId },
+      body: { requirementsDoc, projectId, userId, sessionId },
     });
 
     console.log('[researchRetrievalAgent] Edge Function 调用完成');
@@ -1339,16 +1342,14 @@ export async function researchSynthesisAgent(retrievalResults: any, requirements
  * 1. 调用 Research Retrieval Agent 检索资料
  * 2. 调用 Research Synthesis Agent 整理资料
  */
-export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectId?: string, userId?: string) {
+export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectId?: string, userId?: string, sessionId?: string) {
   // 第一步：资料检索
-  const retrievalResults = await researchRetrievalAgent(requirementsDoc, projectId, userId);
+  const retrievalResults = await researchRetrievalAgent(requirementsDoc, projectId, userId, sessionId);
 
-  // 第二步：资料整理
-  const synthesisResults = await researchSynthesisAgent(retrievalResults, requirementsDoc);
-
+  // 不再自动调用综合分析，等待用户选择资料后再调用
   return {
     retrievalResults,
-    synthesisResults,
+    synthesisResults: null, // 暂时不返回综合结果
   };
 }
 
@@ -2035,4 +2036,90 @@ export async function isResearchStageComplete(sessionId: string): Promise<boolea
 
   return allInsightsDecided && allGapsDecided;
 }
+
+// ==================== 检索资料管理 ====================
+
+// 获取会话的所有检索资料
+export async function getRetrievedMaterials(sessionId: string): Promise<RetrievedMaterial[]> {
+  const { data, error } = await supabase
+    .from('retrieved_materials')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as RetrievedMaterial[];
+}
+
+// 获取选中的检索资料
+export async function getSelectedMaterials(sessionId: string): Promise<RetrievedMaterial[]> {
+  const { data, error } = await supabase
+    .from('retrieved_materials')
+    .select('*')
+    .eq('session_id', sessionId)
+    .eq('is_selected', true)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as RetrievedMaterial[];
+}
+
+// 更新资料选择状态
+export async function updateMaterialSelection(
+  materialId: string,
+  isSelected: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from('retrieved_materials')
+    .update({ is_selected: isSelected })
+    .eq('id', materialId);
+
+  if (error) throw error;
+}
+
+// 批量更新资料选择状态
+export async function batchUpdateMaterialSelection(
+  selections: Array<{ id: string; is_selected: boolean }>
+): Promise<void> {
+  const promises = selections.map(({ id, is_selected }) =>
+    updateMaterialSelection(id, is_selected)
+  );
+  await Promise.all(promises);
+}
+
+// 清空会话的检索资料
+export async function clearRetrievedMaterials(sessionId: string): Promise<void> {
+  const { error } = await supabase
+    .from('retrieved_materials')
+    .delete()
+    .eq('session_id', sessionId);
+
+  if (error) throw error;
+}
+
+// 保存检索资料
+export async function saveRetrievedMaterial(material: Omit<RetrievedMaterial, 'id' | 'created_at'>): Promise<RetrievedMaterial> {
+  const { data, error } = await supabase
+    .from('retrieved_materials')
+    .insert(material)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as RetrievedMaterial;
+}
+
+// 批量保存检索资料
+export async function batchSaveRetrievedMaterials(
+  materials: Array<Omit<RetrievedMaterial, 'id' | 'created_at'>>
+): Promise<RetrievedMaterial[]> {
+  const { data, error } = await supabase
+    .from('retrieved_materials')
+    .insert(materials)
+    .select();
+
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as RetrievedMaterial[];
+}
+
 

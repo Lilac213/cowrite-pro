@@ -1,3 +1,167 @@
+# 任务：优化研究检索和综合流程
+
+## 需求分析
+
+### 当前流程问题
+1. 用户点击"整理资料"后，系统自动调用 Research Synthesis Agent
+2. 用户无法选择具体需要的资料
+3. 缺少对原文内容的展示
+
+### 新流程要求
+1. **Research Retrieval Agent 阶段**
+   - 在各数据源搜索关键词
+   - 获取资料标题和 URL
+   - 从 URL 提取原文内容
+   - 在页面展示搜索结果（标题、摘要、URL、原文）
+   - 用户可以选择需要的资料（点击勾选）
+
+2. **用户选择阶段**
+   - 显示所有搜索到的资料
+   - 支持用户勾选/取消勾选
+   - 只有选中的资料才会进入下一步
+
+3. **Research Synthesis Agent 阶段**
+   - 只在用户选择资料后调用
+   - 基于用户选中的资料进行综合分析
+   - 提取观点、数据、洞察
+   - 显示综合结果
+
+4. **用户决策阶段**
+   - 显示 AI 提取的观点和数据
+   - 用户可以填写自己的判断
+   - 标记观点是否可取
+   - 添加个人评论和决策
+
+5. **完成检查**
+   - 只有完成所有决策后才能进入下一阶段
+
+## 实施计划
+
+### Phase 1: 数据库架构更新 ✅
+- [x] 创建 retrieved_materials 表
+  - id, session_id, source_type, title, url, abstract, full_text
+  - authors, year, citation_count, published_at
+  - is_selected (用户是否选中)
+  - created_at
+- [x] 添加 RLS 策略
+- [x] 创建索引
+
+### Phase 2: 更新 Research Retrieval Agent ✅
+- [x] 添加 sessionId 参数
+- [x] 保存检索结果到 retrieved_materials 表
+- [x] 返回结构化的资料列表
+- [x] 部署 Edge Function
+
+### Phase 3: 创建资料选择 UI ✅
+- [x] 创建 MaterialSelectionPanel 组件
+  - 显示所有检索到的资料
+  - 按数据源分类展示
+  - 显示标题、作者、摘要
+  - 可展开查看原文
+  - 勾选框选择资料
+  - 显示已选数量
+  - 确认选择按钮
+- [x] 添加资料详情展开/折叠
+- [x] 添加全选/取消全选功能
+- [x] 添加按来源筛选功能
+
+### Phase 4: 更新 API 函数 ✅
+- [x] 添加 RetrievedMaterial 类型定义
+- [x] getRetrievedMaterials - 获取会话的所有检索资料
+- [x] getSelectedMaterials - 获取选中的资料
+- [x] updateMaterialSelection - 更新资料选择状态
+- [x] batchUpdateMaterialSelection - 批量更新选择
+- [x] clearRetrievedMaterials - 清空会话的检索资料
+- [x] saveRetrievedMaterial - 保存单个检索资料
+- [x] batchSaveRetrievedMaterials - 批量保存检索资料
+
+### Phase 5: 更新 KnowledgeStage 流程 ✅
+- [x] 添加新状态变量
+  - retrievedMaterials
+  - showMaterialSelection
+  - materialsConfirmed
+- [x] 修改 handleSearch 函数
+  - 传递 sessionId 到 workflow
+  - 加载检索到的资料
+  - 显示 MaterialSelectionPanel
+- [x] 添加 handleMaterialSelectionConfirm 处理器
+- [x] 更新 handleRefreshSearch 处理器
+- [x] 更新按钮状态和提示文本
+- [x] 条件渲染资料选择界面
+
+### Phase 6: 修改 Research Synthesis Agent 调用 ⏳
+- [ ] 修改 handleOrganize 函数
+  - 检查是否有选中的资料
+  - 只传递选中的资料给 Synthesis Agent
+- [ ] 更新 callResearchSynthesisAgent
+  - 接收选中的资料列表
+  - 基于选中资料进行综合分析
+
+### Phase 7: 增强用户决策界面 ⏳
+- [ ] 在 ResearchSynthesisReview 中添加
+  - 用户判断输入框
+  - 观点可取性评分
+  - 个人评论文本框
+  - 决策理由说明
+- [ ] 更新决策保存逻辑
+  - 保存用户判断
+  - 保存评分和评论
+- [ ] 添加决策完成度进度条
+
+### Phase 8: 测试和优化 ⏳
+- [ ] 测试完整流程
+- [ ] 优化加载性能
+- [ ] 添加错误处理
+- [ ] 优化 UI 交互
+
+## 已完成功能
+
+### 数据库
+- ✅ retrieved_materials 表已创建
+- ✅ RLS 策略已配置
+- ✅ 索引已创建
+
+### Edge Function
+- ✅ research-retrieval-agent 已更新
+  - 接收 sessionId 参数
+  - 保存资料到数据库
+  - 支持所有数据源
+
+### API 函数
+- ✅ 8 个新的 API 函数已添加
+- ✅ 类型定义已更新
+
+### UI 组件
+- ✅ MaterialSelectionPanel 已创建
+  - 按来源分组显示
+  - 支持展开/折叠
+  - 支持全选/取消全选
+  - 显示原文内容
+  - 实时更新选择状态
+
+### 工作流
+- ✅ KnowledgeStage 已更新
+  - 新的状态管理
+  - 资料选择流程
+  - 条件渲染逻辑
+
+## 下一步工作
+
+1. **修改 Research Synthesis Agent 调用**
+   - 只使用选中的资料
+   - 优化综合分析逻辑
+
+2. **增强用户决策界面**
+   - 添加用户判断字段
+   - 添加评分和评论功能
+
+3. **完整测试**
+   - 端到端流程测试
+   - 边界情况测试
+   - 性能优化
+
+---
+
 # 任务：集成 SerpAPI 替换现有搜索 API
 
 ## 完成情况

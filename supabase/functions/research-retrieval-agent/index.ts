@@ -10,6 +10,7 @@ interface ResearchRequest {
   requirementsDoc: string;
   projectId?: string;
   userId?: string;
+  sessionId?: string;
 }
 
 interface SourceWithContent {
@@ -41,12 +42,13 @@ Deno.serve(async (req) => {
   };
 
   try {
-    const { requirementsDoc, projectId, userId }: ResearchRequest = await req.json();
+    const { requirementsDoc, projectId, userId, sessionId }: ResearchRequest = await req.json();
 
     addLog('========== 接收到的请求参数 ==========');
     addLog(`requirementsDoc 类型: ${typeof requirementsDoc}`);
     addLog(`projectId: ${projectId || '未提供'}`);
     addLog(`userId: ${userId || '未提供'}`);
+    addLog(`sessionId: ${sessionId || '未提供'}`);
 
     if (!requirementsDoc) {
       return new Response(
@@ -758,6 +760,139 @@ Output Format:
 
     addLog('质量统计:', qualityStats);
     addLog('总资料数:', allSources.length);
+
+    // 保存检索资料到数据库
+    if (sessionId) {
+      addLog('========== 保存检索资料到数据库 ==========');
+      try {
+        // 先清空该会话的旧资料
+        const { error: deleteError } = await supabase
+          .from('retrieved_materials')
+          .delete()
+          .eq('session_id', sessionId);
+
+        if (deleteError) {
+          addLog(`清空旧资料失败: ${deleteError.message}`);
+        } else {
+          addLog('已清空旧资料');
+        }
+
+        // 准备要保存的资料
+        const materialsToSave = [];
+
+        // 学术来源
+        for (const source of finalResults.academic_sources) {
+          materialsToSave.push({
+            session_id: sessionId,
+            source_type: 'academic',
+            title: source.title || '',
+            url: source.url || null,
+            abstract: source.abstract || null,
+            full_text: source.full_text || null,
+            authors: source.authors || null,
+            year: source.year || null,
+            citation_count: source.citation_count || 0,
+            is_selected: false,
+            metadata: {
+              content_status: source.content_status,
+              extracted_content: source.extracted_content || [],
+              notes: source.notes || ''
+            }
+          });
+        }
+
+        // 新闻来源
+        for (const source of finalResults.news_sources) {
+          materialsToSave.push({
+            session_id: sessionId,
+            source_type: 'news',
+            title: source.title || '',
+            url: source.url || null,
+            abstract: source.summary || null,
+            full_text: source.full_text || null,
+            authors: source.source || null,
+            published_at: source.published_at || null,
+            is_selected: false,
+            metadata: {
+              content_status: source.content_status,
+              extracted_content: source.extracted_content || [],
+              notes: source.notes || ''
+            }
+          });
+        }
+
+        // 网络来源
+        for (const source of finalResults.web_sources) {
+          materialsToSave.push({
+            session_id: sessionId,
+            source_type: 'web',
+            title: source.title || '',
+            url: source.url || null,
+            abstract: source.snippet || null,
+            full_text: source.full_text || null,
+            authors: source.site_name || null,
+            is_selected: false,
+            metadata: {
+              content_status: source.content_status,
+              extracted_content: source.extracted_content || [],
+              notes: source.notes || '',
+              last_crawled_at: source.last_crawled_at || ''
+            }
+          });
+        }
+
+        // 用户库来源
+        for (const source of finalResults.user_library_sources) {
+          materialsToSave.push({
+            session_id: sessionId,
+            source_type: 'user_library',
+            title: source.title || '',
+            url: source.url || null,
+            full_text: source.content || null,
+            is_selected: false,
+            metadata: {
+              source_type: source.source_type || '',
+              created_at: source.created_at || ''
+            }
+          });
+        }
+
+        // 个人素材
+        for (const source of finalResults.personal_sources) {
+          materialsToSave.push({
+            session_id: sessionId,
+            source_type: 'personal',
+            title: source.title || '',
+            full_text: source.content || null,
+            is_selected: false,
+            metadata: {
+              material_type: source.material_type || '',
+              created_at: source.created_at || ''
+            }
+          });
+        }
+
+        if (materialsToSave.length > 0) {
+          const { data: savedMaterials, error: insertError } = await supabase
+            .from('retrieved_materials')
+            .insert(materialsToSave)
+            .select();
+
+          if (insertError) {
+            addLog(`保存资料失败: ${insertError.message}`);
+          } else {
+            addLog(`成功保存 ${savedMaterials?.length || 0} 条资料`);
+          }
+        } else {
+          addLog('没有资料需要保存');
+        }
+      } catch (saveError: any) {
+        addLog(`保存资料异常: ${saveError.message}`);
+        console.error('保存资料异常:', saveError);
+      }
+    } else {
+      addLog('未提供 sessionId，跳过保存资料');
+    }
 
     // 最终结果
     const finalResponse = {

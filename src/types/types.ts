@@ -307,6 +307,25 @@ export interface WritingSession {
   updated_at: string;
 }
 
+export type SourceType = 'academic' | 'news' | 'web' | 'user_library' | 'personal';
+
+export interface RetrievedMaterial {
+  id: string;
+  session_id: string;
+  source_type: SourceType;
+  title: string;
+  url?: string;
+  abstract?: string;
+  full_text?: string;
+  authors?: string;
+  year?: string;
+  citation_count?: number;
+  published_at?: string;
+  is_selected: boolean;
+  metadata?: any;
+  created_at: string;
+}
+
 export type UserDecision = 'pending' | 'must_use' | 'background' | 'excluded';
 export type RecommendedUsage = 'direct' | 'background' | 'optional';
 export type Citability = 'direct' | 'background' | 'controversial';

@@ -18,7 +18,7 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
 ## 2. 用户旅程与阶段流程
 
 ### 2.1 整体流程图
-创建项目 → 明确需求 → 资料查询 → 资料整理 → 文章结构 → 段落结构 → 个人素材 → 文章生成 → 内容审校 → 排版导出 → 终版输出
+创建项目 → 明确需求 → 资料检索 → 资料整理 → 文章结构 → 段落结构 → 个人素材 → 文章生成 → 内容审校 → 排版导出 → 终版输出
 
 ### 2.2 详细阶段说明
 
@@ -50,301 +50,46 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
 - 选择文章类型：支持下拉已有模板选项，或新增模板
 - AI 将输入结构化为需求文档，生成时参考所选格式模板中的相关内容
 - 需求文档保存至 _briefs/ 文件夹，文件名格式：项目名-brief.md
-- 需求文档在后续阶段起到引领作用，资料查询和文章结构生成应围绕需求文档展开
+- 需求文档在后续阶段起到引领作用，资料整理和文章结构生成应围绕需求文档展开
 - 用户必须确认需求后才能进入下一步
 - 重新点击生成需求文档后，确认按钮需重置为待确认状态
 - PC端：需求文档模块右侧增加缩进/展开按钮，支持将需求文档隐藏或展开
 - 移动端：无需缩进/展开按钮
-- 跳转至资料查询页时：需求文档不再显示在页面右侧，改为在进度条右侧显示需求文档图标按钮，点击后在弹窗中显示需求文档内容
+- 跳转至资料检索页时：需求文档不再显示在页面右侧，改为在进度条右侧显示需求文档图标按钮，点击后在弹窗中显示需求文档内容
 
-#### 阶段 3：资料查询（Research Retrieval Agent）
+#### 阶段 3：资料检索
 
-**核心流程：Research Retrieval Agent**
+**资料检索页面设计**
 
-资料查询阶段采用 Research Retrieval Agent 负责多源检索、全文抓取与结构化返回。
-
-**Research Retrieval Agent（资料搜索与全文抓取 Agent）**
-
-角色定义：
-- 负责根据用户提供的结构化 JSON 需求文档，在多个数据源中检索最贴合主题、最具时效性、最具信息密度的研究与事实材料
-- 核心职责是获取可用于写作的完整、可引用内容，而不是摘要卡片
-- 只做搜索、筛选、全文抓取、结构化返回，不做观点发挥、不做写作、不做总结结论
-
-输入：
-- 接收 JSON 格式的需求文档，字段包括但不限于：主题、关键要点、核心观点、目标读者、写作风格、预期长度
-- 该 JSON 每次都会变化，字段内容是判断相关性的最高优先级信号
-
-可用数据源（必须全部考虑）：
-
-1. Google Scholar（via SerpApi）
-   - 用途：学术研究、方法论、框架、实证研究
-   - 检索要求：
-     - 语言：英文为主
-     - 年份：2020 年至今
-     - 返回数量：最多 10 条
-   - 优先级排序规则：
-     - 与关键要点/核心观点高度相关
-     - 引用次数较高
-     - 明确包含方法、模型、实证或失败案例
-   - 返回字段：title、authors、abstract、citation_count、publication_year、url
-   - 全文抓取规则：
-     - Scholar 默认只有摘要
-     - 若 URL 可访问全文（PDF / HTML），必须尝试获取
-     - 若无法获取全文，明确标注：abstract_only = true
-
-2. TheNews（新闻 & 行业动态）
-   - 用途：最新趋势、商业实践、失败案例、公司动向
-   - 检索要求：
-     - 强时效性（最近 1-2 年优先）
-     - 返回数量：最多 10 条
-   - 初始返回字段：title、summary、source、published_at、url
-   - 强制规则：
-     - TheNews 返回的内容永远不是最终内容
-     - 必须读取 URL、抓取新闻正文、提取主要段落
-     - 若正文抓取失败，必须标注原因（付费墙 / 403 / 空页面）
-
-3. Smart Search（Bing Web Search）
-   - 用途：博客、白皮书、行业报告、实践总结
-   - 检索要求：
-     - 市场/语言：zh-CN 优先，其次英文
-     - freshness 参数：开启（优先近 12-24 个月）
-     - 返回数量：最多 10 条
-     - 自动清理特殊字符，确保 JSON 可解析
-   - 初始返回字段：title、site_name、snippet、url、last_crawled_at
-   - 强制规则：
-     - snippet 仅用于判断是否值得点开
-     - 必须访问 URL，获取正文内容
-     - 禁止直接把 snippet 当作资料使用
-
-4. 用户参考文章库（User Reference Library）
-   - 用途：用户显式提供或历史沉淀的参考资料
-   - 处理方式：
-     - 直接视为高可信完整资料
-     - 不需要二次搜索
-     - 需要结构化拆分（核心观点 / 可引用段落）
-   - 要求：
-     - 判断与当前需求文档的相关度
-     - 标记高度相关/可补充/边缘相关
-
-5. 用户个人素材库（Personal Knowledge Base）
-   - 用途：用户过往观点、笔记、方法论、内部总结
-   - 处理方式：
-     - 只做检索与匹配
-     - 不篡改、不重写原始内容
-     - 不可当作事实来源，需标注为 personal_material
-
-工作流程（必须严格遵守）：
-
-Step 1：多源检索
-- 针对用户需求，分别从 Scholar、TheNews、Smart Search、用户资料库各取 Top N（≤10）
-
-Step 2：内容补全（关键步骤）
-- 对每一条非用户本地资料：
-  - IF 内容仅包含 title / snippet / abstract:
-    - 访问 URL
-    - 抓取正文
-    - 提取 3-8 个核心段落
-  - ELSE:
-    - 保留原文
-
-Step 3：内容质量判断
-- 若正文长度 < 300 字：标记为 insufficient_content
-- 若全文不可访问：标记为 unavailable_fulltext
-- 严禁 AI 自行补写不存在的内容
-
-Step 4：结果去重与相关度过滤
-- 删除明显跑题、纯营销内容、无实质信息的新闻稿
-
-Research Retrieval Agent 输出格式（严格遵守）：
-```json
-{
-  \"search_summary\": {
-    \"interpreted_topic\": \"...\",
-    \"key_dimensions\": [\"...\", \"...\"]
-  },
-  \"academic_queries\": [\"...\", \"...\"],
-  \"news_queries\": [\"...\", \"...\"],
-  \"web_queries\": [\"...\", \"...\"],
-  \"user_library_queries\": [\"...\", \"...\"],
-  \"sources\": [
-    {
-      \"source_type\": \"SmartSearch | TheNews | GoogleScholar | UserLibrary | PersonalMaterial\",
-      \"title\": \"...\",
-      \"authors\": \"...\",
-      \"year\": 2024,
-      \"url\": \"...\",
-      \"content_status\": \"full_text | abstract_only | insufficient_content | unavailable_fulltext\",
-      \"extracted_content\": [
-        \"段落1\",
-        \"段落2\",
-        \"段落3\"
-      ],
-      \"notes\": \"是否存在付费墙 / 转载 / 摘要限制\",
-      \"core_relevance\": \"高度相关 / 中度相关\"
-    }
-  ],
-  \"去重后数量\": {
-    \"academic\": 128,
-    \"news\": 46,
-    \"web\": 92,
-    \"user_library\": 15,
-    \"personal_material\": 8
-  }
-}
+页面结构：
+```
+ResearchRetrievalPage
+├─ RetrievalHeader（检索概览）
+├─ SearchPanel（搜索面板）
+│  ├─ KeywordInput（关键词输入）
+│  └─ DataSourceSelector（数据源选择）
+├─ ResultsPanel（检索结果面板）
+│  └─ ResultCards（资料卡片列表）
+│      ├─ ResultCard
+│      │   ├─ 资料标题
+│      │   ├─ 资料 URL
+│      │   ├─ 原文内容预览
+│      │   └─ 用户操作区（选择/忽略）
+└─ BottomActionBar（底部操作栏）
+    └─ 确认并进入下一步按钮
 ```
 
-约束：
-- 不允许输出自然语言总结
-- 不允许中文翻译或观点提炼（这是下一个阶段的工作）
-- 不允许基于标题 / snippet / abstract 推断全文观点
-- 不允许常识补全
+功能说明：
+- Research Retrieval Agent 在对应数据源搜索相关关键词
+- 获取资料标题、URL，并从 URL 中提取原文
+- 将检索结果展现在页面上
+- 用户可点击需要的资料进行选择
 
-**资料查询页面设计**
+确认条件：
+- 用户完成资料选择后，确认并进入下一步按钮启用
+- 点击后保存用户选择的资料，进入资料整理阶段
 
-页面整体结构：
-```
-ResearchWorkspacePage
-├─ ResearchHeader（研究概览）
-├─ MainArea
-│  ├─ SearchPlanPanel（左｜搜索计划）
-│  └─ SearchResultPanel（右｜搜索结果）
-│      ├─ ResultFilterBar
-│      ├─ BatchActionBar（选择模式显示）
-│      ├─ ResultSections
-│      │   ├─ AcademicSection（分区分页）
-│      │   ├─ NewsSection（分区分页）
-│      │   ├─ WebSection（分区分页）
-│      │   ├─ UserLibrarySection（分区分页）
-│      │   └─ PersonalMaterialSection（分区分页）
-├─ BottomFixedBar（底部固定操作栏）
-│   ├─ 资料整理按钮
-│   └─ 进入下一步按钮
-└─ ResearchProcessDrawer（流程日志，固定悬浮在页面底部）
-```
-
-**页面布局说明**
-
-**顶部状态栏**
-- 保持原有设计不变
-
-**资料查询模块**
-- 标题栏：
-  - 左侧：资料查询标题
-  - 右侧：上次搜索时间（格式：YYYY/MM/DD HH:MM）
-  - 右侧：刷新按钮，支持重新搜索（点击后重新调用 Research Retrieval Agent 和 Research Synthesis Agent）
-
-**左侧：搜索计划面板（SearchPlanPanel）**
-
-内容来源：
-- 从 Research Retrieval Agent 输出的 JSON 中解析以下字段：
-  - search_summary.interpreted_topic（研究主题）
-  - search_summary.key_dimensions（关键维度）
-  - academic_queries（学术调研查询内容）
-  - news_queries（行业动态查询内容）
-  - web_queries（网络搜索查询内容）
-  - user_library_queries（用户资料库查询内容）
-
-**右侧：搜索结果面板（SearchResultPanel）**
-
-展示 Research Retrieval Agent 返回的所有资料，按数据源类型分区展示：
-- 学术研究（AcademicSection）
-- 行业动态（NewsSection）
-- 网络搜索（WebSection）
-- 用户资料库（UserLibrarySection）
-- 个人素材库（PersonalMaterialSection）
-
-每个分区支持分页展示，每页显示 10 条结果。
-
-**底部固定操作栏（BottomFixedBar）**
-
-位置：固定在页面底部
-
-包含两个按钮：
-1. 资料整理按钮
-   - 点击后调用 Research Synthesis Agent
-   - 生成 JSON 格式的整理结果
-   - 解析并可视化呈现整理结果
-   - 用户可对整理结果进行选择和判断
-
-2. 进入下一步按钮
-   - 初始状态：禁用
-   - 启用条件：用户完成资料整理的选择和确认后
-   - 点击后进入文章结构生成阶段
-
-#### 阶段 4：资料整理（Research Synthesis Agent）
-
-**核心流程：Research Synthesis Agent**
-
-Research Synthesis Agent 负责将多源检索资料整理为可供写作选择的研究素材池。
-
-**Research Synthesis Agent（用户决策式资料整理 Agent）**
-
-角色定义：
-- 你是 CoWrite 的 Research Synthesis Agent
-- 你的职责是：将多源检索资料，整理为可供写作选择的研究素材池
-- 你不负责判断哪些观点最终会被使用
-- 你不做价值取舍或立场选择
-- 所有观点都必须以等待用户决策的状态输出
-
-核心任务：
-
-1. 中文化（非直译）
-   - 面向商业/产品/技术复合读者
-   - 保留原意，不做写作加工
-
-2. 高密度提炼
-   对每条资料提取：
-   - 核心结论/观点
-   - 关键数据或实证
-   - 使用的方法或分析框架
-   - 与原始需求的对应关系
-   - 若缺失，明确标记缺失
-
-3. 主动结构化（不等于取舍）
-   - 将观点归类，但不暗示更重要/次要
-   - 分类只用于帮助用户快速理解与选择
-
-4. 显式标注用户决策位
-   对每一条 insight，必须标注：
-   - recommended_usage: direct | background | optional
-   - 该字段只是推荐，不是最终决定，用户可以覆盖
-
-5. 标注不确定性与争议
-   - 样本、时间、地区、方法限制
-   - 潜在冲突或相互矛盾点
-
-输出格式（严格遵守）：
-```json
-{
-  \"synthesized_insights\": [
-    {
-      \"id\": \"insight_1\",
-      \"category\": \"分类名称\",
-      \"insight\": \"核心洞察（中文）\",
-      \"supporting_data\": [\"数据点1\", \"数据点2\"],
-      \"source_type\": \"academic | news | web\",
-      \"recommended_usage\": \"direct | background | optional\",
-      \"citability\": \"direct | background | controversial\",
-      \"limitations\": \"局限性说明\",
-      \"user_decision\": \"pending\"
-    }
-  ],
-  \"contradictions_or_gaps\": [
-    {
-      \"id\": \"gap_1\",
-      \"issue\": \"矛盾或空白点\",
-      \"description\": \"说明\",
-      \"user_decision\": \"respond | ignore | pending\"
-    }
-  ]
-}
-```
-
-行为约束：
-- 所有 insight 默认 user_decision = pending
-- 不得假设用户的立场
-- 不得为下游结构生成提前收敛观点
-- 优先使用 2025-2026 年的数据，旧数据必须明确标记为历史背景
+#### 阶段 4：资料整理
 
 **资料整理页面设计**
 
@@ -360,6 +105,7 @@ ResearchSynthesisPage
 │      │   ├─ 支持数据
 │      │   ├─ 推荐用途标签
 │      │   ├─ 局限性说明
+│      │   ├─ 用户判断输入框（用户填写观点是否可取）
 │      │   └─ 用户操作区（选择/排除/降级）
 ├─ ContradictionsPanel（矛盾与空白面板）
 │  └─ GapCards（矛盾/空白卡片列表）
@@ -370,18 +116,52 @@ ResearchSynthesisPage
     └─ 确认并进入下一步按钮
 ```
 
+功能说明：
+- 调用 Research Synthesis Agent 整理用户在资料检索阶段选择的资料
+- 显示对应观点、数据等内容
+- 用户可进一步填写自己的判断，评价观点是否可取
+
 用户操作：
 - 对每条洞察，用户可选择：
   - 必须使用（must_use）
   - 作为背景（background）
   - 排除（excluded）
+- 对每条洞察，用户可填写自己的判断（观点是否可取）
 - 对每个矛盾/空白，用户可选择：
   - 响应（respond）
   - 忽略（ignore）
 
 确认条件：
-- 用户完成所有洞察的选择后，确认并进入下一步按钮启用
+- 用户完成所有洞察的选择和判断填写后，确认并进入下一步按钮启用
 - 点击后保存用户决策，进入文章结构生成阶段
+
+#### 阶段 5：文章结构生成
+- 基于需求文档和用户在资料整理阶段的决策，生成文章结构
+- 用户可对文章结构进行确认、调整或重新生成
+
+#### 阶段 6：段落结构
+- 逐段生成段落结构
+- 用户对每个段落进行确认或修改
+
+#### 阶段 7：个人素材
+- 用户可从个人素材库中选择相关素材
+- 支持添加新的个人素材
+
+#### 阶段 8：文章生成
+- 基于前述所有阶段的内容，生成完整文章
+- 用户可对文章进行审校和修改
+
+#### 阶段 9：内容审校
+- 提供三遍审校流程
+- 用户逐步完成审校并确认
+
+#### 阶段 10：排版导出
+- 支持多种格式导出
+- 用户可选择导出格式并完成导出
+
+#### 阶段 11：终版输出
+- 最终版本确认
+- 项目状态更新为已完成
 
 ## 3. 写作状态管理（WritingState）
 
@@ -392,7 +172,7 @@ WritingState 是整个系统的中枢，用于管理写作流程的状态和用�
 ```typescript
 WritingState {
   session_id: string
-  current_stage: 'research' | 'synthesis' | 'structure' | 'paragraph' | 'evidence' | 'writing'
+  current_stage: 'retrieval' | 'synthesis' | 'structure' | 'paragraph' | 'evidence' | 'writing'
   
   locked: {
     core_thesis: boolean
@@ -400,7 +180,7 @@ WritingState {
   }
   
   user_decisions: {
-    research?: ResearchDecision
+    retrieval?: RetrievalDecision
     synthesis?: SynthesisDecision
     structure?: StructureDecision
     paragraph?: ParagraphDecision[]
@@ -421,10 +201,17 @@ WritingState {
 
 ### 3.2 用户决策对象
 
-#### ResearchDecision（资料查询决策）
+#### RetrievalDecision（资料检索决策）
 ```typescript
-ResearchDecision {
-  selected_sources: string[]  // 用户选择的资料 ID 列表
+RetrievalDecision {
+  selected_materials: [
+    {
+      material_id: string
+      title: string
+      url: string
+      content: string
+    }
+  ]
 }
 ```
 
@@ -435,6 +222,7 @@ SynthesisDecision {
     {
       insight_id: string
       usage: 'must_use' | 'background' | 'excluded'
+      user_judgment: string
     }
   ]
   gaps: [
@@ -494,9 +282,9 @@ GuidanceContext {
 新的 Agent 调度逻辑采用状态机式流程控制：
 
 ```
-Research（资料查询）
+Retrieval（资料检索）
   ↓
-等待用户 ResearchDecision
+等待用户 RetrievalDecision
   ↓
 Synthesis（资料整理）
   ↓
@@ -527,8 +315,8 @@ Writing（文章生成）
 前端采用状态机式渲染，核心判断逻辑：
 
 ```javascript
-if (stage === 'research' && !userDecision.research) {
-  showResearchSelection()
+if (stage === 'retrieval' && !userDecision.retrieval) {
+  showRetrievalSelection()
 }
 
 if (stage === 'synthesis' && !userDecision.synthesis) {
@@ -560,13 +348,20 @@ if (stage === 'structure' && !locked.structure) {
 
 ## 5. 接口设计
 
-### 5.1 提交研究阶段决策
+### 5.1 提交资料检索决策
 ```
-POST /writing/decision/research
+POST /writing/decision/retrieval
 {
   \"session_id\": \"...\",
   \"decisions\": {
-    \"selected_sources\": [\"source_1\", \"source_2\"]
+    \"selected_materials\": [
+      {
+        \"material_id\": \"m1\",
+        \"title\": \"...\",
+        \"url\": \"...\",
+        \"content\": \"...\"
+      }
+    ]
   }
 }
 ```
@@ -578,8 +373,16 @@ POST /writing/decision/synthesis
   \"session_id\": \"...\",
   \"decisions\": {
     \"insights\": [
-      { \"insight_id\": \"i1\", \"usage\": \"must_use\" },
-      { \"insight_id\": \"i2\", \"usage\": \"excluded\" }
+      {
+        \"insight_id\": \"i1\",
+        \"usage\": \"must_use\",
+        \"user_judgment\": \"观点可取，数据支持充分\"
+      },
+      {
+        \"insight_id\": \"i2\",
+        \"usage\": \"excluded\",
+        \"user_judgment\": \"观点存在偏差\"
+      }
     ],
     \"gaps\": [
       { \"gap_id\": \"g1\", \"action\": \"respond\" }
@@ -655,19 +458,10 @@ POST /writing/guidance
 
 #### 7.2.4 购买流程
 - 用户在弹窗中选择套餐后点击购买按钮
-- 跳转到 Stripe Payments 支付页面
 - 完成支付后，点数自动充值到用户账户
 - 用户可使用点数兑换 AI降重工具使用次数或创建项目权限
 
-## 8. 功能修复
-
-### 8.1 支付功能修复
-- 修复创建支付时显示失败的问题
-
-### 8.2 文章结构生成功能修复
-- 修复点击生成文章结构时显示失败的问题
-
-## 9. 参考文件
+## 8. 参考文件
 
 1. 上传图片：image.png
 2. 上传图片：image-2.png
