@@ -9,14 +9,17 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
-import { LogOut, User as UserIcon, ShoppingCart, Star } from 'lucide-react';
+import { useInvitationCode } from '@/db/api';
+import { LogOut, User as UserIcon, ShoppingCart, Star, Gift } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [invitationCode, setInvitationCode] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+  const [applyingCode, setApplyingCode] = useState(false);
   const [purchaseDialogOpen, setPurchaseDialogOpen] = useState(false);
   const { toast } = useToast();
 
@@ -121,11 +124,38 @@ export default function SettingsPage() {
         });
       }
     } catch (error: any) {
+      console.error('创建支付失败:', error);
       toast({
         title: '创建支付失败',
         description: error.message || '请稍后重试',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleApplyInvitationCode = async () => {
+    if (!user || !invitationCode) return;
+    
+    setApplyingCode(true);
+    try {
+      await useInvitationCode(invitationCode, user.id);
+      toast({
+        title: '邀请码已生效',
+        description: '点数已充值到您的账户',
+      });
+      setInvitationCode('');
+      // 刷新用户信息
+      if (refreshProfile) {
+        await refreshProfile();
+      }
+    } catch (error: any) {
+      toast({
+        title: '邀请码无效',
+        description: error.message || '请检查邀请码是否正确',
+        variant: 'destructive',
+      });
+    } finally {
+      setApplyingCode(false);
     }
   };
 
@@ -182,6 +212,43 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* 邀请码输入 */}
+            {!profile?.invitation_code && (
+              <div className="p-4 border rounded-lg bg-muted/50">
+                <div className="flex items-center gap-2 mb-2">
+                  <Gift className="h-4 w-4 text-primary" />
+                  <p className="text-sm font-medium">使用邀请码</p>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="输入邀请码获取点数"
+                    value={invitationCode}
+                    onChange={(e) => setInvitationCode(e.target.value.toUpperCase())}
+                    disabled={applyingCode}
+                  />
+                  <Button 
+                    onClick={handleApplyInvitationCode}
+                    disabled={!invitationCode || applyingCode}
+                  >
+                    {applyingCode ? '验证中...' : '使用'}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* 已使用邀请码显示 */}
+            {profile?.invitation_code && (
+              <div className="p-4 border rounded-lg bg-muted/50">
+                <div className="flex items-center gap-2">
+                  <Gift className="h-4 w-4 text-primary" />
+                  <p className="text-sm">
+                    <span className="text-muted-foreground">已使用邀请码：</span>
+                    <span className="font-mono font-bold ml-2">{profile.invitation_code}</span>
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* 购买点数按钮 */}
             <Dialog open={purchaseDialogOpen} onOpenChange={setPurchaseDialogOpen}>
               <DialogTrigger asChild>
@@ -190,43 +257,43 @@ export default function SettingsPage() {
                   购买点数
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-4xl">
-                <DialogHeader>
-                  <DialogTitle>购买点数</DialogTitle>
-                  <DialogDescription>
+              <DialogContent className="max-w-5xl">
+                <DialogHeader className="space-y-3">
+                  <DialogTitle className="text-2xl">购买点数</DialogTitle>
+                  <DialogDescription className="text-base">
                     选择适合您的套餐，增加AI降重次数和项目数量
                   </DialogDescription>
                 </DialogHeader>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 py-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 py-8">
                   {creditPackages.map((pkg) => (
                     <Card 
                       key={pkg.name} 
                       className={`relative ${pkg.recommended ? 'border-primary border-2' : ''}`}
                     >
                       {pkg.recommended && (
-                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
-                          <Star className="h-3 w-3 fill-current" />
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-4 py-1.5 rounded-full text-sm font-medium flex items-center gap-1">
+                          <Star className="h-4 w-4 fill-current" />
                           最多人选择
                         </div>
                       )}
-                      <CardHeader className="text-center pb-4">
-                        <CardTitle className="text-lg">{pkg.name}</CardTitle>
+                      <CardHeader className="text-center pb-6 pt-8">
+                        <CardTitle className="text-xl mb-2">{pkg.name}</CardTitle>
                         {pkg.recommended && (
-                          <Badge variant="default" className="w-fit mx-auto mt-1">
+                          <Badge variant="default" className="w-fit mx-auto">
                             ⭐
                           </Badge>
                         )}
                       </CardHeader>
-                      <CardContent className="space-y-4">
+                      <CardContent className="space-y-6 pb-8">
                         <div className="text-center">
-                          <p className="text-3xl font-bold">¥{pkg.price}</p>
-                          <p className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1">
+                          <p className="text-4xl font-bold mb-3">¥{pkg.price}</p>
+                          <p className="text-base text-muted-foreground flex items-center justify-center gap-2">
                             <span className="inline-block w-2 h-2 rounded-full bg-primary"></span>
                             {pkg.credits} 点
                           </p>
                         </div>
                         <Button 
-                          className="w-full"
+                          className="w-full text-base py-6"
                           variant={pkg.recommended ? 'default' : 'outline'}
                           onClick={() => handlePurchase(pkg)}
                         >

@@ -374,6 +374,7 @@ export default function AdminPage() {
                     <TableHead>可用点数</TableHead>
                     <TableHead>AI降重使用</TableHead>
                     <TableHead>项目创建</TableHead>
+                    <TableHead>邀请码</TableHead>
                     <TableHead>注册时间</TableHead>
                     <TableHead>操作</TableHead>
                   </TableRow>
@@ -396,6 +397,13 @@ export default function AdminPage() {
                       </TableCell>
                       <TableCell>{profile.ai_reducer_used} 次</TableCell>
                       <TableCell>{profile.projects_created} 个</TableCell>
+                      <TableCell>
+                        {profile.invitation_code ? (
+                          <span className="font-mono text-sm">{profile.invitation_code}</span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {new Date(profile.created_at).toLocaleDateString('zh-CN')}
                       </TableCell>

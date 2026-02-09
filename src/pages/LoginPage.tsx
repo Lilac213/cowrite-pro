@@ -7,10 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/db/supabase';
+import { useInvitationCode } from '@/db/api';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [invitationCode, setInvitationCode] = useState('');
   const [loading, setLoading] = useState(false);
   const { signInWithUsername, signUpWithUsername } = useAuth();
   const navigate = useNavigate();
@@ -51,26 +54,64 @@ export default function LoginPage() {
           description: '用户名只能包含字母、数字和下划线',
           variant: 'destructive',
         });
+        setLoading(false);
         return;
       }
 
-      const { error } = await signUpWithUsername(username, password);
+      // 检查用户名是否已存在
+      const { data: existingUser } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', username)
+        .maybeSingle();
+
+      if (existingUser) {
+        toast({
+          title: '注册失败',
+          description: '用户名已被使用，请换一个',
+          variant: 'destructive',
+        });
+        setLoading(false);
+        return;
+      }
+
+      const { error, userId } = await signUpWithUsername(username, password);
       if (error) {
         toast({
           title: '注册失败',
           description: error.message,
           variant: 'destructive',
         });
+        setLoading(false);
+        return;
+      }
+
+      // 如果填写了邀请码，使用邀请码
+      if (invitationCode && userId) {
+        try {
+          await useInvitationCode(invitationCode, userId);
+          toast({
+            title: '注册成功',
+            description: '邀请码已生效，正在自动登录...',
+          });
+        } catch (inviteError: any) {
+          // 邀请码失败不影响注册
+          toast({
+            title: '注册成功',
+            description: `邀请码无效：${inviteError.message}`,
+          });
+        }
       } else {
         toast({
           title: '注册成功',
           description: '正在自动登录...',
         });
-        // 自动登录
-        setTimeout(() => {
-          navigate(from, { replace: true });
-        }, 1000);
       }
+
+      // 自动登录
+      setTimeout(() => {
+        navigate(from, { replace: true });
+      }, 1000);
     } finally {
       setLoading(false);
     }
@@ -142,6 +183,17 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    minLength={6}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="invitation-code">邀请码（可选）</Label>
+                  <Input
+                    id="invitation-code"
+                    type="text"
+                    placeholder="如有邀请码请填写"
+                    value={invitationCode}
+                    onChange={(e) => setInvitationCode(e.target.value.toUpperCase())}
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>

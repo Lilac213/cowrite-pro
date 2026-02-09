@@ -21,7 +21,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signInWithUsername: (username: string, password: string) => Promise<{ error: Error | null }>;
-  signUpWithUsername: (username: string, password: string) => Promise<{ error: Error | null }>;
+  signUpWithUsername: (username: string, password: string) => Promise<{ error: Error | null; userId?: string }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -82,13 +82,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUpWithUsername = async (username: string, password: string) => {
     try {
       const email = `${username}@miaoda.com`;
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            username,
+          },
+        },
       });
 
       if (error) throw error;
-      return { error: null };
+      return { error: null, userId: data.user?.id };
     } catch (error) {
       return { error: error as Error };
     }
