@@ -16,21 +16,23 @@ interface SearchLogsDialogProps {
   onOpenChange: (open: boolean) => void;
   projectTitle: string;
   logs: string[];
+  logType?: 'search' | 'synthesis'; // 新增：日志类型
 }
 
 export default function SearchLogsDialog({ 
   open, 
   onOpenChange, 
   projectTitle,
-  logs 
+  logs,
+  logType = 'search' // 默认为搜索日志
 }: SearchLogsDialogProps) {
   // 解析日志并生成时间轴格式
   const parseLogsToTimeline = (): SearchLog[] => {
     const timeline: SearchLog[] = [];
     const now = new Date();
     
-    // 关键阶段标识
-    const stagePatterns = [
+    // 根据日志类型定义不同的阶段标识
+    const searchStagePatterns = [
       { pattern: /项目初始化|接收到的请求参数/, stage: '项目初始化', status: 'success' as const },
       { pattern: /需求文档解析|解析需求文档/, stage: '需求文档解析成功', status: 'success' as const },
       { pattern: /Google Scholar.*开始|学术搜索/, stage: '正在检索学术来源', status: 'running' as const },
@@ -43,6 +45,22 @@ export default function SearchLogsDialog({
       { pattern: /保存到知识库|入库成功/, stage: '已完成资料入库', status: 'success' as const },
       { pattern: /错误|失败|Error/, stage: '搜索出现错误', status: 'error' as const },
     ];
+    
+    const synthesisStagePatterns = [
+      { pattern: /开始资料整理/, stage: '开始资料整理', status: 'success' as const },
+      { pattern: /正在获取选中的资料/, stage: '正在获取选中的资料', status: 'running' as const },
+      { pattern: /已选择.*条资料/, stage: '资料选择完成', status: 'success' as const },
+      { pattern: /正在保存资料到知识库/, stage: '正在保存资料到知识库', status: 'running' as const },
+      { pattern: /资料保存完成/, stage: '资料保存完成', status: 'success' as const },
+      { pattern: /启动 Research Synthesis Agent/, stage: '启动 Research Synthesis Agent', status: 'running' as const },
+      { pattern: /正在分析资料并生成研究洞察/, stage: '正在分析资料并生成研究洞察', status: 'running' as const },
+      { pattern: /Research Synthesis Agent 完成/, stage: 'Research Synthesis Agent 完成', status: 'success' as const },
+      { pattern: /正在加载研究洞察和空白/, stage: '正在加载研究洞察和空白', status: 'running' as const },
+      { pattern: /已生成.*条研究洞察/, stage: '研究洞察生成完成', status: 'success' as const },
+      { pattern: /错误|失败|Error|❌/, stage: '资料整理出现错误', status: 'error' as const },
+    ];
+    
+    const stagePatterns = logType === 'synthesis' ? synthesisStagePatterns : searchStagePatterns;
 
     logs.forEach((log, index) => {
       // 为每条日志生成时间戳（模拟递增）
@@ -119,19 +137,22 @@ export default function SearchLogsDialog({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `研究日志-${projectTitle}-${new Date().toLocaleDateString()}.txt`;
+    const logTypeName = logType === 'synthesis' ? '资料整理日志' : '研究日志';
+    a.download = `${logTypeName}-${projectTitle}-${new Date().toLocaleDateString()}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
+  const dialogTitle = logType === 'synthesis' ? '资料整理日志' : '研究日志';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl w-[95vw]">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl">研究日志 - {projectTitle}</DialogTitle>
+            <DialogTitle className="text-xl">{dialogTitle} - {projectTitle}</DialogTitle>
             <Button variant="outline" size="sm" onClick={handleDownload}>
               <Download className="w-4 h-4 mr-2" />
               下载完整日志

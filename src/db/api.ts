@@ -1968,11 +1968,33 @@ export async function callResearchSynthesisAgent(
 
   if (error) {
     console.error('[callResearchSynthesisAgent] Edge Function 错误:', error);
+    console.error('[callResearchSynthesisAgent] 错误详情:', JSON.stringify(error, null, 2));
+    
     // 尝试获取更详细的错误信息
     if (error.context) {
       console.error('[callResearchSynthesisAgent] 错误上下文:', error.context);
+      try {
+        const contextText = await error.context.text();
+        console.error('[callResearchSynthesisAgent] 上下文文本:', contextText);
+        
+        // 尝试解析 JSON 错误响应
+        try {
+          const errorData = JSON.parse(contextText);
+          throw new Error(
+            `资料整理失败: ${errorData.error || error.message}\n` +
+            `详情: ${errorData.details ? JSON.stringify(errorData.details, null, 2) : '无'}\n` +
+            `时间: ${errorData.timestamp || '未知'}`
+          );
+        } catch (parseError) {
+          // 如果不是 JSON，直接使用文本
+          throw new Error(`资料整理失败: ${contextText || error.message}`);
+        }
+      } catch (textError) {
+        console.error('[callResearchSynthesisAgent] 无法读取上下文文本:', textError);
+      }
     }
-    throw new Error(error.message || 'Edge Function 调用失败');
+    
+    throw new Error(`资料整理失败: ${error.message || 'Edge Function 调用失败'}`);
   }
   
   console.log('[callResearchSynthesisAgent] 返回数据:', data);

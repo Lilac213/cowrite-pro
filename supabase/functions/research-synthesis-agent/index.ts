@@ -337,8 +337,23 @@ ${materialsContent}
     );
   } catch (error: any) {
     console.error("Research Synthesis Agent 错误:", error);
+    console.error("错误堆栈:", error.stack);
+    console.error("错误详情:", JSON.stringify(error, null, 2));
+    
+    // 构建详细的错误响应
+    const errorResponse = {
+      error: error.message || "处理失败",
+      details: {
+        type: error.name || "UnknownError",
+        message: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      },
+      timestamp: new Date().toISOString(),
+    };
+    
     return new Response(
-      JSON.stringify({ error: error.message || "处理失败" }),
+      JSON.stringify(errorResponse),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

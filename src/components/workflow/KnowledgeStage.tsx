@@ -39,7 +39,6 @@ import SearchResultsPanel from './SearchResultsPanel';
 import SynthesisResultsDialog from './SynthesisResultsDialog';
 import SearchLogsDialog from './SearchLogsDialog';
 import ResearchSynthesisReview from './ResearchSynthesisReview';
-import MaterialSelectionPanel from './MaterialSelectionPanel';
 
 interface KnowledgeStageProps {
   projectId: string;
@@ -67,6 +66,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [lastSearchTime, setLastSearchTime] = useState<string>('');
   const [showSynthesisDialog, setShowSynthesisDialog] = useState(false);
   const [showLogsDialog, setShowLogsDialog] = useState(false);
+  const [logDialogType, setLogDialogType] = useState<'search' | 'synthesis'>('search'); // 新增：日志类型
   const [projectTitle, setProjectTitle] = useState('');
   
   // 新增：写作会话和研究综合相关状态
@@ -81,8 +81,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   
   // 新增：资料选择相关状态
   const [retrievedMaterials, setRetrievedMaterials] = useState<RetrievedMaterial[]>([]);
-  const [showMaterialSelection, setShowMaterialSelection] = useState(false);
-  const [materialsConfirmed, setMaterialsConfirmed] = useState(false);
   
   // 新增：搜索计划相关状态
   const [searchPlan, setSearchPlan] = useState<{
@@ -95,6 +93,50 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   } | null>(null);
   
   const { toast } = useToast();
+
+  // 新增：localStorage 缓存相关函数
+  const getCacheKey = (projectId: string) => `search_cache_${projectId}`;
+  
+  const saveSearchCache = (projectId: string, data: {
+    searchPlan: any;
+    retrievedMaterials: RetrievedMaterial[];
+    searchLogs: string[];
+    lastSearchTime: string;
+    query: string;
+  }) => {
+    try {
+      const cacheKey = getCacheKey(projectId);
+      localStorage.setItem(cacheKey, JSON.stringify(data));
+      console.log('[saveSearchCache] 缓存已保存:', cacheKey);
+    } catch (error) {
+      console.error('[saveSearchCache] 保存缓存失败:', error);
+    }
+  };
+  
+  const loadSearchCache = (projectId: string) => {
+    try {
+      const cacheKey = getCacheKey(projectId);
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        console.log('[loadSearchCache] 缓存已加载:', data);
+        return data;
+      }
+    } catch (error) {
+      console.error('[loadSearchCache] 加载缓存失败:', error);
+    }
+    return null;
+  };
+  
+  const clearSearchCache = (projectId: string) => {
+    try {
+      const cacheKey = getCacheKey(projectId);
+      localStorage.removeItem(cacheKey);
+      console.log('[clearSearchCache] 缓存已清除:', cacheKey);
+    } catch (error) {
+      console.error('[clearSearchCache] 清除缓存失败:', error);
+    }
+  };
 
   // 初始化写作会话
   useEffect(() => {
@@ -109,6 +151,48 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         } else {
           const complete = await isResearchStageComplete(session.id);
           setResearchStageComplete(complete);
+        }
+        
+        // 尝试从缓存加载搜索结果
+        const cached = loadSearchCache(projectId);
+        if (cached && cached.retrievedMaterials && cached.retrievedMaterials.length > 0) {
+          console.log('[initSession] 从缓存加载搜索结果');
+          setSearchPlan(cached.searchPlan);
+          setRetrievedMaterials(cached.retrievedMaterials);
+          setSearchLogs(cached.searchLogs || []);
+          setLastSearchTime(cached.lastSearchTime || '');
+          setQuery(cached.query || '');
+          
+          // 转换为 knowledge 格式
+          const knowledgeItems: KnowledgeBase[] = cached.retrievedMaterials.map((material: RetrievedMaterial) => {
+            let publishedAt = material.published_at;
+            if (!publishedAt && material.year) {
+              publishedAt = `${material.year}-01-01T00:00:00Z`;
+            }
+            
+            return {
+              id: material.id,
+              project_id: projectId,
+              title: material.title,
+              content: material.abstract || material.full_text || '',
+              source: material.source_type,
+              source_url: material.url,
+              published_at: publishedAt,
+              collected_at: material.created_at,
+              selected: material.is_selected,
+              content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
+              extracted_content: material.full_text ? [material.full_text] : [],
+              full_text: material.full_text,
+              created_at: material.created_at,
+            };
+          });
+          setKnowledge(knowledgeItems);
+          setAutoSearched(true); // 标记为已搜索，避免重复搜索
+          
+          toast({
+            title: '已加载缓存的搜索结果',
+            description: `共 ${cached.retrievedMaterials.length} 条资料`,
+          });
         }
       } catch (error) {
         console.error('初始化写作会话失败:', error);
@@ -450,8 +534,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           });
           setKnowledge(knowledgeItems);
           
-          setShowMaterialSelection(true);
-          setMaterialsConfirmed(false);
           setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 成功加载 ' + loadedMaterials.length + ' 条资料']);
         } catch (error: any) {
           console.error('[KnowledgeStage] 加载资料失败:', error);
@@ -488,7 +570,17 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       });
 
       // 更新最后搜索时间
-      setLastSearchTime(new Date().toLocaleString('zh-CN'));
+      const searchTime = new Date().toLocaleString('zh-CN');
+      setLastSearchTime(searchTime);
+      
+      // 保存搜索结果到 localStorage 缓存
+      saveSearchCache(projectId, {
+        searchPlan: retrievalResults?.search_summary || null,
+        retrievedMaterials: loadedMaterials,
+        searchLogs: [...searchLogs, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成'],
+        lastSearchTime: searchTime,
+        query: queryToUse,
+      });
       
     } catch (error: any) {
       console.error('搜索失败 - 完整错误对象:', error);
@@ -811,62 +903,22 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
   // 重新搜索
   const handleRefreshSearch = () => {
-    setShowMaterialSelection(false);
-    setMaterialsConfirmed(false);
+    // 清除缓存
+    clearSearchCache(projectId);
+    
     setRetrievedMaterials([]);
+    setAutoSearched(false); // 重置自动搜索标记
+    
     // 触发重新搜索
     if (query.trim()) {
       handleSearch();
     } else {
-      toast({
-        title: '请输入搜索内容',
-        variant: 'destructive',
-      });
+      // 如果没有查询词，尝试从需求文档自动搜索
+      autoSearchFromBrief();
     }
   };
 
   // 资料整理 - 调用研究综合 Agent
-  // 处理资料选择确认
-  const handleMaterialSelectionConfirm = async () => {
-    if (!writingSession) {
-      toast({
-        title: '会话未初始化',
-        description: '请刷新页面重试',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      // 获取选中的资料
-      const selectedMaterials = await getSelectedMaterials(writingSession.id);
-      
-      if (selectedMaterials.length === 0) {
-        toast({
-          title: '请选择资料',
-          description: '至少选择一条资料才能继续',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      setMaterialsConfirmed(true);
-      setShowMaterialSelection(false);
-
-      toast({
-        title: '✅ 资料选择已确认',
-        description: `已选择 ${selectedMaterials.length} 条资料，现在可以进行整理`,
-      });
-    } catch (error: any) {
-      console.error('确认资料选择失败:', error);
-      toast({
-        title: '确认失败',
-        description: error.message || '请稍后重试',
-        variant: 'destructive',
-      });
-    }
-  };
-
   const handleOrganize = async () => {
     if (!writingSession) {
       toast({
@@ -887,8 +939,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     }
 
     setSynthesizing(true);
+    setSynthesisLogs([]); // 清空旧日志
+    
     try {
+      // 添加初始日志
+      setSynthesisLogs(['[' + new Date().toLocaleTimeString('zh-CN') + '] 开始资料整理...']);
+      
       // 1. 获取选中的资料
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在获取选中的资料...']);
       const selectedMaterials = await getSelectedMaterials(writingSession.id);
       
       if (selectedMaterials.length === 0) {
@@ -901,8 +959,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         return;
       }
 
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 已选择 ' + selectedMaterials.length + ' 条资料']);
+
       // 2. 将选中的资料保存到 knowledge_base 表（检查是否已存在）
       console.log('[handleOrganize] 开始保存选中的资料到 knowledge_base，数量:', selectedMaterials.length);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在保存资料到知识库...']);
       
       // 先获取已存在的资料
       const existingKnowledge = await getKnowledgeBase(projectId);
@@ -940,18 +1001,28 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           savedCount++;
         } catch (error: any) {
           console.error('[handleOrganize] 保存资料失败:', material.title, error);
+          setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 保存资料失败: ' + material.title]);
           // 继续保存其他资料
         }
       }
       
       console.log('[handleOrganize] 资料保存完成，新增:', savedCount, '条，开始调用研究综合 Agent');
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 资料保存完成，新增 ' + savedCount + ' 条']);
 
       // 3. 调用研究综合 Agent
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 🤖 启动 Research Synthesis Agent...']);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在分析资料并生成研究洞察...']);
+      
       const result: SynthesisResult = await callResearchSynthesisAgent(projectId, writingSession.id);
       
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ Research Synthesis Agent 完成']);
+      
       // 4. 获取保存的洞察和空白
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在加载研究洞察和空白...']);
       const insights = await getResearchInsights(writingSession.id);
       const gaps = await getResearchGaps(writingSession.id);
+      
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 已生成 ' + insights.length + ' 条研究洞察，' + gaps.length + ' 条研究空白']);
       
       // 5. 设置审阅数据
       setSynthesisReviewData({
@@ -969,6 +1040,9 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       });
     } catch (error: any) {
       console.error('资料整理失败:', error);
+      
+      // 记录错误日志
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ❌ 资料整理失败: ' + error.message]);
       
       // 提供更详细的错误信息
       let errorMessage = '请稍后重试';
@@ -1143,15 +1217,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         </CardContent>
       </Card>
 
-      {/* 资料选择面板 - 显示在搜索结果下方 */}
-      {showMaterialSelection && retrievedMaterials.length > 0 && (
-        <MaterialSelectionPanel
-          materials={retrievedMaterials}
-          onConfirm={handleMaterialSelectionConfirm}
-          onRefresh={handleRefreshSearch}
-        />
-      )}
-
       {/* 底部操作按钮 */}
       {knowledge.length > 0 && (
         <Card>
@@ -1163,13 +1228,9 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                     <CheckCircle2 className="h-4 w-4" />
                     研究阶段已完成，可以进入下一阶段
                   </span>
-                ) : materialsConfirmed ? (
-                  <span>
-                    请点击"资料整理"并完成决策
-                  </span>
                 ) : retrievedMaterials.length > 0 ? (
                   <span>
-                    请选择需要的资料
+                    请从搜索结果中选择资料，然后点击"资料整理"
                   </span>
                 ) : (
                   <span>
@@ -1182,7 +1243,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                   onClick={handleOrganize} 
                   variant="outline"
                   className="min-w-[140px]"
-                  disabled={synthesizing || !materialsConfirmed}
+                  disabled={synthesizing || retrievedMaterials.length === 0}
                 >
                   <Sparkles className="h-4 w-4 mr-2" />
                   {synthesizing ? '整理中...' : '资料整理'}
@@ -1202,17 +1263,20 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       )}
 
       {/* 搜索分析 - 固定底部日志栏 */}
-      {searchLogs.length > 0 && (
+      {searchLogs.length > 0 && !synthesizing && (
         <div 
           className="fixed bottom-0 left-0 right-0 bg-black text-white border-t border-gray-800 shadow-lg z-50 cursor-pointer hover:bg-gray-900 transition-colors"
-          onClick={() => setShowLogsDialog(true)}
+          onClick={() => {
+            setLogDialogType('search');
+            setShowLogsDialog(true);
+          }}
         >
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${searching ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
-                  <span className="text-sm font-medium text-gray-300">LATEST LOG</span>
+                  <span className="text-sm font-medium text-gray-300">资料搜索日志</span>
                 </div>
                 <Separator orientation="vertical" className="h-4 bg-gray-700" />
                 <span className="text-sm text-gray-400">
@@ -1240,6 +1304,48 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         </div>
       )}
 
+      {/* 资料整理日志 - 固定底部日志栏 */}
+      {synthesisLogs.length > 0 && synthesizing && (
+        <div 
+          className="fixed bottom-0 left-0 right-0 bg-purple-900 text-white border-t border-purple-700 shadow-lg z-50 cursor-pointer hover:bg-purple-800 transition-colors"
+          onClick={() => {
+            setLogDialogType('synthesis');
+            setShowLogsDialog(true);
+          }}
+        >
+          <div className="container mx-auto px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${synthesizing ? 'bg-purple-300 animate-pulse' : 'bg-gray-500'}`} />
+                  <span className="text-sm font-medium text-purple-200">资料整理日志</span>
+                </div>
+                <Separator orientation="vertical" className="h-4 bg-purple-700" />
+                <span className="text-sm text-purple-300">
+                  {(() => {
+                    const latestLog = synthesisLogs[synthesisLogs.length - 1] || '';
+                    const timeMatch = latestLog.match(/\[(\d{2}:\d{2}:\d{2})\]/);
+                    return timeMatch ? timeMatch[1] : new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                  })()}
+                </span>
+                <span className="text-sm text-white">
+                  {(() => {
+                    const latestLog = synthesisLogs[synthesisLogs.length - 1] || '';
+                    // 移除时间戳部分，只显示消息内容
+                    const message = latestLog.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '');
+                    return message.substring(0, 80) || '正在整理资料...';
+                  })()}
+                </span>
+              </div>
+              <Button variant="ghost" size="sm" className="text-white hover:bg-purple-700">
+                <FileText className="w-4 h-4 mr-2" />
+                日志详情
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 资料整理结果弹窗 */}
       <SynthesisResultsDialog
         open={showSynthesisDialog}
@@ -1252,7 +1358,8 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         open={showLogsDialog}
         onOpenChange={setShowLogsDialog}
         projectTitle={projectTitle}
-        logs={searchLogs}
+        logs={logDialogType === 'synthesis' ? synthesisLogs : searchLogs}
+        logType={logDialogType}
       />
         </>
       )}
