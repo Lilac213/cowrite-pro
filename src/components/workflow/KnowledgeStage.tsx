@@ -929,7 +929,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 onClick={handleNextStep}
                 className="min-w-[140px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
               >
-                进入下一步
+                进入下一阶段
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </div>

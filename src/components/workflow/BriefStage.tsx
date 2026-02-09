@@ -224,7 +224,7 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
               </Button>
               <Button onClick={handleConfirm} disabled={confirming || !brief?.confirmed}>
                 <ArrowRight className="h-4 w-4 mr-2" />
-                进入下一步
+                进入下一阶段
               </Button>
             </div>
           </CardContent>
