@@ -6,6 +6,28 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// 辅助函数：将各种日期格式转换为 ISO 8601 格式
+function normalizeDate(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  
+  try {
+    // 尝试解析日期
+    const date = new Date(dateStr);
+    
+    // 检查日期是否有效
+    if (isNaN(date.getTime())) {
+      console.warn(`[normalizeDate] 无效日期格式: ${dateStr}`);
+      return null;
+    }
+    
+    // 返回 ISO 8601 格式
+    return date.toISOString();
+  } catch (error) {
+    console.error(`[normalizeDate] 日期转换失败: ${dateStr}`, error);
+    return null;
+  }
+}
+
 interface ResearchRequest {
   requirementsDoc: string;
   projectId?: string;
@@ -274,7 +296,7 @@ Output Format:
                 title: item.title || '',
                 summary: item.snippet || '',
                 source: item.source || '',
-                published_at: item.date || '',
+                published_at: normalizeDate(item.date) || '',
                 url: item.link || ''
               }));
               rawResults.news_sources.push(...mapped);
@@ -556,7 +578,7 @@ Output Format:
           full_text: source.summary || '',
           notes: '无 URL，仅摘要',
           source: source.source,
-          published_at: source.published_at
+          published_at: normalizeDate(source.published_at) || null
         });
         continue;
       }
@@ -585,7 +607,7 @@ Output Format:
         full_text: fullTextData.full_text || source.summary || '',
         notes: fullTextData.notes,
         source: source.source,
-        published_at: source.published_at
+        published_at: normalizeDate(source.published_at) || null
       });
     }
 
@@ -763,7 +785,7 @@ Output Format:
             abstract: source.summary || null,
             full_text: source.full_text || null,
             authors: source.source || null,
-            published_at: source.published_at || null,
+            published_at: normalizeDate(source.published_at) || null,
             is_selected: false,
             metadata: {
               content_status: source.content_status,

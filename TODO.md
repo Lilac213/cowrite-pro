@@ -1,52 +1,100 @@
 # 任务：修复资料选择和替换搜索API
 
-# 任务：修复资料选择和替换搜索API
+# 任务：修复资料显示和时间戳错误，更新系统配置
 
 ## 当前任务
-- [x] 修复资料选择错误（至少选择一条资料才能继续）
-  - [x] 添加 useEffect 同步 materials prop 到 localMaterials state
-  - [x] 确保选中的资料正确传递
-- [x] 修复资料选择面板布局（应该内嵌在搜索结果模块，而不是占据全部页面）
-  - [x] 将 MaterialSelectionPanel 显示在搜索结果下方
-  - [x] 移除全页面替换逻辑
-- [x] 移动"确认选择并整理资料"按钮到搜索计划和搜索结果模块下方
-- [x] 替换 Smart Search 和 TheNews 为 SerpAPI
-  - [x] 注册 SERPAPI_API_KEY secret
-  - [x] 创建 Google Search Edge Function
-  - [x] 创建 Google News Edge Function  
-  - [x] 创建 Google Scholar Edge Function（使用 SerpAPI）
-  - [x] 更新 research-retrieval-agent 调用新的 API
-  - [x] 部署所有 Edge Functions
+- [x] 修复资料显示问题（资料已抓取但不显示在搜索结果模块）
+  - [x] 将 RetrievedMaterial 转换为 KnowledgeBase 格式
+  - [x] 更新 knowledge 状态以显示在 SearchResultsPanel
+- [x] 修复时间戳格式错误（invalid input syntax for type timestamp）
+  - [x] 添加 normalizeDate 函数规范化日期格式
+  - [x] 更新所有 published_at 字段使用 ISO 8601 格式
+- [x] 更新系统配置页面
+  - [x] 将 OpenAlex 配置替换为 SerpAPI
+  - [x] 将 Tavily 配置替换为 SerpAPI
+  - [x] 更新配置保存逻辑
 
 ## 实现细节
 
-### 1. 修复资料选择面板布局
-- 移除了 `showMaterialSelection && retrievedMaterials.length > 0` 的全页面替换逻辑
-- 将 MaterialSelectionPanel 作为独立组件显示在搜索结果下方
-- 保持搜索计划和搜索结果始终可见
-- "确认选择并整理资料"按钮现在位于 MaterialSelectionPanel 内部，显示在搜索结果下方
+### 1. 修复资料显示问题
+**问题**：资料检索成功（日志显示 academic:4, news:10, web:10），但搜索结果面板显示为空
 
-### 2. 修复资料选择错误
-- 添加 useEffect 监听 materials prop 变化，自动同步到 localMaterials state
-- 确保当资料被选中时，状态正确更新到数据库
-- handleMaterialSelectionConfirm 函数会从数据库查询选中的资料，确保数据一致性
+**原因**：
+- `retrievedMaterials` 状态包含检索到的资料（RetrievedMaterial 类型）
+- `SearchResultsPanel` 组件接收 `knowledge` 状态（KnowledgeBase 类型）
+- 两个状态没有同步，导致资料无法显示
 
-### 3. 替换搜索 API 为 SerpAPI
-创建了三个新的 Edge Functions：
-- **serpapi-google-scholar**: 使用 SerpAPI 的 Google Scholar 引擎搜索学术文献
-- **serpapi-google-news**: 使用 SerpAPI 的 Google News 引擎搜索新闻资讯
-- **serpapi-google-search**: 使用 SerpAPI 的 Google Search 引擎搜索网页内容
+**解决方案**：
+在 KnowledgeStage.tsx 中加载资料后，将 RetrievedMaterial 转换为 KnowledgeBase 格式：
+```typescript
+const knowledgeItems: KnowledgeBase[] = loadedMaterials.map(material => ({
+  id: material.id,
+  project_id: projectId,
+  title: material.title,
+  content: material.abstract || material.full_text || '',
+  source: material.source_type,
+  source_url: material.url,
+  published_at: material.published_at || material.year,
+  collected_at: material.created_at,
+  selected: material.is_selected,
+  content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
+  extracted_content: material.full_text ? [material.full_text] : [],
+  full_text: material.full_text,
+  created_at: material.created_at,
+}));
+setKnowledge(knowledgeItems);
+```
 
-更新了 research-retrieval-agent：
-- 替换原有的 Google Scholar API 调用为 serpapi-google-scholar
-- 替换原有的 TheNews API 调用为 serpapi-google-news
-- 替换原有的 Smart Search (Bing) API 调用为 serpapi-google-search
-- 所有搜索都使用统一的 SerpAPI 服务，API Key: c96ae1f8fd0f0d0095948456dd7db91558ead973f0e8d884a1b7635804a96f41
+### 2. 修复时间戳格式错误
+**问题**：数据库报错 "invalid input syntax for type timestamp with time zone: '02/05/2026, 09:10 PM, +0000 UTC'"
 
-### 4. API 参数配置
-- Google Scholar: 支持年份过滤 (as_ylo: 2020)，语言设置 (hl: zh-CN)
-- Google News: 支持语言和地区设置 (hl: zh-CN, gl: cn)
-- Google Search: 支持结果数量、语言和地区设置 (num: 10, hl: zh-CN, gl: cn)
+**原因**：
+- Google News API 返回的日期格式不是标准的 ISO 8601 格式
+- PostgreSQL 无法解析这种格式的时间戳
+
+**解决方案**：
+在 research-retrieval-agent/index.ts 中添加日期规范化函数：
+```typescript
+function normalizeDate(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+      console.warn(`[normalizeDate] 无效日期格式: ${dateStr}`);
+      return null;
+    }
+    return date.toISOString();
+  } catch (error) {
+    console.error(`[normalizeDate] 日期转换失败: ${dateStr}`, error);
+    return null;
+  }
+}
+```
+
+所有 published_at 字段都使用 `normalizeDate()` 处理：
+- Google News 结果：`published_at: normalizeDate(item.date) || ''`
+- 保存到数据库：`published_at: normalizeDate(source.published_at) || null`
+
+### 3. 更新系统配置页面
+**修改内容**：
+- 移除 OpenAlex API 配置区域
+- 移除 Tavily API 配置区域
+- 添加 SerpAPI 配置区域，包含：
+  - API 密钥输入框
+  - 状态显示（已配置/未配置）
+  - 支持的搜索引擎标签（Google Scholar、Google Search、Google News）
+  - 官网链接：https://serpapi.com/manage-api-key
+
+**配置保存逻辑更新**：
+```typescript
+await Promise.all([
+  updateSystemConfig('llm_provider', systemConfig.llm_provider || 'qwen'),
+  updateSystemConfig('llm_api_key', systemConfig.llm_api_key || ''),
+  updateSystemConfig('search_provider', systemConfig.search_provider || 'serpapi'),
+  updateSystemConfig('serpapi_api_key', systemConfig.serpapi_api_key || ''),
+]);
+```
 
 ## 已完成任务
 - [x] 移除资料查询缓存逻辑，每次进入页面都重新搜索

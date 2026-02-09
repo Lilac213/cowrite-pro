@@ -422,6 +422,25 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           console.log('[KnowledgeStage] 成功加载资料数量:', loadedMaterials.length);
           console.log('[KnowledgeStage] 资料详情:', loadedMaterials);
           setRetrievedMaterials(loadedMaterials);
+          
+          // 转换 RetrievedMaterial 为 KnowledgeBase 格式并更新 knowledge 状态
+          const knowledgeItems: KnowledgeBase[] = loadedMaterials.map(material => ({
+            id: material.id,
+            project_id: projectId,
+            title: material.title,
+            content: material.abstract || material.full_text || '',
+            source: material.source_type,
+            source_url: material.url,
+            published_at: material.published_at || material.year,
+            collected_at: material.created_at,
+            selected: material.is_selected,
+            content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
+            extracted_content: material.full_text ? [material.full_text] : [],
+            full_text: material.full_text,
+            created_at: material.created_at,
+          }));
+          setKnowledge(knowledgeItems);
+          
           setShowMaterialSelection(true);
           setMaterialsConfirmed(false);
           setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 成功加载 ' + loadedMaterials.length + ' 条资料']);

@@ -100,8 +100,8 @@ export default function AdminPage() {
       await Promise.all([
         updateSystemConfig('llm_provider', systemConfig.llm_provider || 'qwen'),
         updateSystemConfig('llm_api_key', systemConfig.llm_api_key || ''),
-        updateSystemConfig('search_provider', systemConfig.search_provider || 'openalex'),
-        updateSystemConfig('search_api_key', systemConfig.search_api_key || ''),
+        updateSystemConfig('search_provider', systemConfig.search_provider || 'serpapi'),
+        updateSystemConfig('serpapi_api_key', systemConfig.serpapi_api_key || ''),
       ]);
       
       // 同步配置到 Edge Function Secrets
@@ -273,80 +273,58 @@ export default function AdminPage() {
           <Card>
             <CardHeader>
               <CardTitle>搜索配置</CardTitle>
-              <CardDescription>配置全局搜索服务（OpenAlex、Tavily）</CardDescription>
+              <CardDescription>配置全局搜索服务（SerpAPI - Google Scholar、Google Search、Google News）</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* OpenAlex 配置 */}
+              {/* SerpAPI 配置 */}
               <div className="space-y-4 p-4 border rounded-lg">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-medium">OpenAlex API</h3>
-                  <Badge variant="secondary">学术论文搜索</Badge>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="openalex-status">状态</Label>
-                  <Input
-                    id="openalex-status"
-                    value="已启用"
-                    disabled
-                    className="bg-muted"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    OpenAlex 是免费开放的学术搜索 API，用于搜索权威学术论文
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="openalex-api-key">API 密钥</Label>
-                  <Input
-                    id="openalex-api-key"
-                    type="password"
-                    placeholder="OpenAlex 不需要 API 密钥"
-                    disabled
-                    className="bg-muted"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    OpenAlex 是开放 API，无需配置密钥即可使用
-                  </p>
-                </div>
-              </div>
-
-              {/* Tavily 配置 */}
-              <div className="space-y-4 p-4 border rounded-lg">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium">Tavily API</h3>
-                  <Badge variant={systemConfig.tavily_api_key ? 'default' : 'outline'}>
-                    {systemConfig.tavily_api_key ? '已配置' : '未配置'}
+                  <h3 className="font-medium">SerpAPI</h3>
+                  <Badge variant={systemConfig.serpapi_api_key ? 'default' : 'outline'}>
+                    {systemConfig.serpapi_api_key ? '已配置' : '未配置'}
                   </Badge>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="tavily-status">状态</Label>
+                  <Label htmlFor="serpapi-status">状态</Label>
                   <Input
-                    id="tavily-status"
-                    value={systemConfig.tavily_api_key ? '已启用' : '未启用'}
+                    id="serpapi-status"
+                    value={systemConfig.serpapi_api_key ? '已启用' : '未启用'}
                     disabled
                     className="bg-muted"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Tavily 提供高质量的实时搜索结果，用于补充学术论文搜索
+                    SerpAPI 提供 Google Scholar（学术搜索）、Google Search（网页搜索）、Google News（新闻搜索）的统一 API 接口
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="tavily-api-key">API 密钥</Label>
+                  <Label htmlFor="serpapi-api-key">API 密钥</Label>
                   <Input
-                    id="tavily-api-key"
+                    id="serpapi-api-key"
                     type="password"
-                    placeholder="请输入 Tavily API Key"
-                    value={systemConfig.tavily_api_key || ''}
-                    onChange={(e) => setSystemConfig({ ...systemConfig, tavily_api_key: e.target.value })}
+                    placeholder="请输入 SerpAPI Key"
+                    value={systemConfig.serpapi_api_key || ''}
+                    onChange={(e) => setSystemConfig({ ...systemConfig, serpapi_api_key: e.target.value })}
                   />
                   <p className="text-xs text-muted-foreground">
-                    可在 <a href="https://tavily.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Tavily 官网</a> 获取 API 密钥
+                    可在 <a href="https://serpapi.com/manage-api-key" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">SerpAPI 官网</a> 获取 API 密钥
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>支持的搜索引擎</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary">Google Scholar</Badge>
+                    <Badge variant="secondary">Google Search</Badge>
+                    <Badge variant="secondary">Google News</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    通过 SerpAPI 统一调用多个 Google 搜索引擎，获取学术文献、网页内容和新闻资讯
                   </p>
                 </div>
               </div>
 
               <div className="p-4 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground">
-                  <strong>说明：</strong>系统使用双引擎搜索策略，OpenAlex 用于学术论文搜索（免费），Tavily 用于实时内容和观点搜索（需配置 API 密钥）。
+                  <strong>说明：</strong>系统使用 SerpAPI 提供的 Google 搜索服务，包括学术文献搜索（Google Scholar）、网页搜索（Google Search）和新闻搜索（Google News），提供全面的信息检索能力。
                 </p>
               </div>
             </CardContent>
