@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -44,6 +44,11 @@ export default function MaterialSelectionPanel({
   const [expandedMaterials, setExpandedMaterials] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+
+  // 同步 materials prop 到 localMaterials state
+  useEffect(() => {
+    setLocalMaterials(materials);
+  }, [materials]);
 
   // 按来源分组
   const groupedMaterials = useMemo(() => {

@@ -946,13 +946,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           onDecisionsComplete={handleSynthesisReviewComplete}
           onCancel={handleSynthesisReviewCancel}
         />
-      ) : showMaterialSelection && retrievedMaterials.length > 0 ? (
-        /* 显示资料选择面板 */
-        <MaterialSelectionPanel
-          materials={retrievedMaterials}
-          onConfirm={handleMaterialSelectionConfirm}
-          onRefresh={handleRefreshSearch}
-        />
       ) : (
         <>
           {/* 标题栏 - 移除搜索框 */}
@@ -1056,6 +1049,15 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           </div>
         </CardContent>
       </Card>
+
+      {/* 资料选择面板 - 显示在搜索结果下方 */}
+      {showMaterialSelection && retrievedMaterials.length > 0 && (
+        <MaterialSelectionPanel
+          materials={retrievedMaterials}
+          onConfirm={handleMaterialSelectionConfirm}
+          onRefresh={handleRefreshSearch}
+        />
+      )}
 
       {/* 底部操作按钮 */}
       {knowledge.length > 0 && (

@@ -208,64 +208,31 @@ Output Format:
       personal_sources: [] as any[]
     };
 
-    // 1. Google Scholar 搜索
+    // 1. Google Scholar 搜索（使用 SerpAPI）
     if (searchPlan.academic_queries && searchPlan.academic_queries.length > 0) {
       addLog('========== Google Scholar 搜索开始 ==========');
       for (const query of searchPlan.academic_queries.slice(0, 2)) {
-        const scholarUrl = `https://app-9bwpferlujnl-api-Xa6JZq2055oa.gateway.appmedo.com/search?engine=google_scholar&q=${encodeURIComponent(query)}&as_ylo=2020&hl=en`;
         addLog(`[Google Scholar] 查询: "${query}"`);
         
         searchPromises.push(
-          fetch(scholarUrl, {
-            headers: {
-              'Accept': 'application/json',
-              'X-Gateway-Authorization': `Bearer ${integrationsApiKey}`
-            }
+          supabase.functions.invoke('serpapi-google-scholar', {
+            body: { q: query, num: 10, hl: 'zh-CN', as_ylo: 2020 }
           })
-          .then(async res => {
-            if (!res.ok) {
-              const errorText = await res.text();
-              let errorMessage = errorText;
-              
-              // 尝试解析 JSON 错误信息
-              try {
-                const errorJson = JSON.parse(errorText);
-                if (errorJson.error) {
-                  errorMessage = errorJson.error;
-                  
-                  // 特殊处理配额用尽错误
-                  if (errorMessage.includes('run out of searches') || errorMessage.includes('quota')) {
-                    addLog(`[Google Scholar] ⚠️ API 配额已用尽，跳过学术搜索`);
-                    return null;
-                  }
-                }
-              } catch (e) {
-                // 如果不是 JSON，使用原始文本
-              }
-              
-              addLog(`[Google Scholar] API 请求失败 (${res.status}): ${errorMessage}`);
-              throw new Error(`HTTP ${res.status}: ${errorMessage}`);
+          .then(({ data, error }) => {
+            if (error) {
+              addLog(`[Google Scholar] 调用失败: ${error.message}`);
+              throw error;
             }
-            return res.json();
-          })
-          .then(data => {
-            if (!data) return; // 配额用尽时跳过
-            
             if (data.error) {
-              // 检查是否是配额错误
-              if (data.error.includes('run out of searches') || data.error.includes('quota')) {
-                addLog(`[Google Scholar] ⚠️ API 配额已用尽，跳过学术搜索`);
-                return;
-              }
               addLog(`[Google Scholar] API 返回错误: ${data.error}`);
               return;
             }
-            if (data.organic_results && data.organic_results.length > 0) {
-              const mapped = data.organic_results.slice(0, 5).map((item: any) => ({
+            if (data.results && data.results.length > 0) {
+              const mapped = data.results.slice(0, 5).map((item: any) => ({
                 title: item.title || '',
                 authors: item.publication_info?.summary || '',
                 abstract: item.snippet || '',
-                citation_count: item.inline_links?.cited_by?.total || 0,
+                citation_count: item.cited_by || 0,
                 year: item.publication_info?.summary?.match(/\d{4}/)?.[0] || '',
                 url: item.link || ''
               }));
@@ -276,105 +243,90 @@ Output Format:
             }
           })
           .catch(err => {
-            // 检查是否是配额错误
-            if (err.message.includes('run out of searches') || err.message.includes('quota')) {
-              addLog(`[Google Scholar] ⚠️ API 配额已用尽，将继续使用其他数据源`);
-            } else {
-              addLog(`[Google Scholar] 搜索异常: ${err.message}`);
-            }
+            addLog(`[Google Scholar] 搜索异常: ${err.message}`);
             console.error('[Google Scholar] 搜索失败:', err);
           })
         );
       }
     }
 
-    // 2. TheNews 搜索
+    // 2. Google News 搜索（使用 SerpAPI）
     if (searchPlan.news_queries && searchPlan.news_queries.length > 0) {
-      addLog('========== TheNews 搜索开始 ==========');
+      addLog('========== Google News 搜索开始 ==========');
       for (const query of searchPlan.news_queries.slice(0, 2)) {
-        const newsUrl = `https://app-9bwpferlujnl-api-W9z3M6eOKQVL.gateway.appmedo.com/v1/news/all?api_token=dummy&search=${encodeURIComponent(query)}&limit=5&sort=published_on`;
-        addLog(`[TheNews] 查询: "${query}"`);
+        addLog(`[Google News] 查询: "${query}"`);
         
         searchPromises.push(
-          fetch(newsUrl, {
-            headers: { 'X-Gateway-Authorization': `Bearer ${integrationsApiKey}` }
+          supabase.functions.invoke('serpapi-google-news', {
+            body: { q: query, hl: 'zh-CN', gl: 'cn' }
           })
-          .then(async res => {
-            if (!res.ok) {
-              const errorText = await res.text();
-              addLog(`[TheNews] API 请求失败 (${res.status}): ${errorText}`);
-              throw new Error(`HTTP ${res.status}: ${errorText}`);
+          .then(({ data, error }) => {
+            if (error) {
+              addLog(`[Google News] 调用失败: ${error.message}`);
+              throw error;
             }
-            return res.json();
-          })
-          .then(data => {
             if (data.error) {
-              addLog(`[TheNews] API 返回错误: ${data.error}`);
+              addLog(`[Google News] API 返回错误: ${data.error}`);
               return;
             }
-            if (data.data && data.data.length > 0) {
-              const mapped = data.data.map((item: any) => ({
+            if (data.results && data.results.length > 0) {
+              const mapped = data.results.map((item: any) => ({
                 title: item.title || '',
-                summary: item.description || item.snippet || '',
+                summary: item.snippet || '',
                 source: item.source || '',
-                published_at: item.published_at || '',
-                url: item.url || ''
+                published_at: item.date || '',
+                url: item.link || ''
               }));
               rawResults.news_sources.push(...mapped);
-              addLog(`[TheNews] 找到 ${mapped.length} 条结果`);
+              addLog(`[Google News] 找到 ${mapped.length} 条结果`);
             } else {
-              addLog(`[TheNews] 未找到结果`);
+              addLog(`[Google News] 未找到结果`);
             }
           })
           .catch(err => {
-            addLog(`[TheNews] 搜索异常: ${err.message}`);
-            console.error('[TheNews] 搜索失败:', err);
+            addLog(`[Google News] 搜索异常: ${err.message}`);
+            console.error('[Google News] 搜索失败:', err);
           })
         );
       }
     }
 
-    // 3. Smart Search (Bing) 搜索
+    // 3. Google Search 搜索（使用 SerpAPI）
     if (searchPlan.web_queries && searchPlan.web_queries.length > 0) {
-      addLog('========== Smart Search 搜索开始 ==========');
+      addLog('========== Google Search 搜索开始 ==========');
       for (const query of searchPlan.web_queries.slice(0, 2)) {
-        const smartUrl = `https://app-9bwpferlujnl-api-VaOwP8E7dKEa.gateway.appmedo.com/search/FgEFxazBTfRUumJx/smart?q=${encodeURIComponent(query)}&count=5&freshness=Month&mkt=zh-CN`;
-        addLog(`[Smart Search] 查询: "${query}"`);
+        addLog(`[Google Search] 查询: "${query}"`);
         
         searchPromises.push(
-          fetch(smartUrl, {
-            headers: { 'X-Gateway-Authorization': `Bearer ${integrationsApiKey}` }
+          supabase.functions.invoke('serpapi-google-search', {
+            body: { q: query, num: 10, hl: 'zh-CN', gl: 'cn' }
           })
-          .then(async res => {
-            if (!res.ok) {
-              const errorText = await res.text();
-              addLog(`[Smart Search] API 请求失败 (${res.status}): ${errorText}`);
-              throw new Error(`HTTP ${res.status}: ${errorText}`);
+          .then(({ data, error }) => {
+            if (error) {
+              addLog(`[Google Search] 调用失败: ${error.message}`);
+              throw error;
             }
-            return res.json();
-          })
-          .then(data => {
             if (data.error) {
-              addLog(`[Smart Search] API 返回错误: ${data.error}`);
+              addLog(`[Google Search] API 返回错误: ${data.error}`);
               return;
             }
-            if (data.webPages?.value && data.webPages.value.length > 0) {
-              const mapped = data.webPages.value.map((item: any) => ({
-                title: item.name || '',
-                site_name: item.siteName || '',
+            if (data.results && data.results.length > 0) {
+              const mapped = data.results.map((item: any) => ({
+                title: item.title || '',
+                site_name: item.displayed_link || '',
                 snippet: item.snippet || '',
-                url: item.url || '',
-                last_crawled_at: item.dateLastCrawled || ''
+                url: item.link || '',
+                last_crawled_at: ''
               }));
               rawResults.web_sources.push(...mapped);
-              addLog(`[Smart Search] 找到 ${mapped.length} 条结果`);
+              addLog(`[Google Search] 找到 ${mapped.length} 条结果`);
             } else {
-              addLog(`[Smart Search] 未找到结果`);
+              addLog(`[Google Search] 未找到结果`);
             }
           })
           .catch(err => {
-            addLog(`[Smart Search] 搜索异常: ${err.message}`);
-            console.error('[Smart Search] 搜索失败:', err);
+            addLog(`[Google Search] 搜索异常: ${err.message}`);
+            console.error('[Google Search] 搜索失败:', err);
           })
         );
       }

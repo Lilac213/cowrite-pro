@@ -1,6 +1,54 @@
-# 任务：优化资料查询页功能
+# 任务：修复资料选择和替换搜索API
+
+# 任务：修复资料选择和替换搜索API
 
 ## 当前任务
+- [x] 修复资料选择错误（至少选择一条资料才能继续）
+  - [x] 添加 useEffect 同步 materials prop 到 localMaterials state
+  - [x] 确保选中的资料正确传递
+- [x] 修复资料选择面板布局（应该内嵌在搜索结果模块，而不是占据全部页面）
+  - [x] 将 MaterialSelectionPanel 显示在搜索结果下方
+  - [x] 移除全页面替换逻辑
+- [x] 移动"确认选择并整理资料"按钮到搜索计划和搜索结果模块下方
+- [x] 替换 Smart Search 和 TheNews 为 SerpAPI
+  - [x] 注册 SERPAPI_API_KEY secret
+  - [x] 创建 Google Search Edge Function
+  - [x] 创建 Google News Edge Function  
+  - [x] 创建 Google Scholar Edge Function（使用 SerpAPI）
+  - [x] 更新 research-retrieval-agent 调用新的 API
+  - [x] 部署所有 Edge Functions
+
+## 实现细节
+
+### 1. 修复资料选择面板布局
+- 移除了 `showMaterialSelection && retrievedMaterials.length > 0` 的全页面替换逻辑
+- 将 MaterialSelectionPanel 作为独立组件显示在搜索结果下方
+- 保持搜索计划和搜索结果始终可见
+- "确认选择并整理资料"按钮现在位于 MaterialSelectionPanel 内部，显示在搜索结果下方
+
+### 2. 修复资料选择错误
+- 添加 useEffect 监听 materials prop 变化，自动同步到 localMaterials state
+- 确保当资料被选中时，状态正确更新到数据库
+- handleMaterialSelectionConfirm 函数会从数据库查询选中的资料，确保数据一致性
+
+### 3. 替换搜索 API 为 SerpAPI
+创建了三个新的 Edge Functions：
+- **serpapi-google-scholar**: 使用 SerpAPI 的 Google Scholar 引擎搜索学术文献
+- **serpapi-google-news**: 使用 SerpAPI 的 Google News 引擎搜索新闻资讯
+- **serpapi-google-search**: 使用 SerpAPI 的 Google Search 引擎搜索网页内容
+
+更新了 research-retrieval-agent：
+- 替换原有的 Google Scholar API 调用为 serpapi-google-scholar
+- 替换原有的 TheNews API 调用为 serpapi-google-news
+- 替换原有的 Smart Search (Bing) API 调用为 serpapi-google-search
+- 所有搜索都使用统一的 SerpAPI 服务，API Key: c96ae1f8fd0f0d0095948456dd7db91558ead973f0e8d884a1b7635804a96f41
+
+### 4. API 参数配置
+- Google Scholar: 支持年份过滤 (as_ylo: 2020)，语言设置 (hl: zh-CN)
+- Google News: 支持语言和地区设置 (hl: zh-CN, gl: cn)
+- Google Search: 支持结果数量、语言和地区设置 (num: 10, hl: zh-CN, gl: cn)
+
+## 已完成任务
 - [x] 移除资料查询缓存逻辑，每次进入页面都重新搜索
 - [x] 优化日志栏显示，确保实时显示搜索进度日志
 
