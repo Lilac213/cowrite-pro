@@ -879,21 +879,60 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
     setSynthesizing(true);
     try {
-      // 调用研究综合 Agent
+      // 1. 获取选中的资料
+      const selectedMaterials = await getSelectedMaterials(writingSession.id);
+      
+      if (selectedMaterials.length === 0) {
+        toast({
+          title: '请选择资料',
+          description: '至少选择一条资料才能继续',
+          variant: 'destructive',
+        });
+        setSynthesizing(false);
+        return;
+      }
+
+      // 2. 将选中的资料保存到 knowledge_base 表
+      console.log('[handleOrganize] 开始保存选中的资料到 knowledge_base，数量:', selectedMaterials.length);
+      
+      for (const material of selectedMaterials) {
+        try {
+          await createKnowledgeBase({
+            project_id: projectId,
+            title: material.title,
+            content: material.abstract || material.full_text || '',
+            source: material.source_type,
+            source_url: material.url,
+            published_at: material.published_at || material.year,
+            collected_at: material.created_at,
+            selected: true,
+            content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
+            extracted_content: material.full_text ? [material.full_text] : [],
+            full_text: material.full_text,
+          });
+        } catch (error: any) {
+          console.error('[handleOrganize] 保存资料失败:', material.title, error);
+          // 继续保存其他资料
+        }
+      }
+      
+      console.log('[handleOrganize] 资料保存完成，开始调用研究综合 Agent');
+
+      // 3. 调用研究综合 Agent
       const result: SynthesisResult = await callResearchSynthesisAgent(projectId, writingSession.id);
       
-      // 获取保存的洞察和空白
+      // 4. 获取保存的洞察和空白
       const insights = await getResearchInsights(writingSession.id);
       const gaps = await getResearchGaps(writingSession.id);
       
-      // 设置审阅数据
+      // 5. 设置审阅数据
       setSynthesisReviewData({
         insights,
         gaps,
         thought: result.thought,
       });
       
-      // 显示审阅界面
+      // 6. 显示审阅界面
       setShowSynthesisReview(true);
       
       toast({
@@ -1033,9 +1072,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                     {searchProgress.message}
                   </p>
                   {searchProgress.details && (
-                    <p className="text-xs text-muted-foreground bg-muted p-2 rounded">
-                      {searchProgress.details}
-                    </p>
+                    <></>
                   )}
                 </div>
               </CardContent>

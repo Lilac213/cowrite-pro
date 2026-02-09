@@ -166,18 +166,19 @@ export default function SearchResultsPanel({
   };
 
   const getSourceIcon = (source: string) => {
-    if (source.includes('Scholar')) return <BookOpen className="w-4 h-4" />;
-    if (source.includes('News')) return <Newspaper className="w-4 h-4" />;
-    if (source.includes('Search')) return <Globe className="w-4 h-4" />;
+    const lowerSource = source.toLowerCase();
+    if (lowerSource.includes('scholar') || lowerSource.includes('academic')) return <BookOpen className="w-4 h-4" />;
+    if (lowerSource.includes('news')) return <Newspaper className="w-4 h-4" />;
+    if (lowerSource.includes('search') || lowerSource.includes('web')) return <Globe className="w-4 h-4" />;
     return <Database className="w-4 h-4" />;
   };
 
-  const getSourceBadgeColor = (source: string) => {
-    if (source.includes('Scholar')) return 'bg-blue-500';
-    if (source.includes('News')) return 'bg-orange-500';
-    if (source.includes('Search')) return 'bg-green-500';
-    if (source.includes('资料库') || source.includes('素材')) return 'bg-purple-500';
-    return 'bg-muted';
+  const getSourceBadgeVariant = (source: string): "default" | "secondary" | "destructive" | "outline" => {
+    const lowerSource = source.toLowerCase();
+    if (lowerSource.includes('scholar') || lowerSource.includes('academic')) return 'default'; // 蓝色
+    if (lowerSource.includes('news')) return 'destructive'; // 橙色/红色
+    if (lowerSource.includes('search') || lowerSource.includes('web')) return 'secondary'; // 绿色
+    return 'outline';
   };
 
   const isAllSelected = filteredResults.length > 0 && selectedIds.size === filteredResults.length;
@@ -300,9 +301,9 @@ export default function SearchResultsPanel({
 
                     {/* 来源和时间 */}
                     <div className="flex items-center gap-2 text-xs">
-                      <Badge className={getSourceBadgeColor(result.source)}>
+                      <Badge variant={getSourceBadgeVariant(result.source)} className="flex items-center gap-1">
                         {getSourceIcon(result.source)}
-                        <span className="ml-1">{result.source}</span>
+                        <span>{result.source}</span>
                       </Badge>
                       {result.published_at && (
                         <span className="text-muted-foreground">

@@ -127,7 +127,7 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Newspaper className="w-4 h-4 text-orange-500" />
-              <span>行业资讯 (TheNews)</span>
+              <span>行业资讯 (SerpAPI - Google News)</span>
               <Badge variant="secondary" className="ml-auto text-xs">
                 {searchSummary.news_queries.length} 条
               </Badge>
@@ -147,7 +147,7 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Globe className="w-4 h-4 text-green-500" />
-              <span>网页内容 (Smart Search)</span>
+              <span>网页内容 (SerpAPI - Google Search)</span>
               <Badge variant="secondary" className="ml-auto text-xs">
                 {searchSummary.web_queries.length} 条
               </Badge>

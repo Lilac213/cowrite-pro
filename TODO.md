@@ -1,100 +1,103 @@
 # 任务：修复资料选择和替换搜索API
 
-# 任务：修复资料显示和时间戳错误，更新系统配置
+# 任务：修复搜索结果筛选、更新数据源标签、修复资料整理失败
 
 ## 当前任务
-- [x] 修复资料显示问题（资料已抓取但不显示在搜索结果模块）
-  - [x] 将 RetrievedMaterial 转换为 KnowledgeBase 格式
-  - [x] 更新 knowledge 状态以显示在 SearchResultsPanel
-- [x] 修复时间戳格式错误（invalid input syntax for type timestamp）
-  - [x] 添加 normalizeDate 函数规范化日期格式
-  - [x] 更新所有 published_at 字段使用 ISO 8601 格式
-- [x] 更新系统配置页面
-  - [x] 将 OpenAlex 配置替换为 SerpAPI
-  - [x] 将 Tavily 配置替换为 SerpAPI
-  - [x] 更新配置保存逻辑
+- [x] 修复搜索结果筛选和标签颜色
+  - [x] 更新 SearchResultsPanel 的 badge 颜色使用语义化变体
+  - [x] 确保按学术/资讯/网页筛选功能正常工作
+  - [x] 标签颜色与搜索计划保持一致
+- [x] 更新数据源标签
+  - [x] 将"行业资讯 (TheNews)"改为"行业资讯 (SerpAPI - Google News)"
+  - [x] 将"网页内容 (Smart Search)"改为"网页内容 (SerpAPI - Google Search)"
+- [x] 修复资料整理失败问题
+  - [x] 在调用 research-synthesis-agent 前将选中的资料保存到 knowledge_base 表
+  - [x] 添加错误处理和日志
 
 ## 实现细节
 
-### 1. 修复资料显示问题
-**问题**：资料检索成功（日志显示 academic:4, news:10, web:10），但搜索结果面板显示为空
-
-**原因**：
-- `retrievedMaterials` 状态包含检索到的资料（RetrievedMaterial 类型）
-- `SearchResultsPanel` 组件接收 `knowledge` 状态（KnowledgeBase 类型）
-- 两个状态没有同步，导致资料无法显示
+### 1. 修复搜索结果筛选和标签颜色
+**问题**：搜索结果的标签颜色使用了直接的 Tailwind 颜色类（bg-blue-500 等），不符合语义化设计规范
 
 **解决方案**：
-在 KnowledgeStage.tsx 中加载资料后，将 RetrievedMaterial 转换为 KnowledgeBase 格式：
-```typescript
-const knowledgeItems: KnowledgeBase[] = loadedMaterials.map(material => ({
-  id: material.id,
-  project_id: projectId,
-  title: material.title,
-  content: material.abstract || material.full_text || '',
-  source: material.source_type,
-  source_url: material.url,
-  published_at: material.published_at || material.year,
-  collected_at: material.created_at,
-  selected: material.is_selected,
-  content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
-  extracted_content: material.full_text ? [material.full_text] : [],
-  full_text: material.full_text,
-  created_at: material.created_at,
-}));
-setKnowledge(knowledgeItems);
+- 更新 `getSourceBadgeVariant` 函数返回语义化的 Badge 变体：
+  - academic/scholar → `default` (蓝色主题色)
+  - news → `destructive` (橙色/红色警示色)
+  - web/search → `secondary` (绿色次要色)
+  - 其他 → `outline` (边框样式)
+
+- 更新 Badge 组件使用：
+```tsx
+<Badge variant={getSourceBadgeVariant(result.source)} className="flex items-center gap-1">
+  {getSourceIcon(result.source)}
+  <span>{result.source}</span>
+</Badge>
 ```
 
-### 2. 修复时间戳格式错误
-**问题**：数据库报错 "invalid input syntax for type timestamp with time zone: '02/05/2026, 09:10 PM, +0000 UTC'"
+- 筛选逻辑已正确实现，通过 `source.toLowerCase()` 匹配关键词：
+  - academic: 匹配 "scholar"
+  - news: 匹配 "news"
+  - web: 匹配 "search"
 
-**原因**：
-- Google News API 返回的日期格式不是标准的 ISO 8601 格式
-- PostgreSQL 无法解析这种格式的时间戳
+### 2. 更新数据源标签
+**修改位置**：SearchPlanPanel.tsx
+
+**更新内容**：
+- 行业资讯：`(TheNews)` → `(SerpAPI - Google News)`
+- 网页内容：`(Smart Search)` → `(SerpAPI - Google Search)`
+
+这样用户可以清楚地知道系统使用的是 SerpAPI 提供的 Google 搜索服务。
+
+### 3. 修复资料整理失败问题
+**问题分析**：
+- 用户点击"资料整理"按钮后，调用 `research-synthesis-agent` Edge Function
+- Edge Function 查询 `knowledge_base` 表获取资料
+- 但是选中的资料还在 `retrieved_materials` 表中，没有保存到 `knowledge_base`
+- 导致 Edge Function 返回错误："知识库为空，请先进行资料搜索"
 
 **解决方案**：
-在 research-retrieval-agent/index.ts 中添加日期规范化函数：
+在 `handleOrganize` 函数中添加以下步骤：
+
+1. 获取选中的资料（从 `retrieved_materials` 表）
+2. 将选中的资料逐条保存到 `knowledge_base` 表
+3. 调用 `research-synthesis-agent` Edge Function
+4. 获取并显示研究洞察和空白
+
+**代码实现**：
 ```typescript
-function normalizeDate(dateStr: string | null | undefined): string | null {
-  if (!dateStr) return null;
-  
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) {
-      console.warn(`[normalizeDate] 无效日期格式: ${dateStr}`);
-      return null;
-    }
-    return date.toISOString();
-  } catch (error) {
-    console.error(`[normalizeDate] 日期转换失败: ${dateStr}`, error);
-    return null;
-  }
+// 1. 获取选中的资料
+const selectedMaterials = await getSelectedMaterials(writingSession.id);
+
+if (selectedMaterials.length === 0) {
+  toast({ title: '请选择资料', description: '至少选择一条资料才能继续' });
+  return;
 }
+
+// 2. 将选中的资料保存到 knowledge_base 表
+for (const material of selectedMaterials) {
+  await createKnowledgeBase({
+    project_id: projectId,
+    title: material.title,
+    content: material.abstract || material.full_text || '',
+    source: material.source_type,
+    source_url: material.url,
+    published_at: material.published_at || material.year,
+    collected_at: material.created_at,
+    selected: true,
+    content_status: material.full_text ? 'full_text' : 'abstract_only',
+    extracted_content: material.full_text ? [material.full_text] : [],
+    full_text: material.full_text,
+  });
+}
+
+// 3. 调用研究综合 Agent
+const result = await callResearchSynthesisAgent(projectId, writingSession.id);
 ```
 
-所有 published_at 字段都使用 `normalizeDate()` 处理：
-- Google News 结果：`published_at: normalizeDate(item.date) || ''`
-- 保存到数据库：`published_at: normalizeDate(source.published_at) || null`
-
-### 3. 更新系统配置页面
-**修改内容**：
-- 移除 OpenAlex API 配置区域
-- 移除 Tavily API 配置区域
-- 添加 SerpAPI 配置区域，包含：
-  - API 密钥输入框
-  - 状态显示（已配置/未配置）
-  - 支持的搜索引擎标签（Google Scholar、Google Search、Google News）
-  - 官网链接：https://serpapi.com/manage-api-key
-
-**配置保存逻辑更新**：
-```typescript
-await Promise.all([
-  updateSystemConfig('llm_provider', systemConfig.llm_provider || 'qwen'),
-  updateSystemConfig('llm_api_key', systemConfig.llm_api_key || ''),
-  updateSystemConfig('search_provider', systemConfig.search_provider || 'serpapi'),
-  updateSystemConfig('serpapi_api_key', systemConfig.serpapi_api_key || ''),
-]);
-```
+**错误处理**：
+- 添加了详细的 console.log 日志
+- 单个资料保存失败不会中断整个流程
+- 统一的错误提示和 toast 通知
 
 ## 已完成任务
 - [x] 移除资料查询缓存逻辑，每次进入页面都重新搜索
