@@ -71,8 +71,38 @@ export default function SynthesisResultsDialog({
                 </div>
                 <div className="space-y-3">
                   {synthesisResults.key_data_points.map((point: any, idx: number) => {
+                    // 检查是否为结构化对象（包含 data、context、source 字段）
+                    if (point && typeof point === 'object' && (point.data || point.context || point.source)) {
+                      const context = point.context || '';
+                      const data = point.data || point.data_point || '';
+                      const source = point.source || '';
+                      
+                      return (
+                        <div 
+                          key={idx} 
+                          className="bg-green-50 dark:bg-green-950 p-4 rounded-lg border-l-4 border-green-500 space-y-2"
+                        >
+                          {context && (
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-muted-foreground">
+                              {context}
+                            </p>
+                          )}
+                          {data && (
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words font-bold">
+                              {data}
+                            </p>
+                          )}
+                          {source && (
+                            <p className="text-xs text-muted-foreground">
+                              来源：{source}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    }
+                    
+                    // 兼容旧格式：纯文本或其他格式
                     const content = parseContent(point);
-                    // 提取数字和百分比并加粗
                     const formattedContent = content.replace(
                       /(\d+(?:\.\d+)?%?|\$\d+(?:,\d{3})*(?:\.\d+)?[MBK]?)/g,
                       '<strong>$1</strong>'

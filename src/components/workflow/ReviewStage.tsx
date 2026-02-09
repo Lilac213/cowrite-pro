@@ -80,7 +80,8 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
     const progressInterval = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 90) return prev;
-        return prev + Math.random() * 15;
+        const next = prev + Math.random() * 15;
+        return Math.min(next, 90); // 确保不超过 90
       });
     }, 500);
     
@@ -98,7 +99,7 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
       const result = await callLLMGenerate(currentContent, '', systemMessage);
       
       clearInterval(progressInterval);
-      setProgress(100);
+      setProgress(100); // 完成时设置为 100
       
       // 等待一下让用户看到100%
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -327,9 +328,9 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">处理中...</span>
-                      <span className="font-medium">{Math.round(progress)}%</span>
+                      <span className="font-medium">{Math.min(Math.round(progress), 100)}%</span>
                     </div>
-                    <Progress value={progress} className="h-2" />
+                    <Progress value={Math.min(progress, 100)} className="h-2" />
                   </div>
                 )}
                 <Button
@@ -372,9 +373,9 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">处理中...</span>
-                      <span className="font-medium">{Math.round(progress)}%</span>
+                      <span className="font-medium">{Math.min(Math.round(progress), 100)}%</span>
                     </div>
-                    <Progress value={progress} className="h-2" />
+                    <Progress value={Math.min(progress, 100)} className="h-2" />
                   </div>
                 )}
                 <Button
@@ -417,9 +418,9 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">处理中...</span>
-                      <span className="font-medium">{Math.round(progress)}%</span>
+                      <span className="font-medium">{Math.min(Math.round(progress), 100)}%</span>
                     </div>
-                    <Progress value={progress} className="h-2" />
+                    <Progress value={Math.min(progress, 100)} className="h-2" />
                   </div>
                 )}
                 <Button

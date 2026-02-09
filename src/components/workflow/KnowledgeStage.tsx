@@ -204,6 +204,57 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('未登录');
 
+      // 检查 localStorage 缓存
+      const cacheKey = `research_results_${projectId}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      
+      if (cachedData) {
+        try {
+          const cached = JSON.parse(cachedData);
+          const cacheAge = Date.now() - cached.timestamp;
+          const maxAge = 24 * 60 * 60 * 1000; // 24小时
+          
+          // 如果缓存未过期，使用缓存数据
+          if (cacheAge < maxAge) {
+            console.log('[KnowledgeStage] 使用缓存的搜索结果');
+            
+            setSearchProgress({ stage: '加载缓存', message: '正在加载已缓存的搜索结果...' });
+            
+            // 恢复缓存的状态
+            setRetrievalResults(cached.retrievalResults);
+            setSynthesisResults(cached.synthesisResults);
+            setWorkflowResult({
+              retrievalResults: cached.retrievalResults,
+              synthesisResults: cached.synthesisResults,
+            });
+            setWritingSummary(cached.synthesisResults);
+            setLastSearchTime(new Date(cached.timestamp).toLocaleString('zh-CN'));
+            
+            // 加载知识库数据
+            await loadKnowledge();
+            
+            setSearchProgress({ 
+              stage: '完成', 
+              message: `已加载缓存的搜索结果（${cached.retrievalResults?.academic_sources?.length || 0} 条资料）`
+            });
+            
+            toast({
+              title: '✅ 加载成功',
+              description: '已从缓存加载搜索结果',
+            });
+            
+            setSearching(false);
+            return;
+          } else {
+            console.log('[KnowledgeStage] 缓存已过期，重新搜索');
+            localStorage.removeItem(cacheKey);
+          }
+        } catch (e) {
+          console.error('[KnowledgeStage] 缓存解析失败:', e);
+          localStorage.removeItem(cacheKey);
+        }
+      }
+
       // 清空旧的知识库数据（如果不是自动搜索触发的）
       if (!autoSearched) {
         console.log('[KnowledgeStage] 清空旧的知识库数据...');
@@ -389,6 +440,20 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
       // 将 synthesisResults 保存为 writingSummary
       setWritingSummary(synthesisResults);
+
+      // 保存到 localStorage 缓存
+      const cacheSaveKey = `research_results_${projectId}`;
+      const cacheData = {
+        retrievalResults,
+        synthesisResults,
+        timestamp: Date.now(),
+      };
+      try {
+        localStorage.setItem(cacheSaveKey, JSON.stringify(cacheData));
+        console.log('[KnowledgeStage] 搜索结果已缓存到 localStorage');
+      } catch (e) {
+        console.error('[KnowledgeStage] 缓存保存失败:', e);
+      }
 
       await loadKnowledge();
       

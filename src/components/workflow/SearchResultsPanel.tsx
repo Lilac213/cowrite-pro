@@ -275,7 +275,6 @@ export default function SearchResultsPanel({
           <Card className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <SearchIcon className="w-16 h-16 mb-4 opacity-20" />
             <p className="text-sm">暂无搜索结果</p>
-            <p className="text-xs mt-2">点击左侧"开始搜索"按钮查询资料</p>
           </Card>
         ) : (
           filteredResults.map((result) => (

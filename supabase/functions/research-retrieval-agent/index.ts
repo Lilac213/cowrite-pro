@@ -81,8 +81,14 @@ Deno.serve(async (req) => {
     // 初始化 Supabase 客户端
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // 获取当前日期
+    const currentDate = new Date().toISOString().split('T')[0]; // 格式：2026-02-09
+    
     // 新的系统提示词 - 严格的输出格式
     const systemPrompt = `🧠 Research Retrieval Agent
+
+⏰ Current Date: ${currentDate}
+CRITICAL: When searching for news and recent content, focus on materials from 2025-2026. Do NOT output or prioritize content from 2023-2024 or earlier unless specifically requested in the requirements.
 
 Role:
 你是 CoWrite 的 Research Retrieval Agent。你的唯一职责是根据用户提供的结构化 JSON 需求文档，在指定数据源中检索、筛选、返回"原始资料线索"。

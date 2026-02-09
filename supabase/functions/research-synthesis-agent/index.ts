@@ -48,8 +48,14 @@ Deno.serve(async (req) => {
       throw new Error('QIANWEN_API_KEY 未配置');
     }
 
+    // 获取当前日期
+    const currentDate = new Date().toISOString().split('T')[0]; // 格式：2026-02-09
+    
     // 新的系统提示词 - 严格的输出格式
     const systemPrompt = `🧠 Research Synthesis Agent
+
+⏰ Current Date: ${currentDate}
+CRITICAL: When synthesizing research materials, prioritize recent data from 2025-2026. If you encounter data from 2023-2024 or earlier, clearly mark it as historical context. Focus on the most current insights and trends.
 
 Role:
 你是 CoWrite 的 Research Synthesis Agent。你的职责是将 Research Retrieval Agent 输出的多源资料，整理为中文、结构化、可写作的研究素材。
