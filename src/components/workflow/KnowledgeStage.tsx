@@ -84,6 +84,16 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [showMaterialSelection, setShowMaterialSelection] = useState(false);
   const [materialsConfirmed, setMaterialsConfirmed] = useState(false);
   
+  // 新增：搜索计划相关状态
+  const [searchPlan, setSearchPlan] = useState<{
+    interpreted_topic?: string;
+    key_dimensions?: string[];
+    academic_queries?: string[];
+    news_queries?: string[];
+    web_queries?: string[];
+    user_library_queries?: string[];
+  } | null>(null);
+  
   const { toast } = useToast();
 
   // 初始化写作会话
@@ -203,14 +213,20 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     }
     
     try {
+      console.log('[autoSearchFromBrief] 开始从需求文档自动搜索');
       const brief = await getBrief(projectId);
-      if (!brief || !brief.requirements) return;
+      if (!brief || !brief.requirements) {
+        console.log('[autoSearchFromBrief] 未找到需求文档或需求内容');
+        return;
+      }
 
       const requirements = typeof brief.requirements === 'string' 
         ? JSON.parse(brief.requirements) 
         : brief.requirements;
 
-      // 构建搜索查询
+      console.log('[autoSearchFromBrief] 需求文档内容:', requirements);
+
+      // 构建搜索查询（用于显示）
       const searchQuery = [
         requirements.主题 || brief.topic,
         ...(requirements.核心观点 || []),
@@ -222,11 +238,17 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         setAutoSearched(true);
         
         // 清空旧的知识库数据
-        console.log('[KnowledgeStage] 清空旧的知识库数据...');
+        console.log('[autoSearchFromBrief] 清空旧的知识库数据...');
         await clearProjectKnowledge(projectId);
         setKnowledge([]);
         
-        // 自动执行搜索
+        // 显示提示信息
+        toast({
+          title: '📋 已加载需求文档',
+          description: '正在根据需求文档生成搜索计划并检索资料...',
+        });
+        
+        // 自动执行搜索（传入完整的需求文档）
         await handleSearch(searchQuery);
       }
     } catch (error) {
@@ -354,15 +376,26 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         预期长度: requirements.预期长度 || '中等',
       };
 
+      console.log('[KnowledgeStage] 完整需求文档:', requirementsDoc);
+
       setSearchProgress({ 
-        stage: '资料查询', 
-        message: '正在从 5 个数据源检索相关资料...',
-        details: '数据源：Google Scholar、TheNews、Smart Search、参考文章库、个人素材库'
+        stage: '生成搜索计划', 
+        message: 'Research Retrieval Agent 正在分析需求文档，生成搜索计划...',
+        details: '将根据需求文档的主题、核心观点和关键要点，为不同数据源生成针对性的搜索关键词'
       });
 
       toast({
-        title: '🔍 启动 Research Retrieval Agent',
-        description: '正在从 5 个数据源检索相关资料...',
+        title: '🤖 启动 Research Retrieval Agent',
+        description: '正在分析需求文档并生成搜索计划...',
+      });
+
+      // 等待一小段时间让用户看到搜索计划生成的提示
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      setSearchProgress({ 
+        stage: '资料检索', 
+        message: '正在从 5 个数据源检索相关资料...',
+        details: '数据源：Google Scholar、TheNews、Smart Search、参考文章库、个人素材库'
       });
 
       console.log('[KnowledgeStage] 调用 agentDrivenResearchWorkflow，需求文档:', requirementsDoc);
@@ -387,6 +420,34 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       // 提取并显示日志
       if (retrievalResults.logs && Array.isArray(retrievalResults.logs)) {
         setSearchLogs(retrievalResults.logs);
+      }
+
+      // 提取搜索计划
+      if (retrievalResults?.search_summary) {
+        console.log('[KnowledgeStage] 搜索计划:', retrievalResults.search_summary);
+        setSearchPlan(retrievalResults.search_summary);
+        
+        // 显示搜索计划
+        const planDetails: string[] = [];
+        if (retrievalResults.search_summary.interpreted_topic) {
+          planDetails.push(`主题理解：${retrievalResults.search_summary.interpreted_topic}`);
+        }
+        if (retrievalResults.search_summary.academic_queries?.length > 0) {
+          planDetails.push(`学术搜索：${retrievalResults.search_summary.academic_queries.join(', ')}`);
+        }
+        if (retrievalResults.search_summary.news_queries?.length > 0) {
+          planDetails.push(`新闻搜索：${retrievalResults.search_summary.news_queries.join(', ')}`);
+        }
+        if (retrievalResults.search_summary.web_queries?.length > 0) {
+          planDetails.push(`网络搜索：${retrievalResults.search_summary.web_queries.join(', ')}`);
+        }
+        
+        if (planDetails.length > 0) {
+          toast({
+            title: '📋 搜索计划已生成',
+            description: planDetails[0],
+          });
+        }
       }
 
       // 保存 retrievalResults 以便后续使用

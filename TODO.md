@@ -174,6 +174,61 @@
 
 ## Bug 修复记录
 
+### 2026-02-10: 从明确需求页自动带入需求文档并生成搜索计划
+
+**需求**: 
+1. 从明确需求页跳转到资料查询页时，将需求文档内容带到下一页
+2. 自动调用 research retrieval agent 生成搜索计划
+3. 按照各类关键词去对应数据源搜索相关内容
+
+**实现方案**:
+1. **需求文档传递**: 
+   - ProjectWorkflowPage 已经加载 requirementsDoc
+   - KnowledgeStage 的 autoSearchFromBrief 函数从数据库加载完整需求文档
+   - handleSearch 函数构建完整的 requirementsDoc JSON 对象传递给 agent
+
+2. **搜索计划生成**:
+   - research-retrieval-agent Edge Function 使用 LLM 分析需求文档
+   - 生成针对不同数据源的搜索关键词：
+     * academic_queries: 学术搜索关键词（Google Scholar）
+     * news_queries: 新闻搜索关键词（TheNews）
+     * web_queries: 网络搜索关键词（Smart Search/Bing）
+     * user_library_queries: 用户库搜索关键词
+   - 返回 search_summary 包含主题理解和关键维度
+
+3. **UI 反馈增强**:
+   - 添加 searchPlan 状态存储搜索计划
+   - 在搜索过程中显示"生成搜索计划"阶段
+   - 搜索计划生成后显示 toast 通知
+   - SearchPlanPanel 组件展示完整搜索计划
+   - 显示各数据源的具体搜索关键词
+
+4. **自动搜索流程**:
+   - 用户从明确需求页点击"进入下一阶段"
+   - KnowledgeStage 初始化 writingSession
+   - autoSearchFromBrief 等待 session 初始化完成
+   - 加载需求文档并自动触发搜索
+   - 显示搜索计划生成和执行过程
+   - 展示检索到的资料供用户选择
+
+**修改文件**:
+- src/components/workflow/KnowledgeStage.tsx
+  - 添加 searchPlan 状态
+  - 增强 autoSearchFromBrief 日志和提示
+  - 改进 handleSearch 搜索进度提示
+  - 提取并显示搜索计划
+  - 添加搜索计划生成阶段的 UI 反馈
+
+**技术细节**:
+- Edge Function 已有完整的搜索计划生成逻辑
+- 使用通义千问 LLM 分析需求文档
+- 针对不同数据源生成专门的搜索关键词
+- 学术搜索使用英文关键词
+- 新闻和网络搜索支持中英文关键词
+- 搜索计划包含在 retrievalResults.search_summary 中
+
+---
+
 ### 2026-02-10: 搜索结果不显示
 **问题**: 用户搜索后看到"找到 0 条相关结果"，MaterialSelectionPanel 不显示
 
