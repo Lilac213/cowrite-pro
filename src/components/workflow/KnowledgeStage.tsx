@@ -173,6 +173,13 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     autoSearchFromBrief();
   }, [projectId]);
 
+  // 当 writingSession 初始化后，尝试自动搜索
+  useEffect(() => {
+    if (writingSession && !autoSearched) {
+      autoSearchFromBrief();
+    }
+  }, [writingSession]);
+
   // 加载项目标题
   const loadProjectTitle = async () => {
     try {
@@ -188,6 +195,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   // 根据需求文档自动搜索
   const autoSearchFromBrief = async () => {
     if (autoSearched) return;
+    
+    // 等待写作会话初始化
+    if (!writingSession) {
+      console.log('[autoSearchFromBrief] 等待 writingSession 初始化');
+      return;
+    }
     
     try {
       const brief = await getBrief(projectId);
@@ -244,6 +257,17 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const handleSearch = async (searchQuery?: string) => {
     const queryToUse = searchQuery || query;
     if (!queryToUse.trim()) return;
+
+    // 确保写作会话已初始化
+    if (!writingSession) {
+      toast({
+        title: '初始化中',
+        description: '请稍等片刻后再试',
+        variant: 'destructive',
+      });
+      console.error('[handleSearch] writingSession 未初始化');
+      return;
+    }
 
     setSearching(true);
     setSearchProgress({ stage: '准备中', message: '正在初始化搜索...' });
@@ -342,6 +366,8 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       });
 
       console.log('[KnowledgeStage] 调用 agentDrivenResearchWorkflow，需求文档:', requirementsDoc);
+      console.log('[KnowledgeStage] writingSession:', writingSession);
+      console.log('[KnowledgeStage] writingSession.id:', writingSession?.id);
 
       // 清空之前的日志
       setSearchLogs([]);
@@ -368,21 +394,36 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       setSynthesisResults(synthesisResults);
 
       // 加载检索到的资料
+      let loadedMaterials: RetrievedMaterial[] = [];
       if (writingSession) {
-        const materials = await getRetrievedMaterials(writingSession.id);
-        setRetrievedMaterials(materials);
-        setShowMaterialSelection(true);
-        setMaterialsConfirmed(false);
+        console.log('[KnowledgeStage] 开始加载检索资料，sessionId:', writingSession.id);
+        try {
+          loadedMaterials = await getRetrievedMaterials(writingSession.id);
+          console.log('[KnowledgeStage] 成功加载资料数量:', loadedMaterials.length);
+          console.log('[KnowledgeStage] 资料详情:', loadedMaterials);
+          setRetrievedMaterials(loadedMaterials);
+          setShowMaterialSelection(true);
+          setMaterialsConfirmed(false);
+        } catch (error: any) {
+          console.error('[KnowledgeStage] 加载资料失败:', error);
+          toast({
+            title: '加载资料失败',
+            description: error.message || '请稍后重试',
+            variant: 'destructive',
+          });
+        }
+      } else {
+        console.warn('[KnowledgeStage] writingSession 为空，无法加载资料');
       }
 
       setSearchProgress({ 
         stage: '完成', 
-        message: `已检索到 ${retrievedMaterials.length} 条资料，请选择需要的资料`,
+        message: `已检索到 ${loadedMaterials.length} 条资料，请选择需要的资料`,
       });
 
       toast({
         title: '✅ 资料检索完成',
-        description: '请选择需要的资料，然后点击"确认选择并整理"',
+        description: `已检索到 ${loadedMaterials.length} 条资料，请选择需要的资料`,
       });
 
       // 注意：不再自动保存到知识库，等待用户选择资料后再保存

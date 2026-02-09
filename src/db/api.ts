@@ -2041,13 +2041,22 @@ export async function isResearchStageComplete(sessionId: string): Promise<boolea
 
 // 获取会话的所有检索资料
 export async function getRetrievedMaterials(sessionId: string): Promise<RetrievedMaterial[]> {
+  console.log('[getRetrievedMaterials] 开始查询，sessionId:', sessionId);
+  
   const { data, error } = await supabase
     .from('retrieved_materials')
     .select('*')
     .eq('session_id', sessionId)
     .order('created_at', { ascending: true });
 
-  if (error) throw error;
+  if (error) {
+    console.error('[getRetrievedMaterials] 查询失败:', error);
+    throw error;
+  }
+  
+  console.log('[getRetrievedMaterials] 查询成功，数据:', data);
+  console.log('[getRetrievedMaterials] 数据数量:', data?.length || 0);
+  
   return (Array.isArray(data) ? data : []) as RetrievedMaterial[];
 }
 

@@ -1,5 +1,20 @@
 # 任务：优化研究检索和综合流程
 
+## 问题诊断
+
+### 搜索结果不显示的原因
+1. **Race Condition**: `autoSearchFromBrief` 在 `writingSession` 初始化之前被调用
+2. **sessionId 为 undefined**: 导致 Edge Function 无法保存资料到数据库
+3. **数据库为空**: retrieved_materials 表中没有数据
+4. **UI 条件不满足**: `showMaterialSelection && retrievedMaterials.length > 0` 条件不满足，导致显示旧的 SearchResultsPanel
+
+### 已修复的问题
+1. ✅ 添加 writingSession 检查，防止在未初始化时调用搜索
+2. ✅ 添加 useEffect 监听 writingSession，在初始化后触发自动搜索
+3. ✅ 修复状态更新时序问题（使用本地变量而不是依赖异步状态）
+4. ✅ 添加详细的 console 日志用于调试
+5. ✅ 改进错误处理和用户提示
+
 ## 需求分析
 
 ### 当前流程问题
@@ -88,8 +103,17 @@
 - [x] 更新 handleRefreshSearch 处理器
 - [x] 更新按钮状态和提示文本
 - [x] 条件渲染资料选择界面
+- [x] 修复 race condition 问题
+- [x] 添加 writingSession 检查
+- [x] 添加详细日志
 
-### Phase 6: 修改 Research Synthesis Agent 调用 ⏳
+### Phase 6: Bug 修复 ✅
+- [x] 修复 writingSession 初始化时序问题
+- [x] 修复状态更新异步问题
+- [x] 添加错误处理和用户提示
+- [x] 添加调试日志
+
+### Phase 7: 修改 Research Synthesis Agent 调用 ⏳
 - [ ] 修改 handleOrganize 函数
   - 检查是否有选中的资料
   - 只传递选中的资料给 Synthesis Agent
@@ -97,7 +121,7 @@
   - 接收选中的资料列表
   - 基于选中资料进行综合分析
 
-### Phase 7: 增强用户决策界面 ⏳
+### Phase 8: 增强用户决策界面 ⏳
 - [ ] 在 ResearchSynthesisReview 中添加
   - 用户判断输入框
   - 观点可取性评分
@@ -108,7 +132,7 @@
   - 保存评分和评论
 - [ ] 添加决策完成度进度条
 
-### Phase 8: 测试和优化 ⏳
+### Phase 9: 测试和优化 ⏳
 - [ ] 测试完整流程
 - [ ] 优化加载性能
 - [ ] 添加错误处理
@@ -130,6 +154,7 @@
 ### API 函数
 - ✅ 8 个新的 API 函数已添加
 - ✅ 类型定义已更新
+- ✅ 添加调试日志
 
 ### UI 组件
 - ✅ MaterialSelectionPanel 已创建
@@ -144,21 +169,46 @@
   - 新的状态管理
   - 资料选择流程
   - 条件渲染逻辑
+  - Race condition 修复
+  - 错误处理改进
+
+## Bug 修复记录
+
+### 2026-02-10: 搜索结果不显示
+**问题**: 用户搜索后看到"找到 0 条相关结果"，MaterialSelectionPanel 不显示
+
+**根本原因**:
+1. `autoSearchFromBrief` 在 `writingSession` 初始化前被调用
+2. `sessionId` 为 undefined，导致 Edge Function 无法保存资料
+3. `retrieved_materials` 表为空
+4. UI 条件 `retrievedMaterials.length > 0` 不满足
+
+**解决方案**:
+1. 在 `handleSearch` 开始时检查 `writingSession` 是否存在
+2. 在 `autoSearchFromBrief` 中添加 `writingSession` 检查
+3. 添加新的 useEffect 监听 `writingSession`，在初始化后触发自动搜索
+4. 修复状态更新时序问题（使用本地变量）
+5. 添加详细的 console 日志用于调试
+
+**修改文件**:
+- src/components/workflow/KnowledgeStage.tsx
+- src/db/api.ts
 
 ## 下一步工作
 
-1. **修改 Research Synthesis Agent 调用**
+1. **测试修复**
+   - 用户需要刷新页面并重新搜索
+   - 检查 console 日志确认 sessionId 正确传递
+   - 验证资料保存到数据库
+   - 确认 MaterialSelectionPanel 正确显示
+
+2. **修改 Research Synthesis Agent 调用**
    - 只使用选中的资料
    - 优化综合分析逻辑
 
-2. **增强用户决策界面**
+3. **增强用户决策界面**
    - 添加用户判断字段
    - 添加评分和评论功能
-
-3. **完整测试**
-   - 端到端流程测试
-   - 边界情况测试
-   - 性能优化
 
 ---
 
