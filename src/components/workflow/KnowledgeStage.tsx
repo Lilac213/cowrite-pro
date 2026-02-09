@@ -178,6 +178,8 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   };
 
   useEffect(() => {
+    // 重置自动搜索标志，确保每次进入页面都会重新搜索
+    setAutoSearched(false);
     loadKnowledge();
     loadProjectTitle();
     autoSearchFromBrief();
@@ -293,61 +295,13 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
     setSearching(true);
     setSearchProgress({ stage: '准备中', message: '正在初始化搜索...' });
+    
+    // 添加初始日志
+    setSearchLogs(['[' + new Date().toLocaleTimeString('zh-CN') + '] 开始搜索资料...']);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('未登录');
-
-      // 检查 localStorage 缓存
-      const cacheKey = `research_results_${projectId}`;
-      const cachedData = localStorage.getItem(cacheKey);
-      
-      if (cachedData) {
-        try {
-          const cached = JSON.parse(cachedData);
-          const cacheAge = Date.now() - cached.timestamp;
-          const maxAge = 24 * 60 * 60 * 1000; // 24小时
-          
-          // 如果缓存未过期，使用缓存数据
-          if (cacheAge < maxAge) {
-            console.log('[KnowledgeStage] 使用缓存的搜索结果');
-            
-            setSearchProgress({ stage: '加载缓存', message: '正在加载已缓存的搜索结果...' });
-            
-            // 恢复缓存的状态
-            setRetrievalResults(cached.retrievalResults);
-            setSynthesisResults(cached.synthesisResults);
-            setWorkflowResult({
-              retrievalResults: cached.retrievalResults,
-              synthesisResults: cached.synthesisResults,
-            });
-            setWritingSummary(cached.synthesisResults);
-            setLastSearchTime(new Date(cached.timestamp).toLocaleString('zh-CN'));
-            
-            // 加载知识库数据
-            await loadKnowledge();
-            
-            setSearchProgress({ 
-              stage: '完成', 
-              message: `已加载缓存的搜索结果（${cached.retrievalResults?.academic_sources?.length || 0} 条资料）`
-            });
-            
-            toast({
-              title: '✅ 加载成功',
-              description: '已从缓存加载搜索结果',
-            });
-            
-            setSearching(false);
-            return;
-          } else {
-            console.log('[KnowledgeStage] 缓存已过期，重新搜索');
-            localStorage.removeItem(cacheKey);
-          }
-        } catch (e) {
-          console.error('[KnowledgeStage] 缓存解析失败:', e);
-          localStorage.removeItem(cacheKey);
-        }
-      }
 
       // 清空旧的知识库数据（如果不是自动搜索触发的）
       if (!autoSearched) {
@@ -357,6 +311,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       }
 
       setSearchProgress({ stage: '读取需求', message: '正在读取需求文档...' });
+      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在读取需求文档...']);
 
       // 获取需求文档
       const brief = await getBrief(projectId);
@@ -383,6 +338,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         message: 'Research Retrieval Agent 正在分析需求文档，生成搜索计划...',
         details: '将根据需求文档的主题、核心观点和关键要点，为不同数据源生成针对性的搜索关键词'
       });
+      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] Research Retrieval Agent 正在分析需求文档...']);
 
       toast({
         title: '🤖 启动 Research Retrieval Agent',
@@ -397,13 +353,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         message: '正在从 5 个数据源检索相关资料...',
         details: '数据源：Google Scholar、TheNews、Smart Search、参考文章库、个人素材库'
       });
+      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在从 5 个数据源检索相关资料...']);
 
       console.log('[KnowledgeStage] 调用 agentDrivenResearchWorkflow，需求文档:', requirementsDoc);
       console.log('[KnowledgeStage] writingSession:', writingSession);
       console.log('[KnowledgeStage] writingSession.id:', writingSession?.id);
-
-      // 清空之前的日志
-      setSearchLogs([]);
 
       // 使用新的 Agent 驱动的研究工作流（传入 sessionId）
       const { retrievalResults, synthesisResults } = await agentDrivenResearchWorkflow(
@@ -419,13 +373,17 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
       // 提取并显示日志
       if (retrievalResults.logs && Array.isArray(retrievalResults.logs)) {
-        setSearchLogs(retrievalResults.logs);
+        const formattedLogs = retrievalResults.logs.map(log => 
+          '[' + new Date().toLocaleTimeString('zh-CN') + '] ' + log
+        );
+        setSearchLogs(prev => [...prev, ...formattedLogs]);
       }
 
       // 提取搜索计划
       if (retrievalResults?.search_summary) {
         console.log('[KnowledgeStage] 搜索计划:', retrievalResults.search_summary);
         setSearchPlan(retrievalResults.search_summary);
+        setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 搜索计划已生成']);
         
         // 显示搜索计划
         const planDetails: string[] = [];
@@ -458,6 +416,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       let loadedMaterials: RetrievedMaterial[] = [];
       if (writingSession) {
         console.log('[KnowledgeStage] 开始加载检索资料，sessionId:', writingSession.id);
+        setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在加载检索到的资料...']);
         try {
           loadedMaterials = await getRetrievedMaterials(writingSession.id);
           console.log('[KnowledgeStage] 成功加载资料数量:', loadedMaterials.length);
@@ -465,8 +424,10 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           setRetrievedMaterials(loadedMaterials);
           setShowMaterialSelection(true);
           setMaterialsConfirmed(false);
+          setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 成功加载 ' + loadedMaterials.length + ' 条资料']);
         } catch (error: any) {
           console.error('[KnowledgeStage] 加载资料失败:', error);
+          setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 加载资料失败: ' + error.message]);
           toast({
             title: '加载资料失败',
             description: error.message || '请稍后重试',
@@ -475,12 +436,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         }
       } else {
         console.warn('[KnowledgeStage] writingSession 为空，无法加载资料');
+        setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 错误：写作会话未初始化']);
       }
 
       setSearchProgress({ 
         stage: '完成', 
         message: `已检索到 ${loadedMaterials.length} 条资料，请选择需要的资料`,
       });
+      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成']);
 
       toast({
         title: '✅ 资料检索完成',
@@ -1153,15 +1116,24 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <div className={`w-2 h-2 rounded-full ${searching ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
                   <span className="text-sm font-medium text-gray-300">LATEST LOG</span>
                 </div>
                 <Separator orientation="vertical" className="h-4 bg-gray-700" />
                 <span className="text-sm text-gray-400">
-                  {new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  {(() => {
+                    const latestLog = searchLogs[searchLogs.length - 1] || '';
+                    const timeMatch = latestLog.match(/\[(\d{2}:\d{2}:\d{2})\]/);
+                    return timeMatch ? timeMatch[1] : new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                  })()}
                 </span>
                 <span className="text-sm text-gray-200">
-                  {searchProgress?.message || searchLogs[searchLogs.length - 1]?.substring(0, 50) || '正在解析搜索结果内容...'}
+                  {(() => {
+                    const latestLog = searchLogs[searchLogs.length - 1] || '';
+                    // 移除时间戳部分，只显示消息内容
+                    const message = latestLog.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '');
+                    return message.substring(0, 80) || searchProgress?.message || '正在解析搜索结果内容...';
+                  })()}
                 </span>
               </div>
               <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800">
