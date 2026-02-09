@@ -26,6 +26,8 @@
   - [x] 更新 handleToggleSelect 同步 retrieved_materials 表
   - [x] 更新 handleBatchFavorite 同步 retrieved_materials 表
   - [x] 确保选择状态在数据库和 UI 之间正确同步
+  - [x] 修复缓存加载逻辑：优先从数据库加载资料
+  - [x] 添加详细日志以便调试选择状态同步问题
 
 ## 实现详情
 
@@ -507,6 +509,108 @@ const handleBatchFavorite = async (ids: string[], selected: boolean) => {
            ↓
     返回选中的资料 ✅
 ```
+
+#### 第二次修复：优先从数据库加载资料
+
+**问题**：
+即使添加了同步逻辑，用户刷新页面后，资料是从 localStorage 缓存加载的，而不是从数据库加载。这导致：
+1. 缓存中的资料可能没有最新的 `is_selected` 状态
+2. 用户勾选后刷新页面，选择状态丢失
+3. 缓存和数据库状态不一致
+
+**解决方案**：
+修改 `initSession` 中的加载逻辑，优先从数据库加载资料：
+
+```typescript
+// 1. 首先尝试从数据库加载检索资料
+const dbMaterials = await getRetrievedMaterials(session.id);
+
+if (dbMaterials.length > 0) {
+  // 使用数据库的数据（包含最新的 is_selected 状态）
+  setRetrievedMaterials(dbMaterials);
+  
+  // 转换为 knowledge 格式
+  const knowledgeItems = dbMaterials.map(material => ({...}));
+  setKnowledge(knowledgeItems);
+  
+  // 从缓存加载其他信息（搜索计划、日志等）
+  const cached = loadSearchCache(projectId);
+  if (cached) {
+    setSearchPlan(cached.searchPlan);
+    setSearchLogs(cached.searchLogs || []);
+    setLastSearchTime(cached.lastSearchTime || '');
+    setQuery(cached.query || '');
+  }
+} else {
+  // 如果数据库中没有资料，才从缓存加载
+  const cached = loadSearchCache(projectId);
+  if (cached && cached.retrievedMaterials) {
+    setRetrievedMaterials(cached.retrievedMaterials);
+    // ...
+  }
+}
+```
+
+**关键改进**：
+1. **数据库优先**：始终优先从数据库加载资料，确保获取最新的 `is_selected` 状态
+2. **缓存辅助**：缓存只用于加载搜索计划、日志等辅助信息
+3. **状态一致性**：数据库是唯一的真实数据源，避免缓存和数据库不一致
+4. **详细日志**：添加详细的 console.log，方便调试数据加载流程
+
+**新的数据流**：
+```
+页面加载 → initSession
+           ↓
+    1. 创建/获取 writingSession
+           ↓
+    2. 从数据库加载 retrieved_materials (包含 is_selected 状态)
+           ↓
+    3. 设置 retrievedMaterials 和 knowledge 状态
+           ↓
+    4. 从缓存加载搜索计划和日志（辅助信息）
+           ↓
+用户看到的资料列表 ✅ (包含正确的选择状态)
+```
+
+#### 调试日志
+
+为了方便调试，添加了详细的日志：
+
+**handleToggleSelect**:
+```typescript
+console.log('[handleToggleSelect] 开始更新选中状态:', { id, selected });
+console.log('[handleToggleSelect] 更新 retrieved_materials 表');
+console.log('[handleToggleSelect] retrieved_materials 表更新成功');
+console.log('[handleToggleSelect] 本地状态已更新，选中数量:', count);
+console.log('[handleToggleSelect] knowledge_base 表更新成功');
+console.log('[handleToggleSelect] 完成');
+```
+
+**handleOrganize**:
+```typescript
+console.log('[handleOrganize] 开始资料整理');
+console.log('[handleOrganize] writingSession:', writingSession);
+console.log('[handleOrganize] knowledge.length:', knowledge.length);
+console.log('[handleOrganize] retrievedMaterials.length:', retrievedMaterials.length);
+console.log('[handleOrganize] retrievedMaterials 选中数量:', count);
+console.log('[handleOrganize] 调用 getSelectedMaterials，sessionId:', sessionId);
+console.log('[handleOrganize] getSelectedMaterials 返回结果:', selectedMaterials);
+console.log('[handleOrganize] 选中资料数量:', selectedMaterials.length);
+```
+
+**initSession**:
+```typescript
+console.log('[initSession] 尝试从数据库加载检索资料，sessionId:', session.id);
+console.log('[initSession] 从数据库加载的资料数量:', dbMaterials.length);
+console.log('[initSession] 使用数据库中的资料');
+console.log('[initSession] 从缓存加载搜索计划和日志');
+```
+
+这些日志可以帮助我们追踪：
+1. 资料是从哪里加载的（数据库 vs 缓存）
+2. 选择状态是否正确更新
+3. getSelectedMaterials 返回了多少条资料
+4. 每个步骤的执行顺序和结果
 
 ## 用户体验改进
 

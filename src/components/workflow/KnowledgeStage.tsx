@@ -155,46 +155,144 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           setResearchStageComplete(complete);
         }
         
-        // 尝试从缓存加载搜索结果
-        const cached = loadSearchCache(projectId);
-        if (cached && cached.retrievedMaterials && cached.retrievedMaterials.length > 0) {
-          console.log('[initSession] 从缓存加载搜索结果');
-          setSearchPlan(cached.searchPlan);
-          setRetrievedMaterials(cached.retrievedMaterials);
-          setSearchLogs(cached.searchLogs || []);
-          setLastSearchTime(cached.lastSearchTime || '');
-          setQuery(cached.query || '');
+        // 尝试从数据库加载检索资料
+        console.log('[initSession] 尝试从数据库加载检索资料，sessionId:', session.id);
+        try {
+          const dbMaterials = await getRetrievedMaterials(session.id);
+          console.log('[initSession] 从数据库加载的资料数量:', dbMaterials.length);
           
-          // 转换为 knowledge 格式
-          const knowledgeItems: KnowledgeBase[] = cached.retrievedMaterials.map((material: RetrievedMaterial) => {
-            let publishedAt = material.published_at;
-            if (!publishedAt && material.year) {
-              publishedAt = `${material.year}-01-01T00:00:00Z`;
+          if (dbMaterials.length > 0) {
+            // 如果数据库中有资料，使用数据库的数据（包含最新的 is_selected 状态）
+            console.log('[initSession] 使用数据库中的资料');
+            setRetrievedMaterials(dbMaterials);
+            
+            // 转换为 knowledge 格式
+            const knowledgeItems: KnowledgeBase[] = dbMaterials.map((material: RetrievedMaterial) => {
+              let publishedAt = material.published_at;
+              if (!publishedAt && material.year) {
+                publishedAt = `${material.year}-01-01T00:00:00Z`;
+              }
+              
+              return {
+                id: material.id,
+                project_id: projectId,
+                title: material.title,
+                content: material.abstract || material.full_text || '',
+                source: material.source_type,
+                source_url: material.url,
+                published_at: publishedAt,
+                collected_at: material.created_at,
+                selected: material.is_selected,
+                content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
+                extracted_content: material.full_text ? [material.full_text] : [],
+                full_text: material.full_text,
+                created_at: material.created_at,
+              };
+            });
+            setKnowledge(knowledgeItems);
+            setAutoSearched(true);
+            
+            // 尝试从缓存加载其他信息（搜索计划、日志等）
+            const cached = loadSearchCache(projectId);
+            if (cached) {
+              console.log('[initSession] 从缓存加载搜索计划和日志');
+              setSearchPlan(cached.searchPlan);
+              setSearchLogs(cached.searchLogs || []);
+              setLastSearchTime(cached.lastSearchTime || '');
+              setQuery(cached.query || '');
             }
             
-            return {
-              id: material.id,
-              project_id: projectId,
-              title: material.title,
-              content: material.abstract || material.full_text || '',
-              source: material.source_type,
-              source_url: material.url,
-              published_at: publishedAt,
-              collected_at: material.created_at,
-              selected: material.is_selected,
-              content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
-              extracted_content: material.full_text ? [material.full_text] : [],
-              full_text: material.full_text,
-              created_at: material.created_at,
-            };
-          });
-          setKnowledge(knowledgeItems);
-          setAutoSearched(true); // 标记为已搜索，避免重复搜索
-          
-          toast({
-            title: '已加载缓存的搜索结果',
-            description: `共 ${cached.retrievedMaterials.length} 条资料`,
-          });
+            toast({
+              title: '已加载检索资料',
+              description: `共 ${dbMaterials.length} 条资料`,
+            });
+          } else {
+            // 如果数据库中没有资料，尝试从缓存加载
+            console.log('[initSession] 数据库中没有资料，尝试从缓存加载');
+            const cached = loadSearchCache(projectId);
+            if (cached && cached.retrievedMaterials && cached.retrievedMaterials.length > 0) {
+              console.log('[initSession] 从缓存加载搜索结果');
+              setSearchPlan(cached.searchPlan);
+              setRetrievedMaterials(cached.retrievedMaterials);
+              setSearchLogs(cached.searchLogs || []);
+              setLastSearchTime(cached.lastSearchTime || '');
+              setQuery(cached.query || '');
+              
+              // 转换为 knowledge 格式
+              const knowledgeItems: KnowledgeBase[] = cached.retrievedMaterials.map((material: RetrievedMaterial) => {
+                let publishedAt = material.published_at;
+                if (!publishedAt && material.year) {
+                  publishedAt = `${material.year}-01-01T00:00:00Z`;
+                }
+                
+                return {
+                  id: material.id,
+                  project_id: projectId,
+                  title: material.title,
+                  content: material.abstract || material.full_text || '',
+                  source: material.source_type,
+                  source_url: material.url,
+                  published_at: publishedAt,
+                  collected_at: material.created_at,
+                  selected: material.is_selected,
+                  content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
+                  extracted_content: material.full_text ? [material.full_text] : [],
+                  full_text: material.full_text,
+                  created_at: material.created_at,
+                };
+              });
+              setKnowledge(knowledgeItems);
+              setAutoSearched(true);
+              
+              toast({
+                title: '已加载缓存的搜索结果',
+                description: `共 ${cached.retrievedMaterials.length} 条资料`,
+              });
+            }
+          }
+        } catch (error) {
+          console.error('[initSession] 加载检索资料失败:', error);
+          // 如果加载失败，尝试从缓存加载
+          const cached = loadSearchCache(projectId);
+          if (cached && cached.retrievedMaterials && cached.retrievedMaterials.length > 0) {
+            console.log('[initSession] 从缓存加载搜索结果（数据库加载失败）');
+            setSearchPlan(cached.searchPlan);
+            setRetrievedMaterials(cached.retrievedMaterials);
+            setSearchLogs(cached.searchLogs || []);
+            setLastSearchTime(cached.lastSearchTime || '');
+            setQuery(cached.query || '');
+            
+            // 转换为 knowledge 格式
+            const knowledgeItems: KnowledgeBase[] = cached.retrievedMaterials.map((material: RetrievedMaterial) => {
+              let publishedAt = material.published_at;
+              if (!publishedAt && material.year) {
+                publishedAt = `${material.year}-01-01T00:00:00Z`;
+              }
+              
+              return {
+                id: material.id,
+                project_id: projectId,
+                title: material.title,
+                content: material.abstract || material.full_text || '',
+                source: material.source_type,
+                source_url: material.url,
+                published_at: publishedAt,
+                collected_at: material.created_at,
+                selected: material.is_selected,
+                content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
+                extracted_content: material.full_text ? [material.full_text] : [],
+                full_text: material.full_text,
+                created_at: material.created_at,
+              };
+            });
+            setKnowledge(knowledgeItems);
+            setAutoSearched(true);
+            
+            toast({
+              title: '已加载缓存的搜索结果',
+              description: `共 ${cached.retrievedMaterials.length} 条资料`,
+            });
+          }
         }
       } catch (error) {
         console.error('初始化写作会话失败:', error);
@@ -732,27 +830,34 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   };
 
   const handleToggleSelect = async (id: string, selected: boolean) => {
+    console.log('[handleToggleSelect] 开始更新选中状态:', { id, selected });
     try {
       // 同时更新 retrieved_materials 表
       // 注意：knowledge 中的 id 对应 retrieved_materials 中的 id
+      console.log('[handleToggleSelect] 更新 retrieved_materials 表');
       await updateRetrievedMaterialSelection(id, selected);
+      console.log('[handleToggleSelect] retrieved_materials 表更新成功');
       
       // 更新本地状态
-      setRetrievedMaterials(prev => 
-        prev.map(m => m.id === id ? { ...m, is_selected: selected } : m)
-      );
+      setRetrievedMaterials(prev => {
+        const updated = prev.map(m => m.id === id ? { ...m, is_selected: selected } : m);
+        console.log('[handleToggleSelect] 本地状态已更新，选中数量:', updated.filter(m => m.is_selected).length);
+        return updated;
+      });
       
       // 尝试更新 knowledge_base 表（如果存在）
       try {
         await updateKnowledgeBase(id, { selected });
+        console.log('[handleToggleSelect] knowledge_base 表更新成功');
       } catch (kbError) {
         // knowledge_base 中可能还不存在该记录，忽略错误
         console.log('[handleToggleSelect] knowledge_base 更新跳过（记录可能不存在）:', id);
       }
       
       await loadKnowledge();
+      console.log('[handleToggleSelect] 完成');
     } catch (error) {
-      console.error('更新选中状态失败:', error);
+      console.error('[handleToggleSelect] 更新选中状态失败:', error);
       toast({
         title: '更新失败',
         description: '请稍后重试',
@@ -967,6 +1072,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
   // 资料整理 - 调用研究综合 Agent
   const handleOrganize = async () => {
+    console.log('[handleOrganize] 开始资料整理');
+    console.log('[handleOrganize] writingSession:', writingSession);
+    console.log('[handleOrganize] knowledge.length:', knowledge.length);
+    console.log('[handleOrganize] retrievedMaterials.length:', retrievedMaterials.length);
+    console.log('[handleOrganize] retrievedMaterials 选中数量:', retrievedMaterials.filter(m => m.is_selected).length);
+    
     if (!writingSession) {
       toast({
         title: '会话未初始化',
@@ -993,10 +1104,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       setSynthesisLogs(['[' + new Date().toLocaleTimeString('zh-CN') + '] 开始资料整理...']);
       
       // 1. 获取选中的资料
+      console.log('[handleOrganize] 调用 getSelectedMaterials，sessionId:', writingSession.id);
       setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在获取选中的资料...']);
       const selectedMaterials = await getSelectedMaterials(writingSession.id);
+      console.log('[handleOrganize] getSelectedMaterials 返回结果:', selectedMaterials);
+      console.log('[handleOrganize] 选中资料数量:', selectedMaterials.length);
       
       if (selectedMaterials.length === 0) {
+        console.error('[handleOrganize] 没有选中的资料');
         toast({
           title: '请选择资料',
           description: '至少选择一条资料才能继续',
