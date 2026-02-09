@@ -1,173 +1,237 @@
-# 任务：邀请码和积分系统升级（第二轮）
+# 任务：研究综合 Agent 和用户决策流程
 
 ## 完成情况
 
 ### ✅ 已完成
 
-#### 1. 购买点数页面优化
-- [x] 增大对话框尺寸（max-w-5xl）
-- [x] 增加标题字号（text-2xl）
-- [x] 增加描述字号（text-base）
-- [x] 增加套餐名称字号（text-xl）
-- [x] 增加价格字号（text-4xl）
-- [x] 增加点数字号（text-base）
-- [x] 增加按钮字号和高度（text-base py-6）
-- [x] 增加卡片间距（gap-6）
-- [x] 增加内容间距（space-y-6, pb-8, pt-8）
+#### 1. 数据库架构
+- [x] 创建 writing_sessions 表（写作会话）
+- [x] 创建 research_insights 表（研究洞察）
+- [x] 创建 research_gaps 表（研究矛盾/空白）
+- [x] 创建 structure_decisions 表（结构决策）
+- [x] 创建 paragraph_decisions 表（段落决策）
+- [x] 创建 evidence_decisions 表（证据决策）
+- [x] 添加 RLS 策略
+- [x] 创建索引
 
-#### 2. 注册时邀请码功能
-- [x] 注册表单添加邀请码输入框（可选）
-- [x] 邀请码自动转大写
-- [x] 注册成功后自动应用邀请码
-- [x] 邀请码失败不影响注册
-- [x] 显示邀请码应用结果
+#### 2. Edge Function
+- [x] 创建 research-synthesis-agent Edge Function
+- [x] 实现 Research Synthesis Agent prompt
+- [x] 解析 JSON 输出
+- [x] 保存洞察到数据库
+- [x] 保存矛盾/空白到数据库
+- [x] 部署 Edge Function
 
-#### 3. 用户信息邀请码功能
-- [x] 未绑定邀请码时显示输入框
-- [x] 已绑定邀请码时显示邀请码信息
-- [x] 邀请码验证和应用功能
-- [x] 应用成功后自动刷新用户信息
+#### 3. 类型定义
+- [x] 添加 WritingSession 类型
+- [x] 添加 WritingStage 枚举
+- [x] 添加 ResearchInsight 类型
+- [x] 添加 ResearchGap 类型
+- [x] 添加 UserDecision 类型
+- [x] 添加 SynthesisResult 类型
+- [x] 添加其他决策类型
 
-#### 4. 邀请码绑定机制
-- [x] 数据库添加唯一约束（一个邀请码只能绑定一个用户）
-- [x] 管理员用户列表显示邀请码列
-- [x] 显示用户绑定的邀请码
-- [x] 未绑定显示"-"
+#### 4. API 函数
+- [x] getOrCreateWritingSession - 获取或创建写作会话
+- [x] updateWritingSessionStage - 更新写作阶段
+- [x] callResearchSynthesisAgent - 调用研究综合 Agent
+- [x] getResearchInsights - 获取研究洞察
+- [x] getResearchGaps - 获取研究空白
+- [x] updateInsightDecision - 更新洞察决策
+- [x] batchUpdateInsightDecisions - 批量更新决策
+- [x] updateGapDecision - 更新空白决策
+- [x] isResearchStageComplete - 检查阶段是否完成
 
-#### 5. 用户名唯一性检查
-- [x] 数据库添加用户名唯一约束
-- [x] 注册前检查用户名是否已存在
-- [x] 显示友好的错误提示
-- [x] 用户名格式验证（字母、数字、下划线）
+#### 5. UI 组件
+- [x] 创建 ResearchSynthesisReview 组件
+  - 显示 AI 思考过程
+  - 按分类显示研究洞察
+  - 显示支持数据
+  - 显示推荐使用和可引用性标签
+  - 显示局限性警告
+  - 用户决策选项（必须使用/背景补充/排除）
+  - 显示矛盾和空白
+  - 决策完成度检查
+  - 保存决策功能
 
-#### 6. 新用户默认点数
-- [x] 修改数据库默认值为2点
-- [x] 更新触发器函数
-- [x] 管理员默认0点（无限点数）
-- [x] 普通用户默认2点（1次AI降重 + 1次项目创建）
-
-#### 7. AuthContext 更新
-- [x] signUpWithUsername 返回 userId
-- [x] 注册时传递 username 到 user_metadata
-- [x] refreshProfile 函数供外部调用
+#### 6. KnowledgeStage 集成
+- [x] 添加写作会话状态管理
+- [x] 初始化写作会话
+- [x] 更新 handleOrganize 调用新 Agent
+- [x] 显示综合审阅界面
+- [x] 更新 handleNextStep 检查决策完成
+- [x] 更新按钮状态和提示
+- [x] 条件渲染审阅界面
 
 ## 功能说明
 
-### 购买点数页面改进
-- **更大的对话框**：从 max-w-4xl 增加到 max-w-5xl
-- **更大的字号**：
-  - 标题：text-2xl
-  - 价格：text-4xl
-  - 点数：text-base
-  - 按钮：text-base py-6
-- **更大的间距**：
-  - 卡片间距：gap-6
-  - 内容间距：space-y-6
-  - 内边距：pb-8, pt-8
+### 用户决策流程
 
-### 邀请码系统
-1. **注册时使用**：
-   - 可选填写邀请码
-   - 自动转大写
-   - 注册成功后自动应用
-   - 失败不影响注册
+1. **资料搜索阶段**
+   - 用户进行资料搜索
+   - 系统从多个数据源检索资料
+   - 资料保存到知识库
 
-2. **用户信息使用**：
-   - 未绑定时显示输入框
-   - 已绑定时显示邀请码
-   - 一次性绑定，不可更改
+2. **资料整理阶段**
+   - 用户点击"资料整理"按钮
+   - 调用 Research Synthesis Agent
+   - Agent 分析资料并生成：
+     * 研究洞察（按分类组织）
+     * 支持数据
+     * 推荐使用方式
+     * 可引用性评估
+     * 局限性说明
+     * 矛盾和空白点
 
-3. **管理员查看**：
-   - 用户列表显示邀请码列
-   - 查看用户使用的邀请码
-   - 未使用显示"-"
+3. **用户决策阶段**
+   - 显示综合审阅界面
+   - 用户为每条洞察做出决策：
+     * 必须使用（must_use）
+     * 背景补充（background）
+     * 排除（excluded）
+   - 用户为每个矛盾/空白做出决策：
+     * 需要处理（respond）
+     * 忽略（ignore）
+   - 所有决策完成后才能保存
 
-### 用户名唯一性
-- 数据库级别唯一约束
-- 注册前检查是否重复
-- 友好的错误提示
-- 格式验证
+4. **进入下一阶段**
+   - 只有完成所有决策后才能进入下一阶段
+   - 按钮状态根据决策完成度动态更新
+   - 更新写作会话阶段为 'structure'
 
-### 新用户权益
-- 默认2点（可用于1次AI降重 + 1次项目创建）
-- 管理员无限点数
-- 可通过邀请码获得更多点数
-- 可购买点数
+### Research Synthesis Agent 特点
 
-## 已知问题和说明
+1. **用户决策导向**
+   - 不做价值取舍
+   - 不假设用户立场
+   - 所有观点等待用户决策
 
-### 1. 支付功能
-- **状态**：已集成 Stripe 支付
-- **问题**：需要配置 STRIPE_SECRET_KEY 环境变量
-- **解决**：在 Supabase 项目设置中添加 STRIPE_SECRET_KEY
+2. **高密度提炼**
+   - 提取核心结论/观点
+   - 提取关键数据
+   - 标注方法和框架
+   - 标注与需求的对应关系
 
-### 2. 文章结构生成
-- **状态**：Edge Function 已部署
-- **问题**：需要配置 INTEGRATIONS_API_KEY 环境变量
-- **解决**：在 Supabase 项目设置中添加 INTEGRATIONS_API_KEY
+3. **结构化输出**
+   - 按分类组织洞察
+   - 标注推荐使用方式
+   - 标注可引用性
+   - 标注局限性
+   - 标注矛盾和空白
 
-### 3. 环境变量配置
-需要在 Supabase 项目中配置以下环境变量：
-- `STRIPE_SECRET_KEY`：Stripe 支付密钥
-- `INTEGRATIONS_API_KEY`：AI 服务密钥
+4. **时效性优先**
+   - 优先使用 2025-2026 数据
+   - 旧数据标记为历史背景
+
+### 数据库设计
+
+#### writing_sessions
+- 跟踪写作流程状态
+- 记录当前阶段
+- 记录锁定状态
+
+#### research_insights
+- 存储研究洞察
+- 记录用户决策
+- 关联写作会话
+
+#### research_gaps
+- 存储矛盾和空白
+- 记录用户决策
+- 关联写作会话
+
+#### 其他决策表
+- 为后续阶段预留
+- structure_decisions
+- paragraph_decisions
+- evidence_decisions
 
 ## 技术细节
 
-### 数据库约束
-```sql
--- 邀请码唯一约束
-ALTER TABLE profiles ADD CONSTRAINT profiles_invitation_code_unique UNIQUE (invitation_code);
+### Edge Function 调用流程
 
--- 用户名唯一约束
-ALTER TABLE profiles ADD CONSTRAINT profiles_username_unique UNIQUE (username);
+```typescript
+// 1. 获取项目信息和知识库
+const project = await getProject(projectId);
+const knowledge = await getKnowledgeBase(projectId);
 
--- 默认点数
-ALTER TABLE profiles ALTER COLUMN available_credits SET DEFAULT 2;
+// 2. 构建 prompt
+const systemPrompt = `Research Synthesis Agent...`;
+const userMessage = `请对以下资料进行研究综合整理...`;
+
+// 3. 调用 LLM
+const response = await callLLM(systemPrompt, userMessage);
+
+// 4. 解析 JSON
+const synthesis = parseJSON(response);
+
+// 5. 保存到数据库
+await saveInsights(sessionId, synthesis.synthesized_insights);
+await saveGaps(sessionId, synthesis.contradictions_or_gaps);
 ```
 
-### 触发器更新
-```sql
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER SET search_path = public
-AS $$
-DECLARE
-  user_count int;
-BEGIN
-  SELECT COUNT(*) INTO user_count FROM profiles;
-  
-  INSERT INTO public.profiles (id, username, role, available_credits)
-  VALUES (
-    NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)),
-    CASE WHEN user_count = 0 THEN 'admin'::public.user_role ELSE 'user'::public.user_role END,
-    CASE WHEN user_count = 0 THEN 0 ELSE 2 END
-  );
-  RETURN NEW;
-END;
-$$;
+### 用户决策保存流程
+
+```typescript
+// 1. 用户在 UI 中选择决策
+handleInsightDecisionChange(insightId, 'must_use');
+
+// 2. 本地状态更新
+setLocalInsights(prev => ...);
+
+// 3. 检查完成度
+const allComplete = localInsights.every(i => i.user_decision !== 'pending');
+
+// 4. 保存到数据库
+await batchUpdateInsightDecisions(decisions);
+
+// 5. 更新阶段状态
+await updateWritingSessionStage(sessionId, 'structure');
 ```
+
+## 后续扩展
+
+### 结构决策阶段
+- 生成文章结构
+- 用户确认核心论点
+- 用户调整论证块顺序
+- 用户删除不需要的块
+
+### 段落决策阶段
+- 生成段落结构
+- 用户选择接受/修改/跳过
+- 用户选择修改类型
+
+### 证据决策阶段
+- 为每个子论点提供证据选项
+- 用户选择使用哪些证据
+
+### 写作阶段
+- 基于用户决策生成文章
+- 只使用用户选择的内容
 
 ## 测试建议
 
-1. **注册流程**：
-   - 测试不带邀请码注册
-   - 测试带邀请码注册
-   - 测试用户名重复
-   - 测试用户名格式
+1. **资料整理测试**
+   - 测试无资料时的提示
+   - 测试 Agent 调用
+   - 测试 JSON 解析
+   - 测试数据保存
 
-2. **邀请码功能**：
-   - 测试在用户信息页面使用邀请码
-   - 测试邀请码重复绑定
-   - 测试无效邀请码
+2. **决策界面测试**
+   - 测试洞察显示
+   - 测试决策选项
+   - 测试完成度检查
+   - 测试保存功能
 
-3. **购买点数**：
-   - 配置 STRIPE_SECRET_KEY 后测试支付流程
-   - 测试支付成功后点数充值
+3. **流程控制测试**
+   - 测试未完成决策时禁止进入下一阶段
+   - 测试完成决策后启用按钮
+   - 测试阶段更新
 
-4. **默认点数**：
-   - 注册新用户检查默认2点
-   - 测试创建1个项目
-   - 测试使用1次AI降重
+4. **边界情况测试**
+   - 测试空洞察列表
+   - 测试空矛盾列表
+   - 测试 Agent 失败
+   - 测试保存失败
 

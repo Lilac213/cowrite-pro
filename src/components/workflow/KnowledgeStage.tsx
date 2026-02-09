@@ -15,9 +15,15 @@ import {
   searchMaterials,
   searchReferenceArticles,
   callLLMGenerate,
-  clearProjectKnowledge
+  clearProjectKnowledge,
+  getOrCreateWritingSession,
+  callResearchSynthesisAgent,
+  getResearchInsights,
+  getResearchGaps,
+  isResearchStageComplete,
+  updateWritingSessionStage,
 } from '@/db/api';
-import type { KnowledgeBase } from '@/types';
+import type { KnowledgeBase, WritingSession, ResearchInsight, ResearchGap, SynthesisResult } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -30,6 +36,7 @@ import SearchPlanPanel from './SearchPlanPanel';
 import SearchResultsPanel from './SearchResultsPanel';
 import SynthesisResultsDialog from './SynthesisResultsDialog';
 import SearchLogsDialog from './SearchLogsDialog';
+import ResearchSynthesisReview from './ResearchSynthesisReview';
 
 interface KnowledgeStageProps {
   projectId: string;
@@ -58,7 +65,40 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [showSynthesisDialog, setShowSynthesisDialog] = useState(false);
   const [showLogsDialog, setShowLogsDialog] = useState(false);
   const [projectTitle, setProjectTitle] = useState('');
+  
+  // 新增：写作会话和研究综合相关状态
+  const [writingSession, setWritingSession] = useState<WritingSession | null>(null);
+  const [showSynthesisReview, setShowSynthesisReview] = useState(false);
+  const [synthesisReviewData, setSynthesisReviewData] = useState<{
+    insights: ResearchInsight[];
+    gaps: ResearchGap[];
+    thought: string;
+  } | null>(null);
+  const [researchStageComplete, setResearchStageComplete] = useState(false);
+  
   const { toast } = useToast();
+
+  // 初始化写作会话
+  useEffect(() => {
+    const initSession = async () => {
+      try {
+        const session = await getOrCreateWritingSession(projectId);
+        setWritingSession(session);
+        
+        // 检查研究阶段是否已完成
+        if (session.current_stage !== 'research') {
+          setResearchStageComplete(true);
+        } else {
+          const complete = await isResearchStageComplete(session.id);
+          setResearchStageComplete(complete);
+        }
+      } catch (error) {
+        console.error('初始化写作会话失败:', error);
+      }
+    };
+    
+    initSession();
+  }, [projectId]);
 
   // 数据清理函数
   const cleanSearchResults = (results: KnowledgeBase[], requirementsDoc: string): KnowledgeBase[] => {
@@ -575,7 +615,30 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
   // 处理进入下一步（从搜索结果直接进入）
   const handleNextStep = async () => {
+    // 检查是否已完成研究阶段决策
+    if (!researchStageComplete) {
+      toast({
+        title: '请先完成资料整理',
+        description: '需要先点击"资料整理"并完成所有决策后才能进入下一阶段',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!writingSession) {
+      toast({
+        title: '会话未初始化',
+        description: '请刷新页面重试',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
+      // 更新写作会话阶段
+      await updateWritingSessionStage(writingSession.id, 'structure');
+      
+      // 更新项目状态
       await updateProject(projectId, { 
         status: 'outline_confirmed'
       });
@@ -777,17 +840,83 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     }
   };
 
-  // 资料整理 - 打开综合分析结果弹窗
-  const handleOrganize = () => {
-    if (!synthesisResults) {
+  // 资料整理 - 调用研究综合 Agent
+  const handleOrganize = async () => {
+    if (!writingSession) {
       toast({
-        title: '暂无整理结果',
-        description: '请先进行资料综合分析',
+        title: '会话未初始化',
+        description: '请刷新页面重试',
         variant: 'destructive',
       });
       return;
     }
-    setShowSynthesisDialog(true);
+
+    if (knowledge.length === 0) {
+      toast({
+        title: '暂无资料',
+        description: '请先进行资料搜索',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSynthesizing(true);
+    try {
+      // 调用研究综合 Agent
+      const result: SynthesisResult = await callResearchSynthesisAgent(projectId, writingSession.id);
+      
+      // 获取保存的洞察和空白
+      const insights = await getResearchInsights(writingSession.id);
+      const gaps = await getResearchGaps(writingSession.id);
+      
+      // 设置审阅数据
+      setSynthesisReviewData({
+        insights,
+        gaps,
+        thought: result.thought,
+      });
+      
+      // 显示审阅界面
+      setShowSynthesisReview(true);
+      
+      toast({
+        title: '资料整理完成',
+        description: `已生成 ${insights.length} 条研究洞察，请审阅并做出决策`,
+      });
+    } catch (error: any) {
+      console.error('资料整理失败:', error);
+      toast({
+        title: '资料整理失败',
+        description: error.message || '请稍后重试',
+        variant: 'destructive',
+      });
+    } finally {
+      setSynthesizing(false);
+    }
+  };
+
+  // 处理综合审阅完成
+  const handleSynthesisReviewComplete = async () => {
+    if (!writingSession) return;
+    
+    try {
+      // 检查是否所有决策都已完成
+      const complete = await isResearchStageComplete(writingSession.id);
+      setResearchStageComplete(complete);
+      setShowSynthesisReview(false);
+      
+      toast({
+        title: '决策已保存',
+        description: '您现在可以进入下一阶段',
+      });
+    } catch (error: any) {
+      console.error('检查完成状态失败:', error);
+    }
+  };
+
+  // 取消综合审阅
+  const handleSynthesisReviewCancel = () => {
+    setShowSynthesisReview(false);
   };
 
   // 解析搜索计划
@@ -809,32 +938,44 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
   return (
     <div className="space-y-4">
-      {/* 标题栏 - 移除搜索框 */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Search className="h-5 w-5 text-primary" />
-              <CardTitle>资料查询</CardTitle>
-            </div>
-            <div className="flex items-center gap-4">
-              {lastSearchTime && (
-                <span className="text-sm text-muted-foreground">
-                  上次更新: {lastSearchTime}
-                </span>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefreshSearch}
-                disabled={searching}
-              >
-                <RefreshCw className={`h-4 w-4 mr-1 ${searching ? 'animate-spin' : ''}`} />
-                刷新
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
+      {/* 如果正在显示综合审阅，则显示审阅界面 */}
+      {showSynthesisReview && synthesisReviewData ? (
+        <ResearchSynthesisReview
+          sessionId={writingSession!.id}
+          insights={synthesisReviewData.insights}
+          gaps={synthesisReviewData.gaps}
+          thought={synthesisReviewData.thought}
+          onDecisionsComplete={handleSynthesisReviewComplete}
+          onCancel={handleSynthesisReviewCancel}
+        />
+      ) : (
+        <>
+          {/* 标题栏 - 移除搜索框 */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Search className="h-5 w-5 text-primary" />
+                  <CardTitle>资料查询</CardTitle>
+                </div>
+                <div className="flex items-center gap-4">
+                  {lastSearchTime && (
+                    <span className="text-sm text-muted-foreground">
+                      上次更新: {lastSearchTime}
+                    </span>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefreshSearch}
+                    disabled={searching}
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-1 ${searching ? 'animate-spin' : ''}`} />
+                    刷新
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
 
         {/* 搜索进度显示 */}
         {searchProgress && (
@@ -915,23 +1056,38 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       {knowledge.length > 0 && (
         <Card>
           <CardContent className="py-4">
-            <div className="flex justify-end gap-4">
-              <Button 
-                onClick={handleOrganize} 
-                variant="outline"
-                className="min-w-[140px]"
-                disabled={!synthesisResults}
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                资料整理
-              </Button>
-              <Button 
-                onClick={handleNextStep}
-                className="min-w-[140px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-              >
-                进入下一阶段
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-muted-foreground">
+                {researchStageComplete ? (
+                  <span className="text-green-600 font-medium flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4" />
+                    研究阶段已完成，可以进入下一阶段
+                  </span>
+                ) : (
+                  <span>
+                    请先点击"资料整理"并完成决策
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-4">
+                <Button 
+                  onClick={handleOrganize} 
+                  variant="outline"
+                  className="min-w-[140px]"
+                  disabled={synthesizing || knowledge.length === 0}
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {synthesizing ? '整理中...' : '资料整理'}
+                </Button>
+                <Button 
+                  onClick={handleNextStep}
+                  className="min-w-[140px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                  disabled={!researchStageComplete}
+                >
+                  进入下一阶段
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -981,6 +1137,8 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         projectTitle={projectTitle}
         logs={searchLogs}
       />
+        </>
+      )}
     </div>
   );
 }

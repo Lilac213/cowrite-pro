@@ -16,6 +16,12 @@ import type {
   ReferenceLibrary,
   InvitationCode,
   Order,
+  WritingSession,
+  WritingStage,
+  ResearchInsight,
+  ResearchGap,
+  UserDecision,
+  SynthesisResult,
 } from '@/types';
 
 // ============ System Config API ============
@@ -1895,5 +1901,138 @@ export async function getOrder(orderId: string): Promise<Order | null> {
 
   if (error) throw error;
   return data as Order | null;
+}
+
+// ==================== 写作会话管理 ====================
+
+// 获取或创建写作会话
+export async function getOrCreateWritingSession(projectId: string): Promise<WritingSession> {
+  // 先尝试获取现有会话
+  const { data: existing, error: fetchError } = await supabase
+    .from('writing_sessions')
+    .select('*')
+    .eq('project_id', projectId)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  
+  if (existing) {
+    return existing as WritingSession;
+  }
+
+  // 创建新会话
+  const { data, error } = await supabase
+    .from('writing_sessions')
+    .insert({
+      project_id: projectId,
+      current_stage: 'research',
+      locked_core_thesis: false,
+      locked_structure: false,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as WritingSession;
+}
+
+// 更新写作会话阶段
+export async function updateWritingSessionStage(
+  sessionId: string,
+  stage: WritingStage
+): Promise<void> {
+  const { error } = await supabase
+    .from('writing_sessions')
+    .update({
+      current_stage: stage,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', sessionId);
+
+  if (error) throw error;
+}
+
+// 调用研究综合 Agent
+export async function callResearchSynthesisAgent(
+  projectId: string,
+  sessionId?: string
+): Promise<SynthesisResult> {
+  const { data, error } = await supabase.functions.invoke('research-synthesis-agent', {
+    body: { projectId, sessionId },
+  });
+
+  if (error) throw error;
+  return data as SynthesisResult;
+}
+
+// 获取研究洞察
+export async function getResearchInsights(sessionId: string): Promise<ResearchInsight[]> {
+  const { data, error } = await supabase
+    .from('research_insights')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as ResearchInsight[];
+}
+
+// 获取研究空白/矛盾
+export async function getResearchGaps(sessionId: string): Promise<ResearchGap[]> {
+  const { data, error } = await supabase
+    .from('research_gaps')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as ResearchGap[];
+}
+
+// 更新研究洞察的用户决策
+export async function updateInsightDecision(
+  insightId: string,
+  decision: UserDecision
+): Promise<void> {
+  const { error } = await supabase
+    .from('research_insights')
+    .update({ user_decision: decision })
+    .eq('id', insightId);
+
+  if (error) throw error;
+}
+
+// 批量更新研究洞察决策
+export async function batchUpdateInsightDecisions(
+  decisions: Array<{ id: string; decision: UserDecision }>
+): Promise<void> {
+  const promises = decisions.map(({ id, decision }) =>
+    updateInsightDecision(id, decision)
+  );
+  await Promise.all(promises);
+}
+
+// 更新研究空白的用户决策
+export async function updateGapDecision(
+  gapId: string,
+  decision: 'respond' | 'ignore'
+): Promise<void> {
+  const { error } = await supabase
+    .from('research_gaps')
+    .update({ user_decision: decision })
+    .eq('id', gapId);
+
+  if (error) throw error;
+}
+
+// 检查研究阶段是否完成（所有决策都已做出）
+export async function isResearchStageComplete(sessionId: string): Promise<boolean> {
+  const insights = await getResearchInsights(sessionId);
+  const gaps = await getResearchGaps(sessionId);
+
+  const allInsightsDecided = insights.every(i => i.user_decision !== 'pending');
+  const allGapsDecided = gaps.every(g => g.user_decision !== 'pending');
+
+  return allInsightsDecided && allGapsDecided;
 }
 

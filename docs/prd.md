@@ -53,9 +53,9 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
 - 需求文档在后续阶段起到引领作用，资料查询和文章结构生成应围绕需求文档展开
 - 用户必须确认需求后才能进入下一步
 - 重新点击生成需求文档后，确认按钮需重置为待确认状态
-- **PC端**：需求文档模块右侧增加缩进/展开按钮，支持将需求文档隐藏或展开
-- **移动端**：无需缩进/展开按钮
-- **跳转至资料查询页时**：需求文档不再显示在页面右侧，改为在进度条右侧显示需求文档图标按钮，点击后在弹窗中显示需求文档内容
+- PC端：需求文档模块右侧增加缩进/展开按钮，支持将需求文档隐藏或展开
+- 移动端：无需缩进/展开按钮
+- 跳转至资料查询页时：需求文档不再显示在页面右侧，改为在进度条右侧显示需求文档图标按钮，点击后在弹窗中显示需求文档内容
 
 #### 阶段 3：资料查询（Research Retrieval Agent）
 
@@ -244,16 +244,377 @@ ResearchWorkspacePage
   - web_queries（网络搜索查询内容）
   - user_library_queries（用户资料库查询内容）
 
-## 3. 管理员功能
+**右侧：搜索结果面板（SearchResultPanel）**
 
-### 3.1 用户管理
+展示 Research Retrieval Agent 返回的所有资料，按数据源类型分区展示：
+- 学术研究（AcademicSection）
+- 行业动态（NewsSection）
+- 网络搜索（WebSection）
+- 用户资料库（UserLibrarySection）
+- 个人素材库（PersonalMaterialSection）
 
-#### 3.1.1 邀请码生成功能
+每个分区支持分页展示，每页显示 10 条结果。
+
+**底部固定操作栏（BottomFixedBar）**
+
+位置：固定在页面底部
+
+包含两个按钮：
+1. 资料整理按钮
+   - 点击后调用 Research Synthesis Agent
+   - 生成 JSON 格式的整理结果
+   - 解析并可视化呈现整理结果
+   - 用户可对整理结果进行选择和判断
+
+2. 进入下一步按钮
+   - 初始状态：禁用
+   - 启用条件：用户完成资料整理的选择和确认后
+   - 点击后进入文章结构生成阶段
+
+#### 阶段 4：资料整理（Research Synthesis Agent）
+
+**核心流程：Research Synthesis Agent**
+
+Research Synthesis Agent 负责将多源检索资料整理为可供写作选择的研究素材池。
+
+**Research Synthesis Agent（用户决策式资料整理 Agent）**
+
+角色定义：
+- 你是 CoWrite 的 Research Synthesis Agent
+- 你的职责是：将多源检索资料，整理为可供写作选择的研究素材池
+- 你不负责判断哪些观点最终会被使用
+- 你不做价值取舍或立场选择
+- 所有观点都必须以等待用户决策的状态输出
+
+核心任务：
+
+1. 中文化（非直译）
+   - 面向商业/产品/技术复合读者
+   - 保留原意，不做写作加工
+
+2. 高密度提炼
+   对每条资料提取：
+   - 核心结论/观点
+   - 关键数据或实证
+   - 使用的方法或分析框架
+   - 与原始需求的对应关系
+   - 若缺失，明确标记缺失
+
+3. 主动结构化（不等于取舍）
+   - 将观点归类，但不暗示更重要/次要
+   - 分类只用于帮助用户快速理解与选择
+
+4. 显式标注用户决策位
+   对每一条 insight，必须标注：
+   - recommended_usage: direct | background | optional
+   - 该字段只是推荐，不是最终决定，用户可以覆盖
+
+5. 标注不确定性与争议
+   - 样本、时间、地区、方法限制
+   - 潜在冲突或相互矛盾点
+
+输出格式（严格遵守）：
+```json
+{
+  \"synthesized_insights\": [
+    {
+      \"id\": \"insight_1\",
+      \"category\": \"分类名称\",
+      \"insight\": \"核心洞察（中文）\",
+      \"supporting_data\": [\"数据点1\", \"数据点2\"],
+      \"source_type\": \"academic | news | web\",
+      \"recommended_usage\": \"direct | background | optional\",
+      \"citability\": \"direct | background | controversial\",
+      \"limitations\": \"局限性说明\",
+      \"user_decision\": \"pending\"
+    }
+  ],
+  \"contradictions_or_gaps\": [
+    {
+      \"id\": \"gap_1\",
+      \"issue\": \"矛盾或空白点\",
+      \"description\": \"说明\",
+      \"user_decision\": \"respond | ignore | pending\"
+    }
+  ]
+}
+```
+
+行为约束：
+- 所有 insight 默认 user_decision = pending
+- 不得假设用户的立场
+- 不得为下游结构生成提前收敛观点
+- 优先使用 2025-2026 年的数据，旧数据必须明确标记为历史背景
+
+**资料整理页面设计**
+
+页面结构：
+```
+ResearchSynthesisPage
+├─ SynthesisHeader（整理概览）
+├─ InsightsPanel（洞察面板）
+│  ├─ CategoryTabs（分类标签）
+│  └─ InsightCards（洞察卡片列表）
+│      ├─ InsightCard
+│      │   ├─ 核心洞察
+│      │   ├─ 支持数据
+│      │   ├─ 推荐用途标签
+│      │   ├─ 局限性说明
+│      │   └─ 用户操作区（选择/排除/降级）
+├─ ContradictionsPanel（矛盾与空白面板）
+│  └─ GapCards（矛盾/空白卡片列表）
+│      ├─ GapCard
+│      │   ├─ 问题描述
+│      │   └─ 用户操作区（响应/忽略）
+└─ BottomActionBar（底部操作栏）
+    └─ 确认并进入下一步按钮
+```
+
+用户操作：
+- 对每条洞察，用户可选择：
+  - 必须使用（must_use）
+  - 作为背景（background）
+  - 排除（excluded）
+- 对每个矛盾/空白，用户可选择：
+  - 响应（respond）
+  - 忽略（ignore）
+
+确认条件：
+- 用户完成所有洞察的选择后，确认并进入下一步按钮启用
+- 点击后保存用户决策，进入文章结构生成阶段
+
+## 3. 写作状态管理（WritingState）
+
+### 3.1 WritingState 对象
+
+WritingState 是整个系统的中枢，用于管理写作流程的状态和用户决策。
+
+```typescript
+WritingState {
+  session_id: string
+  current_stage: 'research' | 'synthesis' | 'structure' | 'paragraph' | 'evidence' | 'writing'
+  
+  locked: {
+    core_thesis: boolean
+    structure: boolean
+  }
+  
+  user_decisions: {
+    research?: ResearchDecision
+    synthesis?: SynthesisDecision
+    structure?: StructureDecision
+    paragraph?: ParagraphDecision[]
+    evidence?: EvidenceDecision[]
+  }
+  
+  timestamps: {
+    created_at: string
+    updated_at: string
+  }
+}
+```
+
+核心原则：
+- Agent 永远只读 WritingState
+- 不猜用户意图，不假设用户同意
+- 任何阶段没有用户决策，不允许进入下一阶段
+
+### 3.2 用户决策对象
+
+#### ResearchDecision（资料查询决策）
+```typescript
+ResearchDecision {
+  selected_sources: string[]  // 用户选择的资料 ID 列表
+}
+```
+
+#### SynthesisDecision（资料整理决策）
+```typescript
+SynthesisDecision {
+  insights: [
+    {
+      insight_id: string
+      usage: 'must_use' | 'background' | 'excluded'
+    }
+  ]
+  gaps: [
+    {
+      gap_id: string
+      action: 'respond' | 'ignore'
+    }
+  ]
+}
+```
+
+#### StructureDecision（文章结构决策）
+```typescript
+StructureDecision {
+  core_thesis_confirmed: boolean
+  core_thesis_override?: string
+  removed_blocks: string[]
+  reordered_blocks: string[]
+}
+```
+
+#### ParagraphDecision（段落结构决策）
+```typescript
+ParagraphDecision {
+  paragraph_id: string
+  action: 'accept' | 'revise' | 'skip'
+  revise_type?: 'logic' | 'experience' | 'counter'
+}
+```
+
+#### EvidenceDecision（证据选择决策）
+```typescript
+EvidenceDecision {
+  sub_claim_id: string
+  selected_evidence_ids: string[]
+}
+```
+
+### 3.3 GuidanceContext（引导词上下文）
+
+GuidanceContext 用于给引导词 Agent 提供输入信息。
+
+```typescript
+GuidanceContext {
+  stage: string
+  completion_status: string
+  user_actions_summary: string
+  next_required_action: string
+  lock_status: object
+}
+```
+
+## 4. Agent 调度逻辑
+
+### 4.1 流程控制
+
+新的 Agent 调度逻辑采用状态机式流程控制：
+
+```
+Research（资料查询）
+  ↓
+等待用户 ResearchDecision
+  ↓
+Synthesis（资料整理）
+  ↓
+等待用户 SynthesisDecision
+  ↓
+Structure（文章结构）
+  ↓
+等待用户 StructureDecision
+  ↓
+Paragraph（段落结构，逐段）
+  ↓
+等待对应 ParagraphDecision
+  ↓
+Evidence（证据选择）
+  ↓
+等待 EvidenceDecision
+  ↓
+Writing（文章生成）
+```
+
+关键规则：
+- 任何阶段没有用户决策，不允许进入下一阶段
+- 每个阶段的 Agent 只读取 WritingState，不做假设
+- 用户决策保存后，才能触发下一阶段 Agent
+
+### 4.2 前端状态驱动
+
+前端采用状态机式渲染，核心判断逻辑：
+
+```javascript
+if (stage === 'research' && !userDecision.research) {
+  showResearchSelection()
+}
+
+if (stage === 'synthesis' && !userDecision.synthesis) {
+  showSynthesisSelection()
+}
+
+if (stage === 'structure' && !locked.structure) {
+  showStructureEditor()
+}
+```
+
+每个 Agent 结果页必须包含三块 UI：
+1. AI 生成结果
+2. 用户操作区
+3. AI 引导词（Guidance Agent）
+
+引导词是独立接口返回，不是写死文案。
+
+### 4.3 前端操作类型
+
+前端只做 3 类操作：
+1. 选择：勾选研究洞察
+2. 确认：接受核心论点
+3. 排序/删除：拖拽论证块
+
+禁止操作：
+- 不让用户改长文本
+- 不让用户重写
+
+## 5. 接口设计
+
+### 5.1 提交研究阶段决策
+```
+POST /writing/decision/research
+{
+  \"session_id\": \"...\",
+  \"decisions\": {
+    \"selected_sources\": [\"source_1\", \"source_2\"]
+  }
+}
+```
+
+### 5.2 提交资料整理决策
+```
+POST /writing/decision/synthesis
+{
+  \"session_id\": \"...\",
+  \"decisions\": {
+    \"insights\": [
+      { \"insight_id\": \"i1\", \"usage\": \"must_use\" },
+      { \"insight_id\": \"i2\", \"usage\": \"excluded\" }
+    ],
+    \"gaps\": [
+      { \"gap_id\": \"g1\", \"action\": \"respond\" }
+    ]
+  }
+}
+```
+
+### 5.3 请求下一阶段 Agent
+```
+POST /writing/agent/structure
+{
+  \"session_id\": \"...\"
+}
+```
+
+### 5.4 获取引导词
+```
+POST /writing/guidance
+{
+  \"session_id\": \"...\",
+  \"stage\": \"structure\"
+}
+```
+
+## 6. 管理员功能
+
+### 6.1 用户管理
+
+#### 6.1.1 邀请码生成功能
 - 管理员在用户管理页面可生成随机8位邀请码
 - 生成邀请码时可设置邀请码对应的点数
 - 邀请码生成后可分享给新用户注册使用
 
-#### 3.1.2 用户权限管理
+#### 6.1.2 用户权限管理
 - 管理员账户拥有无限点数
 - 管理员可为每个用户配置点数
 - 系统记录每个用户的：
@@ -261,52 +622,52 @@ ResearchWorkspacePage
   - 已创建项目数量
 - 当用户点数不足时，系统显示提示：点数不够需要购买点数
 
-#### 3.1.3 邀请码绑定关系显示
+#### 6.1.3 邀请码绑定关系显示
 - 在管理员用户管理页面显示邀请码与用户的绑定关系
 
-## 4. 用户功能
+## 7. 用户功能
 
-### 4.1 用户信息显示
+### 7.1 用户信息显示
 
-#### 4.1.1 使用情况
+#### 7.1.1 使用情况
 - 可用点数：显示用户当前可用点数余额
 - 项目配额：单行显示已创建项目数量和AI降重已使用次数
 
-#### 4.1.2 新用户初始配额
+#### 7.1.2 新用户初始配额
 - 每个新用户可创建一个项目
 - 每个新用户可使用一次AI降重工具
 
-### 4.2 点数购买
+### 7.2 点数购买
 
-#### 4.2.1 购买入口
+#### 7.2.1 购买入口
 - 在设置页面的用户信息模块中，新增点数购买功能
 - 点击后显示点数套餐选择弹窗
 
-#### 4.2.2 点数套餐
+#### 7.2.2 点数套餐
 点数套餐及价格如下：
 - 体验包：16 点，¥9.9
 - 推荐包 ⭐：66 点，¥29.9
 - 进阶包：166 点，¥79.9
 - 专业包：366 点，¥149.9
 
-#### 4.2.3 购买页面设计要求
+#### 7.2.3 购买页面设计要求
 - 调整购买点数页面字号大小，保证内容不紧凑，提升视觉舒适度
 
-#### 4.2.4 购买流程
+#### 7.2.4 购买流程
 - 用户在弹窗中选择套餐后点击购买按钮
 - 跳转到 Stripe Payments 支付页面
 - 完成支付后，点数自动充值到用户账户
 - 用户可使用点数兑换 AI降重工具使用次数或创建项目权限
 
-## 5. 功能修复
+## 8. 功能修复
 
-### 5.1 支付功能修复
+### 8.1 支付功能修复
 - 修复创建支付时显示失败的问题
 
-### 5.2 文章结构生成功能修复
+### 8.2 文章结构生成功能修复
 - 修复点击生成文章结构时显示失败的问题
 
-## 6. 参考文件
+## 9. 参考文件
 
 1. 上传图片：image.png
 2. 上传图片：image-2.png

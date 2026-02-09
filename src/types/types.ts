@@ -293,3 +293,97 @@ export interface ReferenceLibrary {
   saved_at: string;
   created_at: string;
 }
+
+// 写作会话和决策相关类型
+export type WritingStage = 'research' | 'structure' | 'paragraph' | 'evidence' | 'writing' | 'completed';
+
+export interface WritingSession {
+  id: string;
+  project_id: string;
+  current_stage: WritingStage;
+  locked_core_thesis: boolean;
+  locked_structure: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type UserDecision = 'pending' | 'must_use' | 'background' | 'excluded';
+export type RecommendedUsage = 'direct' | 'background' | 'optional';
+export type Citability = 'direct' | 'background' | 'controversial';
+
+export interface ResearchInsight {
+  id: string;
+  session_id: string;
+  insight_id: string;
+  category: string;
+  insight: string;
+  supporting_data: string[];
+  source_type: string;
+  recommended_usage: RecommendedUsage;
+  citability: Citability;
+  limitations: string;
+  user_decision: UserDecision;
+  created_at: string;
+}
+
+export interface ResearchGap {
+  id: string;
+  session_id: string;
+  gap_id: string;
+  issue: string;
+  description: string;
+  user_decision: 'pending' | 'respond' | 'ignore';
+  created_at: string;
+}
+
+export interface StructureDecision {
+  id: string;
+  session_id: string;
+  core_thesis_confirmed: boolean;
+  core_thesis_override?: string;
+  removed_blocks: string[];
+  reordered_blocks: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ParagraphDecision {
+  id: string;
+  session_id: string;
+  paragraph_id: string;
+  action: 'accept' | 'revise' | 'skip';
+  revise_type?: 'logic' | 'experience' | 'counter';
+  created_at: string;
+}
+
+export interface EvidenceDecision {
+  id: string;
+  session_id: string;
+  sub_claim_id: string;
+  selected_evidence_ids: string[];
+  created_at: string;
+}
+
+export interface SynthesisResult {
+  thought: string;
+  synthesis: {
+    synthesized_insights: Array<{
+      id: string;
+      category: string;
+      insight: string;
+      supporting_data: string[];
+      source_type: string;
+      recommended_usage: RecommendedUsage;
+      citability: Citability;
+      limitations: string;
+      user_decision: string;
+    }>;
+    contradictions_or_gaps: Array<{
+      id: string;
+      issue: string;
+      description: string;
+      user_decision: string;
+    }>;
+  };
+  sessionId?: string;
+}

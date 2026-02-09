@@ -1,160 +1,233 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface SynthesisRequest {
-  retrievalResults: any;
-  requirementsDoc: string;
-}
-
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // 用于收集日志的数组
-  const logs: string[] = [];
-  const addLog = (...args: any[]) => {
-    const message = args.map(arg => 
-      typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-    ).join(' ');
-    console.log(...args);
-    logs.push(message);
-  };
-
   try {
-    const { retrievalResults, requirementsDoc }: SynthesisRequest = await req.json();
+    const { projectId, sessionId } = await req.json();
 
-    addLog('========== 接收到的请求参数 ==========');
-    addLog(`retrievalResults 存在: ${!!retrievalResults}`);
-    addLog(`requirementsDoc 存在: ${!!requirementsDoc}`);
-
-    if (!retrievalResults || !requirementsDoc) {
+    if (!projectId) {
       return new Response(
-        JSON.stringify({ error: '缺少必需参数: retrievalResults 或 requirementsDoc' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "缺少 projectId" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const qianwenApiKey = Deno.env.get('QIANWEN_API_KEY');
-    
-    addLog('========== API Keys 状态检查 ==========');
-    addLog(`QIANWEN_API_KEY 存在: ${!!qianwenApiKey}`);
-    
-    if (!qianwenApiKey) {
-      throw new Error('QIANWEN_API_KEY 未配置');
+    // 获取 API 密钥
+    const apiKey = Deno.env.get("INTEGRATIONS_API_KEY");
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "API密钥未配置" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 获取项目信息
+    const { data: project, error: projectError } = await supabase
+      .from("projects")
+      .select("title")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (projectError || !project) {
+      return new Response(
+        JSON.stringify({ error: "项目不存在" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 获取需求文档
+    const { data: brief, error: briefError } = await supabase
+      .from("briefs")
+      .select("requirements")
+      .eq("project_id", projectId)
+      .maybeSingle();
+
+    if (briefError || !brief) {
+      return new Response(
+        JSON.stringify({ error: "需求文档不存在" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 获取知识库资料
+    const { data: knowledge, error: knowledgeError } = await supabase
+      .from("knowledge_base")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("collected_at", { ascending: false });
+
+    if (knowledgeError) {
+      return new Response(
+        JSON.stringify({ error: "获取知识库失败" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!knowledge || knowledge.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "知识库为空，请先进行资料搜索" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 构建资料内容
+    let materialsContent = "";
+    knowledge.forEach((item: any, index: number) => {
+      materialsContent += `\n\n【资料 ${index + 1}】\n`;
+      materialsContent += `标题: ${item.title}\n`;
+      materialsContent += `来源: ${item.source}\n`;
+      if (item.source_url) {
+        materialsContent += `链接: ${item.source_url}\n`;
+      }
+      materialsContent += `内容:\n${item.content}\n`;
+    });
+
+    // 解析需求文档
+    let requirementsText = "";
+    try {
+      const reqDoc = JSON.parse(brief.requirements);
+      requirementsText = `写作主题: ${reqDoc.topic || project.title}\n`;
+      if (reqDoc.target_audience) {
+        requirementsText += `目标读者: ${reqDoc.target_audience}\n`;
+      }
+      if (reqDoc.writing_purpose) {
+        requirementsText += `写作目的: ${reqDoc.writing_purpose}\n`;
+      }
+      if (reqDoc.key_points) {
+        requirementsText += `关键要点: ${reqDoc.key_points}\n`;
+      }
+    } catch {
+      requirementsText = `写作主题: ${project.title}\n`;
     }
 
     // 获取当前日期
-    const currentDate = new Date().toISOString().split('T')[0]; // 格式：2026-02-09
-    
-    // 新的系统提示词 - 严格的输出格式
-    const systemPrompt = `🧠 Research Synthesis Agent
+    const currentDate = new Date().toISOString().split('T')[0];
+
+    // 构建 system prompt
+    const systemPrompt = `🧠 Research Synthesis Agent (User-Gated)
 
 ⏰ Current Date: ${currentDate}
-CRITICAL: When synthesizing research materials, prioritize recent data from 2025-2026. If you encounter data from 2023-2024 or earlier, clearly mark it as historical context. Focus on the most current insights and trends.
+CRITICAL: Prioritize data from 2025–2026. Older materials must be explicitly marked as historical context.
 
 Role:
-你是 CoWrite 的 Research Synthesis Agent。你的职责是将 Research Retrieval Agent 输出的多源资料，整理为中文、结构化、可写作的研究素材。
+你是 CoWrite 的 Research Synthesis Agent。
+你的职责是：将多源检索资料，整理为【可供写作选择的研究素材池】。
 
-你不：写完整文章、引入资料中不存在的新观点
-你要做到：写作者拿到你的输出，可以直接进入正文写作
+🔒 重要定位（强制）：
+- 你【不负责判断哪些观点最终会被使用】
+- 你【不做价值取舍或立场选择】
+- 所有观点都必须以「等待用户决策」的状态输出
 
-Core Tasks（必须完成）:
+你不：
+❌ 写完整文章  
+❌ 生成结论性判断  
+❌ 隐性替用户做取舍  
+
+你要做到：
+✅ 让用户可以"勾选 / 排除 / 降级使用"每一条研究洞察  
+✅ 为后续结构生成提供清晰、可裁剪的素材空间  
+
+Core Tasks:
+
 1️⃣ 中文化（非直译）
-- 所有英文资料转为专业但非学术腔的中文
-- 面向「商业/产品/技术复合读者」
-- 保留原意，不生硬翻译
+- 面向商业 / 产品 / 技术复合读者
+- 保留原意，不做写作加工
 
-2️⃣ 信息提炼（高密度）
-对每条资料，尽量提取：
-- 核心结论/观点
-- 关键数据/实证结果
-- 使用的方法/分析框架
-- 与需求文档中「关键要点」的对应关系
-- 如无法提取，明确标记 "缺失"
+2️⃣ 高密度提炼
+对每条资料提取：
+- 核心结论 / 观点
+- 关键数据或实证
+- 使用的方法或分析框架
+- 与原始需求的对应关系
+- 若缺失，明确标记 "缺失"
 
-3️⃣ 结构化归类（主动整理）
-你需要帮助写作者理清逻辑，而不是简单堆资料。
-推荐（但不限于）以下分类方式：
-- 商业化失败模式
-- 用户识别与定位方法
-- ROI/价值评估方式
-- 学术研究 vs 行业实践差异
+3️⃣ 主动结构化（不等于取舍）
+你必须将观点归类，但不得暗示"更重要 / 次要"。
+分类只用于帮助用户快速理解与选择。
 
-4️⃣ 标注可引用性
-对每一条观点，标注：
-- 是否适合直接引用
-- 是否更适合作为背景/论据
-- 是否存在争议、样本或地区局限
+4️⃣ 显式标注【用户决策位】
+对每一条 insight，必须标注：
+- recommended_usage: direct | background | optional
+⚠️ 该字段只是"推荐"，不是最终决定，用户可以覆盖。
 
-⚠️ 输出规则（极其重要）:
-允许 ---THOUGHT---
-系统只解析 ---JSON---
----JSON--- 中只能是合法 JSON
+5️⃣ 标注不确定性与争议
+- 样本、时间、地区、方法限制
+- 潜在冲突或相互矛盾点
+
+⚠️ 输出规则（强制）:
+- 允许 ---THOUGHT---
+- 系统只解析 ---JSON---
+- JSON 必须是「等待用户筛选的素材池」，而不是可直接写作内容
 
 Output Format:
 ---THOUGHT---
-（你如何整理、分类和判断可引用性的说明）
+（你如何归类信息，以及哪些地方需要用户重点决策）
 
 ---JSON---
 {
   "synthesized_insights": [
     {
+      "id": "insight_1",
       "category": "分类名称",
       "insight": "核心洞察（中文）",
       "supporting_data": ["数据点1", "数据点2"],
-      "source_type": "academic|news|web",
-      "citability": "direct|background|controversial",
-      "limitations": "局限性说明（如有）"
-    }
-  ],
-  "key_data_points": [
-    {
-      "data": "关键数据",
-      "context": "数据背景",
-      "source": "来源"
+      "source_type": "academic | news | web",
+      "recommended_usage": "direct | background | optional",
+      "citability": "direct | background | controversial",
+      "limitations": "局限性说明",
+      "user_decision": "pending"
     }
   ],
   "contradictions_or_gaps": [
     {
+      "id": "gap_1",
       "issue": "矛盾或空白点",
-      "description": "详细说明"
+      "description": "说明",
+      "user_decision": "pending"
     }
   ]
 }
 
-行为约束（强制）:
-❌ 不输出完整文章
-❌ 不引入资料外的新观点
-❌ 不输出 JSON 以外的任何结构化内容
-✅ 所有内容只服务于「后续写作」`;
+🔒 行为约束（强制）:
+- 所有 insight 默认 user_decision = pending
+- 不得假设用户的立场
+- 不得为下游结构生成提前收敛观点`;
 
-    const userPrompt = `原始需求文档：
-${requirementsDoc}
+    // 构建用户消息
+    const userMessage = `请对以下资料进行研究综合整理：
 
-检索到的资料：
-${JSON.stringify(retrievalResults, null, 2)}
+【写作需求】
+${requirementsText}
 
-请整理为可写作的研究素材。`;
+【检索资料】
+${materialsContent}
 
-    addLog('========== 开始调用通义千问 API ==========');
+请按照 Research Synthesis Agent 的要求，将这些资料整理为可供用户选择的研究素材池。`;
 
-    // 调用通义千问 API 整理资料
-    const llmResponse = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
-      method: 'POST',
+    // 调用 LLM
+    const llmResponse = await fetch("https://api.siliconflow.cn/v1/chat/completions", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${qianwenApiKey}`,
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'qwen-plus',
+        model: "Qwen/Qwen2.5-7B-Instruct",
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage }
         ],
         temperature: 0.7,
         max_tokens: 4000,
@@ -163,67 +236,90 @@ ${JSON.stringify(retrievalResults, null, 2)}
 
     if (!llmResponse.ok) {
       const errorText = await llmResponse.text();
-      addLog(`❌ 通义千问 API 错误: ${errorText}`);
-      throw new Error(`通义千问 API 请求失败: ${llmResponse.status}`);
+      console.error("LLM API 错误:", errorText);
+      return new Response(
+        JSON.stringify({ error: "LLM API 调用失败" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const llmData = await llmResponse.json();
-    const content = llmData.choices?.[0]?.message?.content;
+    const content = llmData.choices[0].message.content;
 
-    if (!content) {
-      throw new Error('通义千问 API 返回内容为空');
+    // 解析 JSON
+    const jsonMatch = content.match(/---JSON---\s*([\s\S]*?)(?:---|\n\n|$)/);
+    if (!jsonMatch) {
+      return new Response(
+        JSON.stringify({ error: "无法解析 LLM 返回的 JSON" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    addLog('========== 通义千问返回内容 ==========');
-    addLog(content);
+    const synthesisData = JSON.parse(jsonMatch[1].trim());
 
-    // 提取 ---JSON--- 部分
-    let synthesisResult;
-    try {
-      const jsonMatch = content.match(/---JSON---\s*([\s\S]*?)(?:---|\n\n\n|$)/);
-      if (!jsonMatch) {
-        console.error('未找到 ---JSON--- 标记，原始内容:', content);
-        throw new Error('未找到 ---JSON--- 标记');
+    // 提取 THOUGHT
+    const thoughtMatch = content.match(/---THOUGHT---\s*([\s\S]*?)---JSON---/);
+    const thought = thoughtMatch ? thoughtMatch[1].trim() : "";
+
+    // 如果提供了 sessionId，保存到数据库
+    if (sessionId) {
+      // 保存 insights
+      if (synthesisData.synthesized_insights && synthesisData.synthesized_insights.length > 0) {
+        const insightsToInsert = synthesisData.synthesized_insights.map((insight: any) => ({
+          session_id: sessionId,
+          insight_id: insight.id,
+          category: insight.category,
+          insight: insight.insight,
+          supporting_data: insight.supporting_data || [],
+          source_type: insight.source_type,
+          recommended_usage: insight.recommended_usage,
+          citability: insight.citability,
+          limitations: insight.limitations || "",
+          user_decision: "pending",
+        }));
+
+        const { error: insightsError } = await supabase
+          .from("research_insights")
+          .insert(insightsToInsert);
+
+        if (insightsError) {
+          console.error("保存 insights 失败:", insightsError);
+        }
       }
-      
-      const jsonText = jsonMatch[1].trim();
-      addLog('提取的 JSON 文本:', jsonText);
-      
-      synthesisResult = JSON.parse(jsonText);
-      
-      // 验证必需字段
-      if (!synthesisResult.synthesized_insights) synthesisResult.synthesized_insights = [];
-      if (!synthesisResult.key_data_points) synthesisResult.key_data_points = [];
-      if (!synthesisResult.contradictions_or_gaps) synthesisResult.contradictions_or_gaps = [];
-      
-    } catch (parseError) {
-      console.error('JSON 解析失败:', parseError);
-      console.error('原始内容:', content);
-      throw new Error(`整理结果失败: ${parseError.message}`);
-    }
 
-    addLog('整理结果:', JSON.stringify(synthesisResult, null, 2));
+      // 保存 gaps
+      if (synthesisData.contradictions_or_gaps && synthesisData.contradictions_or_gaps.length > 0) {
+        const gapsToInsert = synthesisData.contradictions_or_gaps.map((gap: any) => ({
+          session_id: sessionId,
+          gap_id: gap.id,
+          issue: gap.issue,
+          description: gap.description,
+          user_decision: "pending",
+        }));
+
+        const { error: gapsError } = await supabase
+          .from("research_gaps")
+          .insert(gapsToInsert);
+
+        if (gapsError) {
+          console.error("保存 gaps 失败:", gapsError);
+        }
+      }
+    }
 
     return new Response(
       JSON.stringify({
-        success: true,
-        data: synthesisResult,
-        logs: logs,
-        raw_content: content
+        thought,
+        synthesis: synthesisData,
+        sessionId,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-
-  } catch (error) {
-    console.error('处理请求时出错:', error);
-    addLog(`❌ 错误: ${error.message || '处理请求时出错'}`);
+  } catch (error: any) {
+    console.error("Research Synthesis Agent 错误:", error);
     return new Response(
-      JSON.stringify({ 
-        error: error.message || '处理请求时出错',
-        details: error.toString(),
-        logs: logs
-      }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: error.message || "处理失败" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
