@@ -1,17 +1,44 @@
-import { useState } from 'react';
-import { callLLMGenerate } from '@/db/api';
+import { useState, useEffect } from 'react';
+import { callLLMGenerate, checkAIReducerLimit, incrementAIReducerUsage, getProfile } from '@/db/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { FileDown } from 'lucide-react';
+import { FileDown, AlertCircle, ShoppingCart } from 'lucide-react';
 import { DEFAULT_ENHANCE_PROMPT } from '@/constants/prompts';
 
 export default function AIReducerPage() {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [canUse, setCanUse] = useState(true);
+  const [usageInfo, setUsageInfo] = useState({ used: 0, limit: 0 });
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
+
+  useEffect(() => {
+    checkUsageLimit();
+  }, [user]);
+
+  const checkUsageLimit = async () => {
+    if (!user) return;
+    try {
+      const profile = await getProfile(user.id);
+      if (profile) {
+        setUsageInfo({
+          used: profile.ai_reducer_used,
+          limit: profile.ai_reducer_limit,
+        });
+        setCanUse(profile.ai_reducer_used < profile.ai_reducer_limit);
+      }
+    } catch (error) {
+      console.error('检查使用限制失败:', error);
+    }
+  };
 
   const handleReduce = async () => {
     if (!input.trim()) {
@@ -22,13 +49,39 @@ export default function AIReducerPage() {
       return;
     }
 
+    if (!user) {
+      toast({
+        title: '请先登录',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // 检查使用限制
+    if (!canUse) {
+      toast({
+        title: '次数不足',
+        description: 'AI降重次数已用完，请购买点数',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setProcessing(true);
     try {
+      // 增加使用次数
+      await incrementAIReducerUsage(user.id);
+      
       // 使用默认增强提示词进行降AI率处理
       const result = await callLLMGenerate(input, '', DEFAULT_ENHANCE_PROMPT);
       setOutput(result);
+      
+      // 更新使用信息
+      await checkUsageLimit();
+      
       toast({
         title: '处理成功',
+        description: `剩余次数：${usageInfo.limit - usageInfo.used - 1}`,
       });
     } catch (error: any) {
       toast({
@@ -58,6 +111,28 @@ export default function AIReducerPage() {
         <p className="text-muted-foreground mt-2">降低文章的 AI 检测率</p>
       </div>
 
+      {/* 使用情况提示 */}
+      <Alert className={`mb-6 ${!canUse ? 'border-destructive' : ''}`}>
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>使用情况</AlertTitle>
+        <AlertDescription className="flex items-center justify-between">
+          <span>
+            已使用 {usageInfo.used}/{usageInfo.limit} 次
+            {!canUse && ' - 次数已用完'}
+          </span>
+          {!canUse && (
+            <Button 
+              size="sm" 
+              onClick={() => navigate('/settings')}
+              variant="destructive"
+            >
+              <ShoppingCart className="h-3 w-3 mr-1" />
+              购买点数
+            </Button>
+          )}
+        </AlertDescription>
+      </Alert>
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -70,6 +145,7 @@ export default function AIReducerPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               rows={20}
+              disabled={!canUse}
             />
           </CardContent>
         </Card>
@@ -101,8 +177,12 @@ export default function AIReducerPage() {
       </div>
 
       <div className="flex justify-center mt-6">
-        <Button onClick={handleReduce} disabled={processing} size="lg">
-          {processing ? '处理中...' : '降 AI 率'}
+        <Button 
+          onClick={handleReduce} 
+          disabled={processing || !canUse} 
+          size="lg"
+        >
+          {processing ? '处理中...' : !canUse ? '次数不足' : '降 AI 率'}
         </Button>
       </div>
     </div>

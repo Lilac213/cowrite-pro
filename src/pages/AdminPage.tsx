@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getAllProfiles, updateProfile, getSystemConfig, updateSystemConfig } from '@/db/api';
-import type { Profile, SystemConfig } from '@/types';
+import { getAllProfiles, updateProfile, getSystemConfig, updateSystemConfig, getAllInvitationCodes, createInvitationCode, deactivateInvitationCode } from '@/db/api';
+import type { Profile, SystemConfig, InvitationCode } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
+import { Copy, Plus, Ban } from 'lucide-react';
 
 // 同步配置到 Edge Function Secrets
 async function syncConfigToSecrets() {
@@ -35,9 +37,16 @@ async function syncConfigToSecrets() {
 
 export default function AdminPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [invitationCodes, setInvitationCodes] = useState<InvitationCode[]>([]);
   const [systemConfig, setSystemConfig] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [newCodeLimits, setNewCodeLimits] = useState({
+    aiReducerLimit: 10,
+    projectLimit: 5,
+  });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -46,11 +55,13 @@ export default function AdminPage() {
 
   const loadData = async () => {
     try {
-      const [profilesData, configData] = await Promise.all([
+      const [profilesData, configData, codesData] = await Promise.all([
         getAllProfiles(),
         getSystemConfig(),
+        getAllInvitationCodes(),
       ]);
       setProfiles(profilesData);
+      setInvitationCodes(codesData);
       
       // 将配置数组转换为对象
       const configMap = configData.reduce((acc, item) => {
@@ -110,6 +121,54 @@ export default function AdminPage() {
     }
   };
 
+  const handleGenerateCode = async () => {
+    setGenerating(true);
+    try {
+      const newCode = await createInvitationCode(
+        newCodeLimits.aiReducerLimit,
+        newCodeLimits.projectLimit
+      );
+      setInvitationCodes([newCode, ...invitationCodes]);
+      setDialogOpen(false);
+      toast({
+        title: '生成成功',
+        description: `邀请码：${newCode.code}`,
+      });
+    } catch (error) {
+      toast({
+        title: '生成失败',
+        variant: 'destructive',
+      });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    toast({
+      title: '已复制',
+      description: `邀请码 ${code} 已复制到剪贴板`,
+    });
+  };
+
+  const handleDeactivateCode = async (codeId: string) => {
+    try {
+      await deactivateInvitationCode(codeId);
+      setInvitationCodes(invitationCodes.map(c => 
+        c.id === codeId ? { ...c, is_active: false } : c
+      ));
+      toast({
+        title: '停用成功',
+      });
+    } catch (error) {
+      toast({
+        title: '停用失败',
+        variant: 'destructive',
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -129,6 +188,7 @@ export default function AdminPage() {
         <TabsList>
           <TabsTrigger value="system">系统配置</TabsTrigger>
           <TabsTrigger value="users">用户管理</TabsTrigger>
+          <TabsTrigger value="invitations">邀请码管理</TabsTrigger>
         </TabsList>
 
         <TabsContent value="system" className="space-y-6">
@@ -288,6 +348,9 @@ export default function AdminPage() {
                   <TableRow>
                     <TableHead>用户名</TableHead>
                     <TableHead>角色</TableHead>
+                    <TableHead>积分</TableHead>
+                    <TableHead>AI降重</TableHead>
+                    <TableHead>项目数</TableHead>
                     <TableHead>注册时间</TableHead>
                     <TableHead>操作</TableHead>
                   </TableRow>
@@ -300,6 +363,13 @@ export default function AdminPage() {
                         <Badge variant={profile.role === 'admin' ? 'default' : 'secondary'}>
                           {profile.role === 'admin' ? '管理员' : '用户'}
                         </Badge>
+                      </TableCell>
+                      <TableCell>{profile.credits} 点</TableCell>
+                      <TableCell>
+                        {profile.ai_reducer_used}/{profile.ai_reducer_limit}
+                      </TableCell>
+                      <TableCell>
+                        {profile.projects_created}/{profile.project_limit}
                       </TableCell>
                       <TableCell>
                         {new Date(profile.created_at).toLocaleDateString('zh-CN')}
@@ -317,6 +387,124 @@ export default function AdminPage() {
                             <SelectItem value="admin">管理员</SelectItem>
                           </SelectContent>
                         </Select>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="invitations">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>邀请码管理</CardTitle>
+                  <CardDescription>生成和管理邀请码</CardDescription>
+                </div>
+                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      生成邀请码
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>生成新邀请码</DialogTitle>
+                      <DialogDescription>
+                        设置邀请码的使用限制
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-reducer-limit">AI降重工具使用次数</Label>
+                        <Input
+                          id="ai-reducer-limit"
+                          type="number"
+                          min="0"
+                          value={newCodeLimits.aiReducerLimit}
+                          onChange={(e) => setNewCodeLimits({
+                            ...newCodeLimits,
+                            aiReducerLimit: parseInt(e.target.value) || 0
+                          })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="project-limit">可创建项目数量</Label>
+                        <Input
+                          id="project-limit"
+                          type="number"
+                          min="0"
+                          value={newCodeLimits.projectLimit}
+                          onChange={(e) => setNewCodeLimits({
+                            ...newCodeLimits,
+                            projectLimit: parseInt(e.target.value) || 0
+                          })}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                        取消
+                      </Button>
+                      <Button onClick={handleGenerateCode} disabled={generating}>
+                        {generating ? '生成中...' : '生成'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>邀请码</TableHead>
+                    <TableHead>AI降重次数</TableHead>
+                    <TableHead>项目数量</TableHead>
+                    <TableHead>使用次数</TableHead>
+                    <TableHead>状态</TableHead>
+                    <TableHead>创建时间</TableHead>
+                    <TableHead>操作</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invitationCodes.map((code) => (
+                    <TableRow key={code.id}>
+                      <TableCell className="font-mono font-bold">{code.code}</TableCell>
+                      <TableCell>{code.ai_reducer_limit}</TableCell>
+                      <TableCell>{code.project_limit}</TableCell>
+                      <TableCell>{code.used_count}</TableCell>
+                      <TableCell>
+                        <Badge variant={code.is_active ? 'default' : 'secondary'}>
+                          {code.is_active ? '有效' : '已停用'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(code.created_at).toLocaleDateString('zh-CN')}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCopyCode(code.code)}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                          {code.is_active && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeactivateCode(code.id)}
+                            >
+                              <Ban className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

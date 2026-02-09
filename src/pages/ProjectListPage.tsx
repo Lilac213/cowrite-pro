@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { getProjects, createProject, deleteProject } from '@/db/api';
+import { getProjects, createProject, deleteProject, checkProjectLimit, incrementProjectCount, getProfile } from '@/db/api';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,8 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Plus, Trash2, FileText } from 'lucide-react';
+import { Plus, Trash2, FileText, AlertCircle, ShoppingCart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const statusLabels: Record<string, string> = {
@@ -43,13 +44,32 @@ export default function ProjectListPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [creating, setCreating] = useState(false);
+  const [canCreate, setCanCreate] = useState(true);
+  const [projectInfo, setProjectInfo] = useState({ created: 0, limit: 0 });
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
     loadProjects();
+    checkCreateLimit();
   }, [user]);
+
+  const checkCreateLimit = async () => {
+    if (!user) return;
+    try {
+      const profile = await getProfile(user.id);
+      if (profile) {
+        setProjectInfo({
+          created: profile.projects_created,
+          limit: profile.project_limit,
+        });
+        setCanCreate(profile.projects_created < profile.project_limit);
+      }
+    } catch (error) {
+      console.error('检查项目限制失败:', error);
+    }
+  };
 
   const loadProjects = async () => {
     if (!user) return;
@@ -70,21 +90,38 @@ export default function ProjectListPage() {
   const handleCreateProject = async () => {
     if (!user || !newProjectTitle.trim()) return;
 
+    // 检查项目创建限制
+    if (!canCreate) {
+      toast({
+        title: '项目数量已达上限',
+        description: '请购买点数以创建更多项目',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setCreating(true);
     try {
+      // 增加项目计数
+      await incrementProjectCount(user.id);
+      
       const project = await createProject(user.id, newProjectTitle.trim());
       setProjects([project, ...projects]);
       setNewProjectTitle('');
       setDialogOpen(false);
+      
+      // 更新限制信息
+      await checkCreateLimit();
+      
       toast({
         title: '创建成功',
-        description: '项目已创建',
+        description: `剩余可创建项目：${projectInfo.limit - projectInfo.created - 1}`,
       });
       navigate(`/project/${project.id}`);
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: '创建失败',
-        description: '无法创建项目',
+        description: error.message || '无法创建项目',
         variant: 'destructive',
       });
     } finally {
@@ -126,7 +163,7 @@ export default function ProjectListPage() {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button disabled={!canCreate}>
               <Plus className="h-4 w-4 mr-2" />
               新建项目
             </Button>
@@ -164,12 +201,34 @@ export default function ProjectListPage() {
         </Dialog>
       </div>
 
+      {/* 项目限制提示 */}
+      <Alert className={`mb-6 ${!canCreate ? 'border-destructive' : ''}`}>
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>项目配额</AlertTitle>
+        <AlertDescription className="flex items-center justify-between">
+          <span>
+            已创建 {projectInfo.created}/{projectInfo.limit} 个项目
+            {!canCreate && ' - 已达上限'}
+          </span>
+          {!canCreate && (
+            <Button 
+              size="sm" 
+              onClick={() => navigate('/settings')}
+              variant="destructive"
+            >
+              <ShoppingCart className="h-3 w-3 mr-1" />
+              购买点数
+            </Button>
+          )}
+        </AlertDescription>
+      </Alert>
+
       {projects.length === 0 ? (
         <Card className="p-12 text-center">
           <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-xl font-semibold mb-2">暂无项目</h3>
           <p className="text-muted-foreground mb-6">创建您的第一个写作项目</p>
-          <Button onClick={() => setDialogOpen(true)}>
+          <Button onClick={() => setDialogOpen(true)} disabled={!canCreate}>
             <Plus className="h-4 w-4 mr-2" />
             新建项目
           </Button>

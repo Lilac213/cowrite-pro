@@ -21,6 +21,24 @@ export interface Profile {
   id: string;
   username: string;
   role: UserRole;
+  credits: number;
+  ai_reducer_used: number;
+  ai_reducer_limit: number;
+  projects_created: number;
+  project_limit: number;
+  invitation_code?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvitationCode {
+  id: string;
+  code: string;
+  ai_reducer_limit: number;
+  project_limit: number;
+  used_count: number;
+  is_active: boolean;
+  created_by: string;
   created_at: string;
   updated_at: string;
 }

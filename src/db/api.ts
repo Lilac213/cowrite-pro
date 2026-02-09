@@ -14,6 +14,7 @@ import type {
   Template,
   SearchResult,
   ReferenceLibrary,
+  InvitationCode,
 } from '@/types';
 
 // ============ System Config API ============
@@ -1688,5 +1689,166 @@ export async function reorderOutlines(
   );
 
   await Promise.all(updates);
+}
+
+// ============ Invitation Code API ============
+// 生成随机8位邀请码
+function generateInvitationCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 排除易混淆字符
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+// 创建邀请码
+export async function createInvitationCode(
+  aiReducerLimit: number,
+  projectLimit: number
+): Promise<InvitationCode> {
+  const code = generateInvitationCode();
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('未登录');
+
+  const { data, error } = await supabase
+    .from('invitation_codes')
+    .insert({
+      code,
+      ai_reducer_limit: aiReducerLimit,
+      project_limit: projectLimit,
+      created_by: user.id,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as InvitationCode;
+}
+
+// 获取所有邀请码（管理员）
+export async function getAllInvitationCodes(): Promise<InvitationCode[]> {
+  const { data, error } = await supabase
+    .from('invitation_codes')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as InvitationCode[];
+}
+
+// 验证并使用邀请码
+export async function useInvitationCode(code: string, userId: string): Promise<void> {
+  // 查询邀请码
+  const { data: inviteCode, error: fetchError } = await supabase
+    .from('invitation_codes')
+    .select('*')
+    .eq('code', code)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  if (!inviteCode) throw new Error('邀请码不存在或已失效');
+
+  // 更新用户权限
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({
+      ai_reducer_limit: inviteCode.ai_reducer_limit,
+      project_limit: inviteCode.project_limit,
+      invitation_code: code,
+    })
+    .eq('id', userId);
+
+  if (updateError) throw updateError;
+
+  // 增加邀请码使用次数
+  const { error: incrementError } = await supabase
+    .from('invitation_codes')
+    .update({ used_count: inviteCode.used_count + 1 })
+    .eq('id', inviteCode.id);
+
+  if (incrementError) throw incrementError;
+}
+
+// 停用邀请码
+export async function deactivateInvitationCode(codeId: string): Promise<void> {
+  const { error } = await supabase
+    .from('invitation_codes')
+    .update({ is_active: false })
+    .eq('id', codeId);
+
+  if (error) throw error;
+}
+
+// 检查用户是否可以使用AI降重工具
+export async function checkAIReducerLimit(userId: string): Promise<boolean> {
+  const profile = await getProfile(userId);
+  if (!profile) return false;
+  return profile.ai_reducer_used < profile.ai_reducer_limit;
+}
+
+// 增加AI降重使用次数
+export async function incrementAIReducerUsage(userId: string): Promise<void> {
+  const profile = await getProfile(userId);
+  if (!profile) throw new Error('用户不存在');
+  
+  if (profile.ai_reducer_used >= profile.ai_reducer_limit) {
+    throw new Error('AI降重次数不足，请购买点数');
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ ai_reducer_used: profile.ai_reducer_used + 1 })
+    .eq('id', userId);
+
+  if (error) throw error;
+}
+
+// 检查用户是否可以创建项目
+export async function checkProjectLimit(userId: string): Promise<boolean> {
+  const profile = await getProfile(userId);
+  if (!profile) return false;
+  return profile.projects_created < profile.project_limit;
+}
+
+// 增加项目创建次数
+export async function incrementProjectCount(userId: string): Promise<void> {
+  const profile = await getProfile(userId);
+  if (!profile) throw new Error('用户不存在');
+  
+  if (profile.projects_created >= profile.project_limit) {
+    throw new Error('项目创建数量已达上限，请购买点数');
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ projects_created: profile.projects_created + 1 })
+    .eq('id', userId);
+
+  if (error) throw error;
+}
+
+// 购买积分（增加用户积分和对应的使用限制）
+export async function purchaseCredits(
+  userId: string,
+  credits: number,
+  aiReducerIncrease: number,
+  projectIncrease: number
+): Promise<void> {
+  const profile = await getProfile(userId);
+  if (!profile) throw new Error('用户不存在');
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      credits: profile.credits + credits,
+      ai_reducer_limit: profile.ai_reducer_limit + aiReducerIncrease,
+      project_limit: profile.project_limit + projectIncrease,
+    })
+    .eq('id', userId);
+
+  if (error) throw error;
 }
 
