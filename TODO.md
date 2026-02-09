@@ -1,103 +1,147 @@
 # 任务：修复资料选择和替换搜索API
 
-# 任务：修复搜索结果筛选、更新数据源标签、修复资料整理失败
+# 任务：修复学术标签筛选、资料整理失败、文章生成失败
 
 ## 当前任务
-- [x] 修复搜索结果筛选和标签颜色
-  - [x] 更新 SearchResultsPanel 的 badge 颜色使用语义化变体
-  - [x] 确保按学术/资讯/网页筛选功能正常工作
-  - [x] 标签颜色与搜索计划保持一致
-- [x] 更新数据源标签
-  - [x] 将"行业资讯 (TheNews)"改为"行业资讯 (SerpAPI - Google News)"
-  - [x] 将"网页内容 (Smart Search)"改为"网页内容 (SerpAPI - Google Search)"
+- [x] 修复学术标签筛选问题
+  - [x] 更新筛选逻辑，支持 "academic" 和 "scholar" 关键词
+  - [x] 更新筛选逻辑，支持 "web" 和 "search" 关键词
 - [x] 修复资料整理失败问题
-  - [x] 在调用 research-synthesis-agent 前将选中的资料保存到 knowledge_base 表
-  - [x] 添加错误处理和日志
+  - [x] 添加重复检查逻辑，避免重复插入
+  - [x] 更新 research-synthesis-agent 使用正确的 API 密钥
+  - [x] 添加详细的错误日志和用户提示
+- [x] 修复文章生成失败问题
+  - [x] 注册 INTEGRATIONS_API_KEY 密钥
+  - [x] 重新部署 research-synthesis-agent
 
 ## 实现细节
 
-### 1. 修复搜索结果筛选和标签颜色
-**问题**：搜索结果的标签颜色使用了直接的 Tailwind 颜色类（bg-blue-500 等），不符合语义化设计规范
+### 1. 修复学术标签筛选问题
+**问题**：搜索结果中显示 "academic" 标签的内容，但点击"学术"筛选时无法筛选出来
+
+**原因**：筛选逻辑只检查 "scholar" 关键词，没有检查 "academic"
 
 **解决方案**：
-- 更新 `getSourceBadgeVariant` 函数返回语义化的 Badge 变体：
-  - academic/scholar → `default` (蓝色主题色)
-  - news → `destructive` (橙色/红色警示色)
-  - web/search → `secondary` (绿色次要色)
-  - 其他 → `outline` (边框样式)
-
-- 更新 Badge 组件使用：
-```tsx
-<Badge variant={getSourceBadgeVariant(result.source)} className="flex items-center gap-1">
-  {getSourceIcon(result.source)}
-  <span>{result.source}</span>
-</Badge>
+更新 SearchResultsPanel.tsx 的筛选逻辑：
+```typescript
+case 'academic':
+  return source.includes('scholar') || source.includes('academic');
+case 'web':
+  return source.includes('search') || source.includes('web');
 ```
 
-- 筛选逻辑已正确实现，通过 `source.toLowerCase()` 匹配关键词：
-  - academic: 匹配 "scholar"
-  - news: 匹配 "news"
-  - web: 匹配 "search"
-
-### 2. 更新数据源标签
-**修改位置**：SearchPlanPanel.tsx
-
-**更新内容**：
-- 行业资讯：`(TheNews)` → `(SerpAPI - Google News)`
-- 网页内容：`(Smart Search)` → `(SerpAPI - Google Search)`
-
-这样用户可以清楚地知道系统使用的是 SerpAPI 提供的 Google 搜索服务。
-
-### 3. 修复资料整理失败问题
+### 2. 修复资料整理失败问题
 **问题分析**：
-- 用户点击"资料整理"按钮后，调用 `research-synthesis-agent` Edge Function
-- Edge Function 查询 `knowledge_base` 表获取资料
-- 但是选中的资料还在 `retrieved_materials` 表中，没有保存到 `knowledge_base`
-- 导致 Edge Function 返回错误："知识库为空，请先进行资料搜索"
+1. 资料可能被重复插入到 knowledge_base 表，导致唯一约束错误
+2. research-synthesis-agent 使用了错误的 API 密钥（INTEGRATIONS_API_KEY 而不是 QIANWEN_API_KEY）
+3. 错误信息不够详细，用户无法了解具体原因
 
 **解决方案**：
-在 `handleOrganize` 函数中添加以下步骤：
 
-1. 获取选中的资料（从 `retrieved_materials` 表）
-2. 将选中的资料逐条保存到 `knowledge_base` 表
-3. 调用 `research-synthesis-agent` Edge Function
-4. 获取并显示研究洞察和空白
-
-**代码实现**：
+#### 2.1 添加重复检查逻辑
+在 `handleOrganize` 函数中：
 ```typescript
-// 1. 获取选中的资料
-const selectedMaterials = await getSelectedMaterials(writingSession.id);
+// 先获取已存在的资料
+const existingKnowledge = await getKnowledgeBase(projectId);
+const existingUrls = new Set(existingKnowledge.map(k => k.source_url).filter(Boolean));
 
-if (selectedMaterials.length === 0) {
-  toast({ title: '请选择资料', description: '至少选择一条资料才能继续' });
-  return;
+let savedCount = 0;
+for (const material of selectedMaterials) {
+  // 跳过已存在的资料（通过 URL 判断）
+  if (material.url && existingUrls.has(material.url)) {
+    console.log('[handleOrganize] 资料已存在，跳过:', material.title);
+    continue;
+  }
+  
+  try {
+    await createKnowledgeBase({ ... });
+    savedCount++;
+  } catch (error) {
+    console.error('[handleOrganize] 保存资料失败:', material.title, error);
+    // 继续保存其他资料
+  }
 }
 
-// 2. 将选中的资料保存到 knowledge_base 表
-for (const material of selectedMaterials) {
-  await createKnowledgeBase({
-    project_id: projectId,
-    title: material.title,
-    content: material.abstract || material.full_text || '',
-    source: material.source_type,
-    source_url: material.url,
-    published_at: material.published_at || material.year,
-    collected_at: material.created_at,
-    selected: true,
-    content_status: material.full_text ? 'full_text' : 'abstract_only',
-    extracted_content: material.full_text ? [material.full_text] : [],
-    full_text: material.full_text,
+console.log('[handleOrganize] 资料保存完成，新增:', savedCount, '条');
+```
+
+#### 2.2 更新 API 密钥配置
+修改 research-synthesis-agent/index.ts：
+```typescript
+// 使用 QIANWEN_API_KEY 而不是 INTEGRATIONS_API_KEY
+const apiKey = Deno.env.get("QIANWEN_API_KEY");
+if (!apiKey) {
+  return new Response(
+    JSON.stringify({ error: "API密钥未配置，请在系统设置中配置通义千问 API 密钥" }),
+    { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+```
+
+这样可以使用系统设置中配置的通义千问 API 密钥，通过 sync-config-to-secrets 同步到 Edge Function 环境变量。
+
+#### 2.3 改进错误处理
+在 api.ts 中添加详细日志：
+```typescript
+export async function callResearchSynthesisAgent(
+  projectId: string,
+  sessionId?: string
+): Promise<SynthesisResult> {
+  console.log('[callResearchSynthesisAgent] 调用参数:', { projectId, sessionId });
+  
+  const { data, error } = await supabase.functions.invoke('research-synthesis-agent', {
+    body: { projectId, sessionId },
+  });
+
+  if (error) {
+    console.error('[callResearchSynthesisAgent] Edge Function 错误:', error);
+    if (error.context) {
+      console.error('[callResearchSynthesisAgent] 错误上下文:', error.context);
+    }
+    throw new Error(error.message || 'Edge Function 调用失败');
+  }
+  
+  console.log('[callResearchSynthesisAgent] 返回数据:', data);
+  return data as SynthesisResult;
+}
+```
+
+在 KnowledgeStage.tsx 中提供更友好的错误提示：
+```typescript
+catch (error: any) {
+  console.error('资料整理失败:', error);
+  
+  // 提供更详细的错误信息
+  let errorMessage = '请稍后重试';
+  if (error.message) {
+    errorMessage = error.message;
+  } else if (error.error) {
+    errorMessage = error.error;
+  }
+  
+  toast({
+    title: '资料整理失败',
+    description: errorMessage,
+    variant: 'destructive',
   });
 }
-
-// 3. 调用研究综合 Agent
-const result = await callResearchSynthesisAgent(projectId, writingSession.id);
 ```
 
-**错误处理**：
-- 添加了详细的 console.log 日志
-- 单个资料保存失败不会中断整个流程
-- 统一的错误提示和 toast 通知
+### 3. 修复文章生成失败问题
+**问题**：generate-article-structure Edge Function 使用 INTEGRATIONS_API_KEY 访问 Gemini 模型，但该密钥未配置
+
+**解决方案**：
+1. 注册 INTEGRATIONS_API_KEY 密钥，提示用户需要配置
+2. 重新部署 research-synthesis-agent Edge Function
+
+**密钥说明**：
+- `INTEGRATIONS_API_KEY`: MeDo 平台 AI 网关密钥，用于访问 Gemini 等模型。需要联系平台管理员获取。
+- `QIANWEN_API_KEY`: 通义千问 API 密钥，从系统设置同步，用于 SiliconFlow API 调用。
+
+## 使用说明
+1. 确保在系统设置中配置了通义千问 API 密钥
+2. 点击"同步配置"按钮，将 API 密钥同步到 Edge Function 环境
+3. 如需使用文章结构生成功能，需要联系平台管理员配置 INTEGRATIONS_API_KEY
 
 ## 已完成任务
 - [x] 移除资料查询缓存逻辑，每次进入页面都重新搜索

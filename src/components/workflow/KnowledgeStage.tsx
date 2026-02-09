@@ -892,10 +892,21 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         return;
       }
 
-      // 2. 将选中的资料保存到 knowledge_base 表
+      // 2. 将选中的资料保存到 knowledge_base 表（检查是否已存在）
       console.log('[handleOrganize] 开始保存选中的资料到 knowledge_base，数量:', selectedMaterials.length);
       
+      // 先获取已存在的资料
+      const existingKnowledge = await getKnowledgeBase(projectId);
+      const existingUrls = new Set(existingKnowledge.map(k => k.source_url).filter(Boolean));
+      
+      let savedCount = 0;
       for (const material of selectedMaterials) {
+        // 跳过已存在的资料（通过 URL 判断）
+        if (material.url && existingUrls.has(material.url)) {
+          console.log('[handleOrganize] 资料已存在，跳过:', material.title);
+          continue;
+        }
+        
         try {
           await createKnowledgeBase({
             project_id: projectId,
@@ -910,13 +921,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             extracted_content: material.full_text ? [material.full_text] : [],
             full_text: material.full_text,
           });
+          savedCount++;
         } catch (error: any) {
           console.error('[handleOrganize] 保存资料失败:', material.title, error);
           // 继续保存其他资料
         }
       }
       
-      console.log('[handleOrganize] 资料保存完成，开始调用研究综合 Agent');
+      console.log('[handleOrganize] 资料保存完成，新增:', savedCount, '条，开始调用研究综合 Agent');
 
       // 3. 调用研究综合 Agent
       const result: SynthesisResult = await callResearchSynthesisAgent(projectId, writingSession.id);
@@ -941,9 +953,18 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       });
     } catch (error: any) {
       console.error('资料整理失败:', error);
+      
+      // 提供更详细的错误信息
+      let errorMessage = '请稍后重试';
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.error) {
+        errorMessage = error.error;
+      }
+      
       toast({
         title: '资料整理失败',
-        description: error.message || '请稍后重试',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {

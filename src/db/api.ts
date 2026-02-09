@@ -1960,11 +1960,22 @@ export async function callResearchSynthesisAgent(
   projectId: string,
   sessionId?: string
 ): Promise<SynthesisResult> {
+  console.log('[callResearchSynthesisAgent] 调用参数:', { projectId, sessionId });
+  
   const { data, error } = await supabase.functions.invoke('research-synthesis-agent', {
     body: { projectId, sessionId },
   });
 
-  if (error) throw error;
+  if (error) {
+    console.error('[callResearchSynthesisAgent] Edge Function 错误:', error);
+    // 尝试获取更详细的错误信息
+    if (error.context) {
+      console.error('[callResearchSynthesisAgent] 错误上下文:', error.context);
+    }
+    throw new Error(error.message || 'Edge Function 调用失败');
+  }
+  
+  console.log('[callResearchSynthesisAgent] 返回数据:', data);
   return data as SynthesisResult;
 }
 

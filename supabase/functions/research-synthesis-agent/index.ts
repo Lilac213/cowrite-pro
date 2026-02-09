@@ -25,10 +25,10 @@ Deno.serve(async (req) => {
     }
 
     // 获取 API 密钥
-    const apiKey = Deno.env.get("INTEGRATIONS_API_KEY");
+    const apiKey = Deno.env.get("QIANWEN_API_KEY");
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: "API密钥未配置" }),
+        JSON.stringify({ error: "API密钥未配置，请在系统设置中配置通义千问 API 密钥" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

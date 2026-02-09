@@ -53,11 +53,11 @@ export default function SearchResultsPanel({
         const source = result.source.toLowerCase();
         switch (sourceFilter) {
           case 'academic':
-            return source.includes('scholar');
+            return source.includes('scholar') || source.includes('academic');
           case 'news':
             return source.includes('news');
           case 'web':
-            return source.includes('search');
+            return source.includes('search') || source.includes('web');
           case 'library':
             return source.includes('资料库') || source.includes('素材');
           default:
