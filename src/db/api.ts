@@ -1935,15 +1935,38 @@ export async function updateWritingSessionStage(
   if (error) throw error;
 }
 
-// 调用研究综合 Agent
+// 调用研究综合 Agent（支持新旧两种格式）
 export async function callResearchSynthesisAgent(
-  projectId: string,
+  projectIdOrInput: string | {
+    writing_requirements: {
+      topic: string;
+      target_audience?: string;
+      writing_purpose?: string;
+      key_points?: string[];
+    };
+    raw_materials: Array<{
+      title: string;
+      source: string;
+      source_url?: string;
+      content: string;
+    }>;
+  },
   sessionId?: string
 ): Promise<SynthesisResult> {
-  console.log('[callResearchSynthesisAgent] 调用参数:', { projectId, sessionId });
+  let body: any;
+  
+  if (typeof projectIdOrInput === 'string') {
+    // 旧格式：projectId
+    console.log('[callResearchSynthesisAgent] 使用旧格式（projectId）:', { projectId: projectIdOrInput, sessionId });
+    body = { projectId: projectIdOrInput, sessionId };
+  } else {
+    // 新格式：ResearchSynthesisInput
+    console.log('[callResearchSynthesisAgent] 使用新格式（input）');
+    body = { input: projectIdOrInput, sessionId };
+  }
   
   const { data, error } = await supabase.functions.invoke('research-synthesis-agent', {
-    body: { projectId, sessionId },
+    body,
   });
 
   if (error) {

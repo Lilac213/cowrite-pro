@@ -119,22 +119,123 @@ ResearchSynthesisPage
     └─ 确认并进入下一步按钮
 ```
 
-功能说明:
+**Research Synthesis Agent 输入输出规范**
+
+**输入格式**
+
+在调用 Research Synthesis Agent 前,将需求文档、用户选择的初始资料整理成以下 JSON 形式:
+
+```typescript
+ResearchSynthesisInput = {
+  writing_requirements: {
+    topic: string
+    target_audience?: string
+    writing_purpose?: string
+    key_points?: string[]
+  }
+  raw_materials: Array<{
+    title: string
+    source: string
+    source_url?: string
+    content: string
+  }>
+}
+```
+
+**输出格式**
+
+**日志详情展示**
+
+日志详情中将 Research Retrieval Agent 和 Research Synthesis Agent 的日志合并展示,包含以下内容:
+
+1. **THOUGHT 部分**
+
+展示 Agent 的思考过程,示例:
+
+```
+---THOUGHT---
+我将资料按商业失败原因 / 用户识别方法 / 系统设计模式进行归类。
+其中部分学术研究样本偏早,需要用户决定是否仍有参考价值。
+某些研究在用户定义上存在分歧,已单独标注为争议点。
+```
+
+2. **synthesized_insights(综合洞察)**
+
+```typescript
+{
+  \"synthesized_insights\": [
+    {
+      \"id\": \"insight_1\",
+      \"category\": \"AI Agent 商业失败原因\",
+      \"insight\": \"多数 AI Agent 项目失败并非模型能力不足,而是缺乏清晰的用户任务闭环\",
+      \"supporting_data\": [
+        \"超过 60% 的项目未能定义核心用户任务\",
+        \"失败案例集中在多场景泛化尝试\"
+      ],
+      \"source_type\": \"academic\",
+      \"recommended_usage\": \"direct\",
+      \"citability\": \"direct\",
+      \"limitations\": \"样本主要集中在 2020–2023 年欧美市场\",
+      \"user_decision\": \"pending\"
+    }
+  ]
+}
+```
+
+**字段说明**
+
+| 字段 | 含义 |
+|------|------|
+| category | 结构提示,不是价值判断 |
+| insight | 可被拷贝进文章的最小观点单元 |
+| supporting_data | 证据池,不一定都会用 |
+| recommended_usage | 给用户的轻建议 |
+| citability | 给写作 agent 的引用提示 |
+| user_decision | 必须由用户决定 |
+
+3. **contradictions_or_gaps(研究冲突与空白)**
+
+```typescript
+{
+  \"contradictions_or_gaps\": [
+    {
+      \"id\": \"gap_1\",
+      \"issue\": \"用户定义粒度不一致\",
+      \"description\": \"部分研究以行业角色定义用户,部分以具体任务定义用户,结论存在冲突\",
+      \"user_decision\": \"pending\"
+    }
+  ]
+}
+```
+
+**用户交互流程**
+
+1. Agent 输出 THOUGHT 以及除 user_decision 之外的所有内容
+2. 系统展示所有洞察和矛盾/空白,默认全部采用
+3. 用户选择是否采用每条观点
+4. 用户完成选择后,系统更新 user_decision 字段
+
+**功能说明**
+
 - 调用 Research Synthesis Agent 整理用户在资料检索阶段选择的资料
 - 显示对应观点、数据等内容
 - 用户可进一步填写自己的判断,评价观点是否可取
 
-用户操作:
-- 对每条洞察,用户可选择:
-  - 必须使用(must_use)
-  - 作为背景(background)
-  - 排除(excluded)
-- 对每条洞察,用户可填写自己的判断(观点是否可取)
-- 对每个矛盾/空白,用户可选择:
-  - 响应(respond)
-  - 忽略(ignore)
+**用户操作**
 
-确认条件:
+对每条洞察,用户可选择:
+- 必须使用(must_use)
+- 作为背景(background)
+- 排除(excluded)
+
+对每条洞察,用户可填写自己的判断(观点是否可取)
+
+对每个矛盾/空白,用户可选择:
+- 响应(respond)
+- 忽略(ignore)
+
+**确认条件**
+
 - 用户完成所有洞察的选择和判断填写后,确认并进入下一步按钮启用
 - 点击后保存用户决策,进入文章结构生成阶段
 

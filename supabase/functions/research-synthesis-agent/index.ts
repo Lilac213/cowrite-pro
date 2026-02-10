@@ -4,12 +4,6 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
 // ============ 统一的 LLM 调用客户端 ============
 interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
@@ -154,7 +148,24 @@ async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+// 输入接口定义
+interface ResearchSynthesisInput {
+  writing_requirements: {
+    topic: string;
+    target_audience?: string;
+    writing_purpose?: string;
+    key_points?: string[];
+  };
+  raw_materials: Array<{
+    title: string;
+    source: string;
+    source_url?: string;
+    content: string;
+  }>;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -162,67 +173,111 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { projectId, sessionId } = await req.json();
+    const body = await req.json();
+    
+    // 支持两种输入格式：
+    // 1. 新格式：{ input: ResearchSynthesisInput, sessionId?: string }
+    // 2. 旧格式（兼容）：{ projectId: string, sessionId?: string }
+    let input: ResearchSynthesisInput;
+    let sessionId: string | undefined;
+    
+    if (body.input) {
+      // 新格式
+      input = body.input;
+      sessionId = body.sessionId;
+    } else if (body.projectId) {
+      // 旧格式 - 从数据库读取
+      const projectId = body.projectId;
+      sessionId = body.sessionId;
 
-    if (!projectId) {
+      if (!projectId) {
+        return new Response(
+          JSON.stringify({ error: "缺少 projectId 或 input 参数" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // 获取项目信息
+      const { data: project, error: projectError } = await supabase
+        .from("projects")
+        .select("title")
+        .eq("id", projectId)
+        .maybeSingle();
+
+      if (projectError || !project) {
+        return new Response(
+          JSON.stringify({ error: "项目不存在" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // 获取需求文档
+      const { data: brief, error: briefError } = await supabase
+        .from("briefs")
+        .select("requirements")
+        .eq("project_id", projectId)
+        .maybeSingle();
+
+      if (briefError || !brief) {
+        return new Response(
+          JSON.stringify({ error: "需求文档不存在" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // 获取知识库资料
+      const { data: knowledge, error: knowledgeError } = await supabase
+        .from("knowledge_base")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("collected_at", { ascending: false });
+
+      if (knowledgeError) {
+        return new Response(
+          JSON.stringify({ error: "获取知识库失败" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!knowledge || knowledge.length === 0) {
+        return new Response(
+          JSON.stringify({ error: "知识库为空，请先进行资料搜索" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // 转换为新格式
+      let requirements: any = {};
+      try {
+        requirements = JSON.parse(brief.requirements);
+      } catch {
+        requirements = { topic: project.title };
+      }
+
+      input = {
+        writing_requirements: {
+          topic: requirements.topic || project.title,
+          target_audience: requirements.target_audience,
+          writing_purpose: requirements.writing_purpose,
+          key_points: requirements.key_points,
+        },
+        raw_materials: knowledge.map((item: any) => ({
+          title: item.title,
+          source: item.source,
+          source_url: item.source_url,
+          content: item.content,
+        })),
+      };
+    } else {
       return new Response(
-        JSON.stringify({ error: "缺少 projectId" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 获取项目信息
-    const { data: project, error: projectError } = await supabase
-      .from("projects")
-      .select("title")
-      .eq("id", projectId)
-      .maybeSingle();
-
-    if (projectError || !project) {
-      return new Response(
-        JSON.stringify({ error: "项目不存在" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 获取需求文档
-    const { data: brief, error: briefError } = await supabase
-      .from("briefs")
-      .select("requirements")
-      .eq("project_id", projectId)
-      .maybeSingle();
-
-    if (briefError || !brief) {
-      return new Response(
-        JSON.stringify({ error: "需求文档不存在" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 获取知识库资料
-    const { data: knowledge, error: knowledgeError } = await supabase
-      .from("knowledge_base")
-      .select("*")
-      .eq("project_id", projectId)
-      .order("collected_at", { ascending: false });
-
-    if (knowledgeError) {
-      return new Response(
-        JSON.stringify({ error: "获取知识库失败" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (!knowledge || knowledge.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "知识库为空，请先进行资料搜索" }),
+        JSON.stringify({ error: "缺少 projectId 或 input 参数" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // 构建资料内容
     let materialsContent = "";
-    knowledge.forEach((item: any, index: number) => {
+    input.raw_materials.forEach((item, index) => {
       materialsContent += `\n\n【资料 ${index + 1}】\n`;
       materialsContent += `标题: ${item.title}\n`;
       materialsContent += `来源: ${item.source}\n`;
@@ -232,22 +287,16 @@ Deno.serve(async (req) => {
       materialsContent += `内容:\n${item.content}\n`;
     });
 
-    // 解析需求文档
-    let requirementsText = "";
-    try {
-      const reqDoc = JSON.parse(brief.requirements);
-      requirementsText = `写作主题: ${reqDoc.topic || project.title}\n`;
-      if (reqDoc.target_audience) {
-        requirementsText += `目标读者: ${reqDoc.target_audience}\n`;
-      }
-      if (reqDoc.writing_purpose) {
-        requirementsText += `写作目的: ${reqDoc.writing_purpose}\n`;
-      }
-      if (reqDoc.key_points) {
-        requirementsText += `关键要点: ${reqDoc.key_points}\n`;
-      }
-    } catch {
-      requirementsText = `写作主题: ${project.title}\n`;
+    // 构建需求文档文本
+    let requirementsText = `写作主题: ${input.writing_requirements.topic}\n`;
+    if (input.writing_requirements.target_audience) {
+      requirementsText += `目标读者: ${input.writing_requirements.target_audience}\n`;
+    }
+    if (input.writing_requirements.writing_purpose) {
+      requirementsText += `写作目的: ${input.writing_requirements.writing_purpose}\n`;
+    }
+    if (input.writing_requirements.key_points && input.writing_requirements.key_points.length > 0) {
+      requirementsText += `关键要点: ${input.writing_requirements.key_points.join(', ')}\n`;
     }
 
     // 获取当前日期和年份

@@ -326,7 +326,7 @@ export interface RetrievedMaterial {
   created_at: string;
 }
 
-export type UserDecision = 'pending' | 'must_use' | 'background' | 'excluded';
+export type UserDecision = 'pending' | 'adopt' | 'downgrade' | 'reject';
 export type RecommendedUsage = 'direct' | 'background' | 'optional';
 export type Citability = 'direct' | 'background' | 'controversial';
 

@@ -26,6 +26,8 @@ import {
   getSelectedMaterials,
   updateRetrievedMaterialSelection,
   batchUpdateRetrievedMaterialSelection,
+  updateInsightDecision,
+  updateGapDecision,
 } from '@/db/api';
 import type { KnowledgeBase, WritingSession, ResearchInsight, ResearchGap, SynthesisResult, RetrievedMaterial } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -1521,6 +1523,63 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         open={showSynthesisDialog}
         onOpenChange={setShowSynthesisDialog}
         synthesisResults={synthesisResults}
+        onUpdateInsightDecision={async (insightId, decision) => {
+          try {
+            await updateInsightDecision(insightId, decision);
+            toast({
+              title: '已更新决策',
+              description: `洞察决策已更新为：${decision === 'adopt' ? '采用' : decision === 'downgrade' ? '降级使用' : '排除'}`,
+            });
+          } catch (error) {
+            console.error('更新洞察决策失败:', error);
+            toast({
+              title: '更新失败',
+              description: '无法更新洞察决策',
+              variant: 'destructive',
+            });
+          }
+        }}
+        onUpdateGapDecision={async (gapId, decision) => {
+          try {
+            await updateGapDecision(gapId, decision);
+            toast({
+              title: '已更新决策',
+              description: `空白决策已更新为：${decision === 'respond' ? '需要处理' : '忽略'}`,
+            });
+          } catch (error) {
+            console.error('更新空白决策失败:', error);
+            toast({
+              title: '更新失败',
+              description: '无法更新空白决策',
+              variant: 'destructive',
+            });
+          }
+        }}
+        onBatchAcceptAll={async () => {
+          try {
+            if (writingSession) {
+              const insights = await getResearchInsights(writingSession.id);
+              const gaps = await getResearchGaps(writingSession.id);
+              
+              await Promise.all([
+                ...insights.map(insight => updateInsightDecision(insight.id, 'adopt')),
+                ...gaps.map(gap => updateGapDecision(gap.id, 'respond')),
+              ]);
+              
+              toast({
+                title: '批量操作成功',
+                description: '已将所有洞察设为采用，所有空白设为需要处理',
+              });
+            }
+          } catch (error) {
+            console.error('批量操作失败:', error);
+            toast({
+              title: '批量操作失败',
+              description: '无法完成批量操作',
+              variant: 'destructive',
+            });
+          }
+        }}
       />
 
       {/* 搜索日志弹窗 */}
