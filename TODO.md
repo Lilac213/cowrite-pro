@@ -36,6 +36,52 @@
   - [x] 更新搜索完成后的提示信息
   - [x] 保留复选框功能（供未来扩展使用）
 
+## 重要提示：API 密钥配置
+
+### 问题
+Research Synthesis Agent 调用失败，错误信息：
+- "Edge Function returned a non-2xx status code"
+- "LLM API 调用失败 (401): Api key is invalid"
+
+### 原因
+Edge Function `research-synthesis-agent` 需要 `QIANWEN_API_KEY` 环境变量来调用 SiliconFlow API，但该密钥未配置或无效。
+
+### 解决方案
+
+#### 1. 获取 API 密钥
+访问 https://cloud.siliconflow.cn 并完成以下步骤：
+1. 注册账号并登录
+2. 进入控制台
+3. 创建 API Key
+4. 复制生成的 API Key
+
+#### 2. 配置密钥到 Supabase
+在 Supabase 项目中配置密钥：
+1. 打开 Supabase Dashboard
+2. 进入 Project Settings → Edge Functions → Secrets
+3. 添加新的 Secret：
+   - Name: `QIANWEN_API_KEY`
+   - Value: [粘贴你的 API Key]
+4. 保存
+
+#### 3. 重新部署 Edge Function
+配置密钥后，需要重新部署 Edge Function 才能生效：
+```bash
+supabase functions deploy research-synthesis-agent
+```
+
+或者在 Miaoda 平台上点击"同步配置"按钮。
+
+### 使用的 API
+- **服务商**: SiliconFlow (https://api.siliconflow.cn)
+- **模型**: Qwen/Qwen2.5-7B-Instruct
+- **用途**: Research Synthesis Agent 的 LLM 推理
+
+### 代码位置
+- Edge Function: `/supabase/functions/research-synthesis-agent/index.ts`
+- API 调用: Line 230-245
+- 密钥获取: Line 28
+
 ## 实现详情
 
 ### 1. 改进资料整理日志
