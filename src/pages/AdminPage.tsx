@@ -101,7 +101,7 @@ export default function AdminPage() {
         updateSystemConfig('llm_provider', systemConfig.llm_provider || 'siliconflow'),
         updateSystemConfig('llm_api_key', systemConfig.llm_api_key || ''),
         updateSystemConfig('search_provider', systemConfig.search_provider || 'serpapi'),
-        updateSystemConfig('serpapi_api_key', systemConfig.serpapi_api_key || ''),
+        updateSystemConfig('search_api_key', systemConfig.search_api_key || ''),
       ]);
       
       toast({
@@ -280,15 +280,15 @@ export default function AdminPage() {
               <div className="space-y-4 p-4 border rounded-lg">
                 <div className="flex items-center justify-between">
                   <h3 className="font-medium">SerpAPI</h3>
-                  <Badge variant={systemConfig.serpapi_api_key ? 'default' : 'outline'}>
-                    {systemConfig.serpapi_api_key ? '已配置' : '未配置'}
+                  <Badge variant={systemConfig.search_api_key ? 'default' : 'outline'}>
+                    {systemConfig.search_api_key ? '已配置' : '未配置'}
                   </Badge>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="serpapi-status">状态</Label>
                   <Input
                     id="serpapi-status"
-                    value={systemConfig.serpapi_api_key ? '已启用' : '未启用'}
+                    value={systemConfig.search_api_key ? '已启用' : '未启用'}
                     disabled
                     className="bg-muted"
                   />
@@ -302,8 +302,8 @@ export default function AdminPage() {
                     id="serpapi-api-key"
                     type="password"
                     placeholder="请输入 SerpAPI Key"
-                    value={systemConfig.serpapi_api_key || ''}
-                    onChange={(e) => setSystemConfig({ ...systemConfig, serpapi_api_key: e.target.value })}
+                    value={systemConfig.search_api_key || ''}
+                    onChange={(e) => setSystemConfig({ ...systemConfig, search_api_key: e.target.value })}
                   />
                   <p className="text-xs text-muted-foreground">
                     可在 <a href="https://serpapi.com/manage-api-key" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">SerpAPI 官网</a> 获取 API 密钥
