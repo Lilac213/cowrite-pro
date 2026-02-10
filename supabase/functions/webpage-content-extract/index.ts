@@ -43,7 +43,16 @@ Deno.serve(async (req) => {
 
     const integrationsApiKey = Deno.env.get('INTEGRATIONS_API_KEY');
     if (!integrationsApiKey) {
-      throw new Error('INTEGRATIONS_API_KEY 未配置');
+      console.warn('[Webpage Extract] INTEGRATIONS_API_KEY 未配置，跳过抓取');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          content_status: 'unavailable_fulltext',
+          error: 'INTEGRATIONS_API_KEY 未配置',
+          notes: '系统未配置网页内容提取服务，仅返回摘要'
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     console.log(`[Webpage Extract] 开始提取: ${url}`);

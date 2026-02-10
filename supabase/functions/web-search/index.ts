@@ -142,6 +142,31 @@ Deno.serve(async (req) => {
         url: item.url,
         publishedAt: item.datePublished,
       }));
+    } else if (searchProvider === 'serpapi') {
+      if (!searchApiKey) {
+        return new Response(
+          JSON.stringify({ error: '系统搜索配置未完成，请联系管理员配置' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const response = await fetch(
+        `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(query)}&api_key=${searchApiKey}&num=10&hl=zh-cn&gl=cn`
+      );
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`SerpAPI 错误: ${error}`);
+      }
+
+      const data = await response.json();
+      results = (data.organic_results || []).map((item: any) => ({
+        title: item.title,
+        content: item.snippet,
+        source: item.displayed_link,
+        url: item.link,
+        publishedAt: '',
+      }));
     } else {
       return new Response(
         JSON.stringify({ error: `不支持的搜索提供商: ${searchProvider}` }),

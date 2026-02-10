@@ -103,6 +103,14 @@ export default function AdminPage() {
         updateSystemConfig('search_provider', systemConfig.search_provider || 'serpapi'),
         updateSystemConfig('search_api_key', systemConfig.search_api_key || ''),
       ]);
+
+      // 同步到 Secrets
+      try {
+        await syncConfigToSecrets();
+      } catch (syncError) {
+        console.error('同步 Secrets 失败:', syncError);
+        // 即使同步失败也提示保存成功，因为数据库已经更新，边缘函数会自动回退到数据库读取
+      }
       
       toast({
         title: '保存成功',

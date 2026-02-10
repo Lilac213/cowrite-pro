@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,7 +30,26 @@ Deno.serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get('SERPAPI_API_KEY');
+    let apiKey = Deno.env.get('SERPAPI_API_KEY');
+    
+    // 如果环境变量没有配置，尝试从数据库读取
+    if (!apiKey) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      
+      const { data: config } = await supabase
+        .from('system_config')
+        .select('config_value')
+        .eq('config_key', 'search_api_key')
+        .maybeSingle();
+        
+      if (config?.config_value) {
+        apiKey = config.config_value;
+        console.log('[SerpAPI Google Scholar] 从数据库加载了 API Key');
+      }
+    }
+
     if (!apiKey) {
       throw new Error('SERPAPI_API_KEY 未配置');
     }

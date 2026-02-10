@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,7 +21,26 @@ serve(async (req) => {
       );
     }
 
-    const serpApiKey = Deno.env.get('SERPAPI_KEY');
+    let serpApiKey = Deno.env.get('SERPAPI_API_KEY') || Deno.env.get('SERPAPI_KEY');
+    
+    // 如果环境变量没有配置，尝试从数据库读取
+    if (!serpApiKey) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      
+      const { data: config } = await supabase
+        .from('system_config')
+        .select('config_value')
+        .eq('config_key', 'search_api_key')
+        .maybeSingle();
+        
+      if (config?.config_value) {
+        serpApiKey = config.config_value;
+        console.log('[AI Search] 从数据库加载了 API Key');
+      }
+    }
+
     if (!serpApiKey) {
       return new Response(
         JSON.stringify({ error: 'SerpAPI密钥未配置' }),

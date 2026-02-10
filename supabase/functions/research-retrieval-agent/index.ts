@@ -92,14 +92,10 @@ Deno.serve(async (req) => {
     
     addLog('========== API Keys 状态检查 ==========');
     addLog(`QIANWEN_API_KEY 存在: ${!!qianwenApiKey}`);
-    addLog(`INTEGRATIONS_API_KEY 存在: ${!!integrationsApiKey}`);
     addLog(`SUPABASE_URL 存在: ${!!supabaseUrl}`);
     
     if (!qianwenApiKey) {
       throw new Error('QIANWEN_API_KEY 未配置');
-    }
-    if (!integrationsApiKey) {
-      throw new Error('INTEGRATIONS_API_KEY 未配置');
     }
 
     // 初始化 Supabase 客户端

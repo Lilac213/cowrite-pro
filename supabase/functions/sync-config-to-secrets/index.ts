@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     const { data: configs, error: configError } = await supabase
       .from('system_config')
       .select('config_key, config_value')
-      .in('config_key', ['llm_api_key', 'llm_provider']);
+      .in('config_key', ['llm_api_key', 'llm_provider', 'search_api_key']);
 
     if (configError) {
       throw configError;
@@ -83,6 +83,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Search API Key (SerpAPI)
+    if (configMap.search_api_key) {
+      secretsToSync.push({
+        name: 'SERPAPI_API_KEY',
+        value: configMap.search_api_key,
+      });
+    }
+
     console.log('准备同步的密钥:', secretsToSync.map(s => s.name));
 
     // 注意：实际的密钥同步由 MeDo 平台的 supabase_bulk_create_secrets 工具完成
@@ -93,7 +101,7 @@ Deno.serve(async (req) => {
         success: true,
         message: '配置已准备同步',
         secrets: secretsToSync,
-        note: 'QIANWEN_API_KEY 已配置。密钥将在下次部署时同步到 Edge Function 环境。'
+        note: 'QIANWEN_API_KEY 和 SERPAPI_API_KEY 已配置。密钥将同步到 Edge Function 环境。'
       }),
       { 
         status: 200, 
