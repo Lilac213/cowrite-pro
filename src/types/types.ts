@@ -4,6 +4,7 @@ export type ProjectStatus =
   | 'init'
   | 'confirm_brief'
   | 'knowledge_selected'
+  | 'material_review'
   | 'outline_confirmed'
   | 'paragraph_structure_confirmed'
   | 'drafting'
@@ -310,6 +311,7 @@ export interface WritingSession {
   locked_core_thesis: boolean;
   locked_structure: boolean;
   structure_result?: ArticleArgumentStructure;
+  synthesis_result?: any; // 研究综合结果（包含 thought, input, synthesis）
   created_at: string;
   updated_at: string;
 }

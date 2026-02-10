@@ -76,6 +76,9 @@ ResearchRetrievalPage
 │      │   ├─ 资料 URL
 │      │   ├─ 原文内容预览
 │      │   └─ 用户操作区(选择/忽略)
+├─ LogPanel(日志面板)
+│  ├─ 运行步骤显示
+│  └─ 日志详情按钮
 └─ BottomActionBar(底部操作栏)
     └─ 确认并进入下一步按钮
 ```
@@ -87,6 +90,8 @@ ResearchRetrievalPage
 - 获取资料标题、URL,并从 URL 中提取原文
 - 将检索结果展现在页面上
 - 用户可点击需要的资料进行选择
+- 页面底部显示日志框,展示运行步骤
+- 日志框包含日志详情按钮,点击后弹窗显示 Research Retrieval Agent 接收到的输入、输出以及 LLM 输出的 THOUGHT 部分内容
 
 确认条件:
 - 用户完成资料选择后,确认并进入下一步按钮启用
@@ -99,22 +104,31 @@ ResearchRetrievalPage
 页面结构:
 ```
 ResearchSynthesisPage
-├─ SynthesisHeader(整理概览)
-├─ InsightsPanel(洞察面板)
-│  ├─ CategoryTabs(分类标签)
+├─ LeftPanel(左侧面板)
+│  ├─ CategorySummary(资料类型统计)
+│  │   └─ 显示各类型资料数量(xxx条)
+│  └─ ReviewGuidelines(审阅指南)
+│      ├─ 必须使用:核心观点,将直接用于文章论证
+│      ├─ 背景补充:辅助信息,可作为背景或补充说明
+│      └─ 排除:不相关或不适用的内容
+├─ RightPanel(右侧面板)
+│  ├─ BatchActions(批量操作区)
+│  │   ├─ 一键全选按钮
+│  │   ├─ 批量选择必须使用按钮
+│  │   ├─ 批量选择背景补充按钮
+│  │   └─ 批量选择排除按钮
+│  ├─ UndecidedAlert(未决策提示)
+│  │   └─ 还有xxx项未决策(点击跳转到未决策资料)
 │  └─ InsightCards(洞察卡片列表)
 │      ├─ InsightCard
 │      │   ├─ 核心洞察
 │      │   ├─ 支持数据
 │      │   ├─ 推荐用途标签
 │      │   ├─ 局限性说明
-│      │   ├─ 用户判断输入框(用户填写观点是否可取)
-│      │   └─ 用户操作区(选择/排除/降级)
-├─ ContradictionsPanel(矛盾与空白面板)
-│  └─ GapCards(矛盾/空白卡片列表)
-│      ├─ GapCard
-│      │   ├─ 问题描述
-│      │   └─ 用户操作区(响应/忽略)
+│      │   └─ 用户操作区(必须使用/背景补充/排除)
+├─ LogPanel(日志面板)
+│  ├─ 运行步骤显示
+│  └─ 日志详情按钮
 └─ BottomActionBar(底部操作栏)
     └─ 确认并进入下一步按钮
 ```
@@ -211,33 +225,36 @@ ResearchSynthesisInput = {
 **用户交互流程**
 
 1. Agent 输出 THOUGHT 以及除 user_decision 之外的所有内容
-2. 系统展示所有洞察和矛盾/空白,默认全部采用
-3. 用户选择是否采用每条观点
-4. 用户完成选择后,系统更新 user_decision 字段
+2. 系统展示所有洞察,默认全部未决策
+3. 用户可通过以下方式进行决策:
+   - 单个选择:对每条洞察选择必须使用/背景补充/排除
+   - 批量选择:勾选多条洞察后批量设置为必须使用/背景补充/排除
+   - 一键全选:将所有洞察设置为必须使用
+4. 系统实时统计未决策数量,显示还有xxx项未决策
+5. 点击未决策提示可直接跳转到第一条未决策资料
+6. 用户完成所有决策后,系统更新 user_decision 字段
 
 **功能说明**
 
 - 调用 Research Synthesis Agent 整理用户在资料检索阶段选择的资料
-- 显示对应观点、数据等内容
-- 用户可进一步填写自己的判断,评价观点是否可取
+- 左侧面板显示资料类型统计和审阅指南
+- 右侧面板显示具体资料内容和操作区
+- 支持批量选择和一键全选功能
+- 实时显示未决策数量,点击可跳转到未决策资料
 - Research Synthesis Agent 输出的结果保存在 Supabase 数据库中
+- 页面底部显示日志框,展示运行步骤
+- 日志框包含日志详情按钮,点击后弹窗显示 Research Synthesis Agent 接收到的输入、输出以及 LLM 输出的 THOUGHT 部分内容
 
 **用户操作**
 
 对每条洞察,用户可选择:
-- 必须使用(must_use)
-- 作为背景(background)
-- 排除(excluded)
-
-对每条洞察,用户可填写自己的判断(观点是否可取)
-
-对每个矛盾/空白,用户可选择:
-- 响应(respond)
-- 忽略(ignore)
+- 必须使用(must_use):核心观点,将直接用于文章论证
+- 背景补充(background):辅助信息,可作为背景或补充说明
+- 排除(excluded):不相关或不适用的内容
 
 **确认条件**
 
-- 用户完成所有洞察的选择和判断填写后,确认并进入下一步按钮启用
+- 用户完成所有洞察的决策后,确认并进入下一步按钮启用
 - 点击后保存用户决策,进入文章结构生成阶段
 
 #### 阶段 5:文章结构生成
@@ -486,13 +503,6 @@ SynthesisDecision {
     {
       insight_id: string
       usage: 'must_use' | 'background' | 'excluded'
-      user_judgment: string
-    }
-  ]
-  gaps: [
-    {
-      gap_id: string
-      action: 'respond' | 'ignore'
     }
   ]
 }
@@ -639,17 +649,12 @@ POST /writing/decision/synthesis
     insights: [
       {
         insight_id: i1,
-        usage: must_use,
-        user_judgment: 观点可取,数据支持充分
+        usage: must_use
       },
       {
         insight_id: i2,
-        usage: excluded,
-        user_judgment: 观点存在偏差
+        usage: excluded
       }
-    ],
-    gaps: [
-      { gap_id: g1, action: respond }
     ]
   }
 }

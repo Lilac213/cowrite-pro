@@ -1919,6 +1919,18 @@ export async function getOrCreateWritingSession(projectId: string): Promise<Writ
   return data as WritingSession;
 }
 
+// 获取写作会话
+export async function getWritingSession(projectId: string): Promise<WritingSession | null> {
+  const { data, error } = await supabase
+    .from('writing_sessions')
+    .select('*')
+    .eq('project_id', projectId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as WritingSession | null;
+}
+
 // 更新写作会话阶段
 export async function updateWritingSessionStage(
   sessionId: string,
@@ -2001,6 +2013,33 @@ export async function callResearchSynthesisAgent(
   }
   
   console.log('[callResearchSynthesisAgent] 返回数据:', data);
+  
+  // 保存 synthesis_result 到 writing_sessions
+  if (sessionId && data) {
+    try {
+      const { error: updateError } = await supabase
+        .from('writing_sessions')
+        .update({
+          synthesis_result: {
+            thought: data.thought,
+            input: body.input || { projectId: body.projectId },
+            synthesis: data.synthesis,
+            timestamp: new Date().toISOString()
+          },
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', sessionId);
+      
+      if (updateError) {
+        console.error('[callResearchSynthesisAgent] 保存 synthesis_result 失败:', updateError);
+      } else {
+        console.log('[callResearchSynthesisAgent] synthesis_result 已保存到 writing_sessions');
+      }
+    } catch (saveError) {
+      console.error('[callResearchSynthesisAgent] 保存 synthesis_result 异常:', saveError);
+    }
+  }
+  
   return data as SynthesisResult;
 }
 

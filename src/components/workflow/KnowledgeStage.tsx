@@ -791,11 +791,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
   // 处理进入下一步（从搜索结果直接进入）
   const handleNextStep = async () => {
-    // 检查是否已完成研究阶段决策
+    // 检查是否已完成研究综合
     if (!researchStageComplete) {
       toast({
         title: '请先完成资料整理',
-        description: '需要先点击"资料整理"并完成所有决策后才能进入下一阶段',
+        description: '需要先点击"资料整理"并完成研究综合后才能进入下一阶段',
         variant: 'destructive',
       });
       return;
@@ -813,66 +813,23 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     try {
       setConfirming(true);
       
-      // 调试：检查当前洞察状态
-      console.log('[handleNextStep] ========== 开始进入下一阶段 ==========');
-      console.log('[handleNextStep] writingSession.id:', writingSession.id);
-      console.log('[handleNextStep] projectId:', projectId);
-      
-      // 获取当前洞察状态
-      const { getResearchInsights, getResearchGaps } = await import('@/db/api');
-      const currentInsights = await getResearchInsights(writingSession.id);
-      const currentGaps = await getResearchGaps(writingSession.id);
-      
-      console.log('[handleNextStep] 当前洞察总数:', currentInsights.length);
-      console.log('[handleNextStep] 当前空白总数:', currentGaps.length);
-      console.log('[handleNextStep] 洞察决策分布:', {
-        adopt: currentInsights.filter(i => i.user_decision === 'adopt').length,
-        downgrade: currentInsights.filter(i => i.user_decision === 'downgrade').length,
-        reject: currentInsights.filter(i => i.user_decision === 'reject').length,
-        pending: currentInsights.filter(i => i.user_decision === 'pending').length,
-      });
-      
-      // 详细输出每条洞察
-      currentInsights.forEach((insight, index) => {
-        console.log(`[handleNextStep] 洞察 ${index + 1}:`, {
-          id: insight.id,
-          insight_id: insight.insight_id,
-          decision: insight.user_decision,
-          category: insight.category,
-          content: insight.insight.substring(0, 50) + '...'
-        });
-      });
-      
-      // 1. 生成文章结构（基于用户确认的洞察）
-      toast({
-        title: '正在生成文章结构',
-        description: '基于您确认的研究洞察生成论证结构...',
-      });
-      
-      await callArticleStructureAgent(writingSession.id, projectId);
-      
-      // 2. 更新写作会话阶段
-      await updateWritingSessionStage(writingSession.id, 'structure');
-      
-      // 3. 更新项目状态
+      // 更新项目状态到资料整理阶段
       await updateProject(projectId, { 
-        status: 'outline_confirmed'
+        status: 'material_review'
       });
       
       toast({
-        title: '已进入下一阶段',
-        description: '文章结构已生成，开始结构设计',
+        title: '已进入资料整理阶段',
+        description: '请审阅研究资料并做出决策',
       });
+      
       onComplete();
     } catch (error: any) {
-      console.error('[handleNextStep] ========== 发生错误 ==========');
-      console.error('[handleNextStep] 错误类型:', error.constructor?.name);
-      console.error('[handleNextStep] 错误消息:', error.message);
-      console.error('[handleNextStep] 错误堆栈:', error.stack);
+      console.error('[handleNextStep] 进入下一阶段失败:', error);
       
       toast({
         title: '操作失败',
-        description: error.message || '无法生成文章结构',
+        description: error.message || '无法进入下一阶段',
         variant: 'destructive',
       });
     } finally {
