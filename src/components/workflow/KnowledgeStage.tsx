@@ -651,16 +651,16 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
       setSearchProgress({ 
         stage: '完成', 
-        message: `已检索到 ${loadedMaterials.length} 条资料，请选择需要的资料`,
+        message: `已检索到 ${loadedMaterials.length} 条资料，可以开始资料整理`,
       });
       setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成']);
 
       toast({
         title: '✅ 资料检索完成',
-        description: `已检索到 ${loadedMaterials.length} 条资料，请选择需要的资料`,
+        description: `已检索到 ${loadedMaterials.length} 条资料，可以开始资料整理`,
       });
 
-      // 注意：不再自动保存到知识库，等待用户选择资料后再保存
+      // 注意：资料将在用户点击"资料整理"时自动保存到知识库
       // 旧的自动保存代码已被注释
 
       // 保存综合结果到项目（暂时为空）
@@ -1076,7 +1076,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     console.log('[handleOrganize] writingSession:', writingSession);
     console.log('[handleOrganize] knowledge.length:', knowledge.length);
     console.log('[handleOrganize] retrievedMaterials.length:', retrievedMaterials.length);
-    console.log('[handleOrganize] retrievedMaterials 选中数量:', retrievedMaterials.filter(m => m.is_selected).length);
     
     if (!writingSession) {
       toast({
@@ -1087,7 +1086,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       return;
     }
 
-    if (knowledge.length === 0) {
+    if (retrievedMaterials.length === 0) {
       toast({
         title: '暂无资料',
         description: '请先进行资料搜索',
@@ -1103,28 +1102,28 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       // 添加初始日志
       setSynthesisLogs(['[' + new Date().toLocaleTimeString('zh-CN') + '] 开始资料整理...']);
       
-      // 1. 获取选中的资料
-      console.log('[handleOrganize] 调用 getSelectedMaterials，sessionId:', writingSession.id);
-      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在获取选中的资料...']);
-      const selectedMaterials = await getSelectedMaterials(writingSession.id);
-      console.log('[handleOrganize] getSelectedMaterials 返回结果:', selectedMaterials);
-      console.log('[handleOrganize] 选中资料数量:', selectedMaterials.length);
+      // 1. 获取所有检索到的资料（不再只获取选中的资料）
+      console.log('[handleOrganize] 调用 getRetrievedMaterials，sessionId:', writingSession.id);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在获取检索到的资料...']);
+      const allMaterials = await getRetrievedMaterials(writingSession.id);
+      console.log('[handleOrganize] getRetrievedMaterials 返回结果:', allMaterials);
+      console.log('[handleOrganize] 资料总数:', allMaterials.length);
       
-      if (selectedMaterials.length === 0) {
-        console.error('[handleOrganize] 没有选中的资料');
+      if (allMaterials.length === 0) {
+        console.error('[handleOrganize] 没有可用的资料');
         toast({
-          title: '请选择资料',
-          description: '至少选择一条资料才能继续',
+          title: '暂无资料',
+          description: '请先进行资料搜索',
           variant: 'destructive',
         });
         setSynthesizing(false);
         return;
       }
 
-      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 已选择 ' + selectedMaterials.length + ' 条资料']);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 共 ' + allMaterials.length + ' 条资料待整理']);
 
-      // 2. 将选中的资料保存到 knowledge_base 表（检查是否已存在）
-      console.log('[handleOrganize] 开始保存选中的资料到 knowledge_base，数量:', selectedMaterials.length);
+      // 2. 将所有资料保存到 knowledge_base 表（检查是否已存在）
+      console.log('[handleOrganize] 开始保存资料到 knowledge_base，数量:', allMaterials.length);
       setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在保存资料到知识库...']);
       
       // 先获取已存在的资料
@@ -1132,7 +1131,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       const existingUrls = new Set(existingKnowledge.map(k => k.source_url).filter(Boolean));
       
       let savedCount = 0;
-      for (const material of selectedMaterials) {
+      for (const material of allMaterials) {
         // 跳过已存在的资料（通过 URL 判断）
         if (material.url && existingUrls.has(material.url)) {
           console.log('[handleOrganize] 资料已存在，跳过:', material.title);
@@ -1392,7 +1391,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                   </span>
                 ) : retrievedMaterials.length > 0 ? (
                   <span>
-                    请从搜索结果中选择资料，然后点击"资料整理"
+                    点击"资料整理"将自动整理所有搜索结果
                   </span>
                 ) : (
                   <span>

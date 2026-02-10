@@ -29,6 +29,13 @@
   - [x] 修复缓存加载逻辑：优先从数据库加载资料
   - [x] 添加详细日志以便调试选择状态同步问题
 
+- [x] 修改资料整理流程为自动处理所有资料
+  - [x] 修改 handleOrganize 使用 getRetrievedMaterials 而非 getSelectedMaterials
+  - [x] 移除"至少选择一条资料"的验证逻辑
+  - [x] 更新 UI 提示文本，说明将自动整理所有搜索结果
+  - [x] 更新搜索完成后的提示信息
+  - [x] 保留复选框功能（供未来扩展使用）
+
 ## 实现详情
 
 ### 1. 改进资料整理日志
@@ -611,6 +618,100 @@ console.log('[initSession] 从缓存加载搜索计划和日志');
 2. 选择状态是否正确更新
 3. getSelectedMaterials 返回了多少条资料
 4. 每个步骤的执行顺序和结果
+
+### 5. 修改资料整理流程为自动处理所有资料
+
+#### 问题描述
+用户希望 Research Synthesis Agent 自动处理所有搜索结果，而不需要手动选择资料。
+
+#### 解决方案
+
+##### 1. 修改 handleOrganize 函数
+将 `getSelectedMaterials` 改为 `getRetrievedMaterials`，处理所有检索到的资料：
+
+```typescript
+// 1. 获取所有检索到的资料（不再只获取选中的资料）
+console.log('[handleOrganize] 调用 getRetrievedMaterials，sessionId:', writingSession.id);
+setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在获取检索到的资料...']);
+const allMaterials = await getRetrievedMaterials(writingSession.id);
+console.log('[handleOrganize] getRetrievedMaterials 返回结果:', allMaterials);
+console.log('[handleOrganize] 资料总数:', allMaterials.length);
+
+if (allMaterials.length === 0) {
+  console.error('[handleOrganize] 没有可用的资料');
+  toast({
+    title: '暂无资料',
+    description: '请先进行资料搜索',
+    variant: 'destructive',
+  });
+  setSynthesizing(false);
+  return;
+}
+
+setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 共 ' + allMaterials.length + ' 条资料待整理']);
+```
+
+##### 2. 更新验证逻辑
+- 移除"至少选择一条资料"的验证
+- 改为检查是否有任何检索到的资料
+- 使用 `retrievedMaterials.length` 而非 `knowledge.length` 进行验证
+
+##### 3. 更新 UI 提示文本
+```typescript
+{researchStageComplete ? (
+  <span className="text-green-600 font-medium flex items-center gap-2">
+    <CheckCircle2 className="h-4 w-4" />
+    研究阶段已完成，可以进入下一阶段
+  </span>
+) : retrievedMaterials.length > 0 ? (
+  <span>
+    点击"资料整理"将自动整理所有搜索结果
+  </span>
+) : (
+  <span>
+    请先进行资料搜索
+  </span>
+)}
+```
+
+##### 4. 更新搜索完成提示
+```typescript
+toast({
+  title: '✅ 资料检索完成',
+  description: `已检索到 ${loadedMaterials.length} 条资料，可以开始资料整理`,
+});
+```
+
+#### 新的工作流程
+```
+用户搜索 → 资料检索完成
+           ↓
+    显示所有搜索结果（无需选择）
+           ↓
+用户点击"资料整理" → handleOrganize
+           ↓
+    getRetrievedMaterials(sessionId) → 获取所有资料
+           ↓
+    保存所有资料到 knowledge_base
+           ↓
+    调用 Research Synthesis Agent
+           ↓
+    生成研究洞察和空白
+           ↓
+    显示审阅界面 ✅
+```
+
+#### 关键改进
+1. **自动处理**：无需用户手动选择，自动处理所有搜索结果
+2. **简化流程**：减少用户操作步骤，提升效率
+3. **保留复选框**：复选框功能保留，供未来扩展使用（如删除、标记等）
+4. **清晰提示**：UI 提示明确告知用户将处理所有资料
+
+#### 用户体验
+- 搜索完成后，用户可以直接点击"资料整理"
+- 系统自动处理所有搜索结果
+- 无需手动勾选资料
+- 流程更加流畅和高效
 
 ## 用户体验改进
 
