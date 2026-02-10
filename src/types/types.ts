@@ -73,11 +73,17 @@ export interface ArgumentBlock {
   title: string;
   description: string;
   order: number;
+  relation?: string;
+  derived_from?: string[];
+  user_editable?: boolean;
 }
 
 export interface ArticleArgumentStructure {
   core_thesis: string;
   argument_blocks: ArgumentBlock[];
+  structure_relations?: string;
+  status?: string;
+  allowed_user_actions?: string[];
 }
 
 export interface Project {
@@ -303,6 +309,7 @@ export interface WritingSession {
   current_stage: WritingStage;
   locked_core_thesis: boolean;
   locked_structure: boolean;
+  structure_result?: ArticleArgumentStructure;
   created_at: string;
   updated_at: string;
 }

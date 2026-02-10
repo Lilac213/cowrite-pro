@@ -220,6 +220,7 @@ ResearchSynthesisInput = {
 - 调用 Research Synthesis Agent 整理用户在资料检索阶段选择的资料
 - 显示对应观点、数据等内容
 - 用户可进一步填写自己的判断,评价观点是否可取
+- Research Synthesis Agent 输出的结果保存在 Supabase 数据库中
 
 **用户操作**
 
@@ -240,8 +241,169 @@ ResearchSynthesisInput = {
 - 点击后保存用户决策,进入文章结构生成阶段
 
 #### 阶段 5:文章结构生成
-- 基于需求文档和用户在资料整理阶段的决策,生成文章结构
-- 用户可对文章结构进行确认、调整或重新生成
+
+**输入 JSON 串**
+
+这是上一步 synthesis 输出 → 经过 user decision → 系统整理后,唯一允许传给结构 Agent 的输入形态:
+
+```json
+{
+  \"topic\": \"AI Agent 项目的商业失败原因分析\",
+  \"user_core_thesis\": null,
+  \"confirmed_insights\": [
+    {
+      \"id\": \"insight_1\",
+      \"category\": \"AI Agent 商业失败原因\",
+      \"content\": \"多数 AI Agent 项目失败并非模型能力不足,而是缺乏清晰的用户任务闭环。\",
+      \"source_insight_id\": \"insight_1\"
+    }
+  ],
+  \"context_flags\": {
+    \"confirmed_insight_count\": 1,
+    \"contradictions_or_gaps_present\": true
+  }
+}
+```
+
+**输入字段设计说明**
+
+| 字段 | 作用 |
+|------|------|
+| topic | 结构聚焦锚点 |
+| user_core_thesis | 用户强控位(最高优先级) |
+| confirmed_insights | 唯一可用信息源 |
+| category | 结构聚合提示,不是判断 |
+| context_flags | 只提示存在性,防止 AI 补全 |
+
+注意:
+- 没有 supporting_data
+- 没有 pending / optional
+- 没有 contradictions_or_gaps 的具体内容
+
+**Prompt**
+
+```
+你是 CoWrite 的文章级论证架构 Agent(User-Gated)。
+
+你的职责不是写文章,而是:
+基于用户已确认的研究洞察,生成一份可编辑、可确认的文章论证结构草案。
+
+────────────────
+输入前提(强制)
+────────────────
+- 你只能使用 user 已确认(confirmed)的洞察
+- 任何 pending / optional / ignored 的内容一律不可使用
+- 不允许引入新观点、新材料或隐含前提
+- 若已确认洞察不足以支撑结构,必须明确指出,而不是补全
+
+────────────────
+输入
+────────────────
+以下是结构化 JSON 数据,请严格按字段理解:
+{{INPUT_JSON}}
+
+────────────────
+你的任务
+────────────────
+1. 基于 confirmed_insights,提炼文章核心论点(一句话)
+   - 若 user_core_thesis 已提供,必须完全服从
+2. 拆分 3–5 个一级论证块(章节级)
+3. 为每个论证块明确论证任务(说明要证明什么,而不是写什么)
+4. 说明论证块之间的逻辑关系(递进 / 并列 / 因果 / 对比 等)
+
+────────────────
+结构边界
+────────────────
+- 不生成正文内容
+- 不展开案例、数据或引用
+- 不处理研究冲突与空白(除非已被升级为 confirmed_insight)
+- 输出必须保持高度可编辑性,便于用户删除或重排
+
+────────────────
+输出要求
+────────────────
+- 仅以 JSON 输出
+- 结构生成后必须停在等待用户确认状态
+- 不得进入写作阶段
+```
+
+**输出 JSON 串**
+
+```json
+{
+  \"core_thesis\": \"AI Agent 项目的失败更多源于用户任务闭环缺失,而非模型能力不足。\",
+  \"argument_blocks\": [
+    {
+      \"id\": \"block_1\",
+      \"title\": \"用户任务闭环缺失的普遍性\",
+      \"description\": \"论证在大量 AI Agent 项目中,未能定义清晰、可执行的用户任务闭环是一种普遍现象。\",
+      \"order\": 1,
+      \"relation\": \"起始论证块,提出核心问题\",
+      \"derived_from\": [\"insight_1\"],
+      \"user_editable\": true
+    },
+    {
+      \"id\": \"block_2\",
+      \"title\": \"任务不清对产品价值转化的影响\",
+      \"description\": \"说明用户任务不清如何导致 Agent 能力无法转化为稳定、可感知的产品价值。\",
+      \"order\": 2,
+      \"relation\": \"递进:从现象到影响\",
+      \"derived_from\": [\"insight_1\"],
+      \"user_editable\": true
+    },
+    {
+      \"id\": \"block_3\",
+      \"title\": \"从模型能力迷思回到产品设计问题\",
+      \"description\": \"对比模型能力提升与任务定义缺失之间的错位,澄清失败原因的常见误判。\",
+      \"order\": 3,
+      \"relation\": \"对比:纠正常见解释偏差\",
+      \"derived_from\": [\"insight_1\"],
+      \"user_editable\": true
+    }
+  ],
+  \"structure_relations\": \"文章采用递进式结构,从问题现象出发,分析影响机制,并对常见误解进行澄清。\",
+  \"status\": \"awaiting_user_confirmation\",
+  \"allowed_user_actions\": [\"edit_core_thesis\", \"delete_block\", \"reorder_blocks\"]
+}
+```
+
+**后端实现**
+
+Structure Agent 的输入(后端拼接):
+
+后端需要进行内容筛选:
+
+```javascript
+const structureAgentInput = {
+  topic,
+  writing_goal,
+  audience,
+
+  accepted_insights: synthesis_result.synthesized_insights
+    .filter(i => session.user_decisions.insights[i.id] === \"accept\"),
+
+  accepted_gaps: synthesis_result.contradictions_or_gaps
+    .filter(g => session.user_decisions.gaps[g.id] === \"accept\")
+};
+```
+
+注意:剩下的 insights 不丢,只是:
+- 不进 structure
+- 还留在 session 里,后面写作/扩展再用
+
+Structure Agent 输出存储:
+
+```javascript
+session.structure_result = {
+  outline: [...],
+  section_purpose_map: {...},
+  coverage_map: {...}
+};
+
+session.current_stage = WritingStage.STRUCTURE;
+```
+
+用户可对文章结构进行确认、调整或重新生成
 
 #### 阶段 6:段落结构
 - 逐段生成段落结构

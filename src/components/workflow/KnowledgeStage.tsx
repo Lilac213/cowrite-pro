@@ -28,6 +28,7 @@ import {
   batchUpdateRetrievedMaterialSelection,
   updateInsightDecision,
   updateGapDecision,
+  callArticleStructureAgent,
 } from '@/db/api';
 import type { KnowledgeBase, WritingSession, ResearchInsight, ResearchGap, SynthesisResult, RetrievedMaterial } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -810,24 +811,38 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     }
 
     try {
-      // 更新写作会话阶段
+      setConfirming(true);
+      
+      // 1. 生成文章结构（基于用户确认的洞察）
+      toast({
+        title: '正在生成文章结构',
+        description: '基于您确认的研究洞察生成论证结构...',
+      });
+      
+      await callArticleStructureAgent(writingSession.id, projectId);
+      
+      // 2. 更新写作会话阶段
       await updateWritingSessionStage(writingSession.id, 'structure');
       
-      // 更新项目状态
+      // 3. 更新项目状态
       await updateProject(projectId, { 
         status: 'outline_confirmed'
       });
       
       toast({
         title: '已进入下一阶段',
-        description: '开始文章结构设计',
+        description: '文章结构已生成，开始结构设计',
       });
       onComplete();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('进入下一阶段失败:', error);
       toast({
         title: '操作失败',
+        description: error.message || '无法生成文章结构',
         variant: 'destructive',
       });
+    } finally {
+      setConfirming(false);
     }
   };
 
