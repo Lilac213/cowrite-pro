@@ -143,6 +143,25 @@ async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
     }
   }
 }
+/**
+ * 清理和修复 JSON 文本中的常见问题
+ */
+function cleanJsonText(jsonText: string): string {
+  // 移除 markdown 代码块标记
+  jsonText = jsonText.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '');
+  
+  // 移除 BOM 和其他不可见字符
+  jsonText = jsonText.replace(/^\uFEFF/, '');
+  
+  // 移除尾部的逗号（在数组或对象的最后一个元素后）
+  jsonText = jsonText.replace(/,(\s*[}\]])/g, '$1');
+  
+  // 尝试修复未转义的换行符（在字符串中）
+  // 这个比较复杂，需要小心处理
+  
+  return jsonText.trim();
+}
+
 // ============ End of LLM Client ============
 
 const corsHeaders = {
@@ -364,6 +383,9 @@ Core Tasks:
 - 允许 ---THOUGHT---
 - 系统只解析 ---JSON---
 - JSON 必须是「等待用户筛选的素材池」，而不是可直接写作内容
+- JSON 必须是有效的、格式正确的 JSON，不能有语法错误
+- 字符串中的引号必须转义，换行符使用 \n
+- 不要在 JSON 中使用注释
 
 Output Format:
 ---THOUGHT---
@@ -393,6 +415,14 @@ Output Format:
     }
   ]
 }
+---END---
+
+⚠️ JSON 格式要求（强制）:
+- 必须以 ---JSON--- 开始，以 ---END--- 结束
+- JSON 对象必须完整，所有括号必须匹配
+- 字符串中不能有未转义的引号或换行符
+- 数组最后一个元素后不能有逗号
+- 对象最后一个属性后不能有逗号
 
 🔒 行为约束（强制）:
 - 所有 insight 默认 user_decision = pending
@@ -425,15 +455,50 @@ ${materialsContent}
     const content = llmResult.content;
 
     // 解析 JSON
-    const jsonMatch = content.match(/---JSON---\s*([\s\S]*?)(?:---|\n\n|$)/);
+    const jsonMatch = content.match(/---JSON---\s*([\s\S]*?)(?:---END---|---THOUGHT|$)/);
     if (!jsonMatch) {
+      console.error("无法找到 JSON 标记，LLM 返回内容:", content.substring(0, 500));
       return new Response(
-        JSON.stringify({ error: "无法解析 LLM 返回的 JSON" }),
+        JSON.stringify({ error: "无法解析 LLM 返回的 JSON：未找到 JSON 标记" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const synthesisData = JSON.parse(jsonMatch[1].trim());
+    let jsonText = cleanJsonText(jsonMatch[1]);
+    
+    // 尝试解析 JSON
+    let synthesisData: any;
+    try {
+      synthesisData = JSON.parse(jsonText);
+    } catch (parseError: any) {
+      console.error("JSON 解析失败:", parseError.message);
+      console.error("JSON 文本（前 1000 字符）:", jsonText.substring(0, 1000));
+      
+      return new Response(
+        JSON.stringify({ 
+          error: "JSON 解析失败", 
+          details: parseError.message,
+          jsonPreview: jsonText.substring(0, 500)
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 验证数据结构
+    if (!synthesisData || typeof synthesisData !== 'object') {
+      return new Response(
+        JSON.stringify({ error: "解析的数据格式不正确" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 确保必要字段存在
+    if (!synthesisData.synthesized_insights) {
+      synthesisData.synthesized_insights = [];
+    }
+    if (!synthesisData.contradictions_or_gaps) {
+      synthesisData.contradictions_or_gaps = [];
+    }
 
     // 提取 THOUGHT
     const thoughtMatch = content.match(/---THOUGHT---\s*([\s\S]*?)---JSON---/);
