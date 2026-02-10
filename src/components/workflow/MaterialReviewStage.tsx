@@ -43,14 +43,22 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sessionId, setSessionId] = useState<string>('');
   const [synthesisLog, setSynthesisLog] = useState<any>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [showLogsDialog, setShowLogsDialog] = useState(false);
   const { toast } = useToast();
 
-  // 分类统计
+  // 分类统计（包含未决策数量）
   const categoryStats = useMemo(() => {
-    const stats: Record<string, number> = {};
+    const stats: Record<string, { total: number; pending: number }> = {};
     materials.forEach(item => {
       if (item.type === 'insight') {
-        stats[item.category] = (stats[item.category] || 0) + 1;
+        if (!stats[item.category]) {
+          stats[item.category] = { total: 0, pending: 0 };
+        }
+        stats[item.category].total += 1;
+        if (item.decision === 'pending') {
+          stats[item.category].pending += 1;
+        }
       }
     });
     return stats;
@@ -65,6 +73,12 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
   const decidedCount = useMemo(() => {
     return materials.filter(m => m.decision !== 'pending').length;
   }, [materials]);
+
+  // 过滤后的资料列表
+  const filteredMaterials = useMemo(() => {
+    if (!selectedCategory) return materials;
+    return materials.filter(m => m.category === selectedCategory);
+  }, [materials, selectedCategory]);
 
   useEffect(() => {
     loadMaterials();
@@ -405,50 +419,6 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
                   还有 {pendingCount} 项未决策
                 </Button>
               )}
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <FileText className="w-4 h-4 mr-2" />
-                    日志详情
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-4xl max-h-[80vh]">
-                  <DialogHeader>
-                    <DialogTitle>研究综合日志</DialogTitle>
-                  </DialogHeader>
-                  <ScrollArea className="h-[60vh]">
-                    <div className="space-y-4 p-4">
-                      {synthesisLog ? (
-                        <>
-                          <div>
-                            <h3 className="font-semibold mb-2">思考过程 (Thought)</h3>
-                            <pre className="bg-muted p-4 rounded-lg text-sm whitespace-pre-wrap">
-                              {synthesisLog.thought || '无思考过程记录'}
-                            </pre>
-                          </div>
-                          <div>
-                            <h3 className="font-semibold mb-2">输入数据</h3>
-                            <pre className="bg-muted p-4 rounded-lg text-sm overflow-auto">
-                              {JSON.stringify(synthesisLog.input || {}, null, 2)}
-                            </pre>
-                          </div>
-                          <div>
-                            <h3 className="font-semibold mb-2">输出结果</h3>
-                            <pre className="bg-muted p-4 rounded-lg text-sm overflow-auto">
-                              {JSON.stringify(synthesisLog.synthesis || {}, null, 2)}
-                            </pre>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="text-center text-muted-foreground py-8">
-                          <Info className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                          <p>暂无日志数据</p>
-                        </div>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </DialogContent>
-              </Dialog>
               <Button
                 onClick={handleNextStage}
                 disabled={saving || pendingCount > 0}
@@ -471,10 +441,34 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
               <CardTitle className="text-base">资料类型</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {Object.entries(categoryStats).map(([category, count]) => (
-                <div key={category} className="flex items-center justify-between py-2 border-b last:border-0">
-                  <span className="text-sm">{category}</span>
-                  <Badge variant="secondary">{count} 条</Badge>
+              <div 
+                className={cn(
+                  "flex items-center justify-between py-2 px-3 rounded-md cursor-pointer transition-colors hover:bg-accent",
+                  !selectedCategory && "bg-accent"
+                )}
+                onClick={() => setSelectedCategory(null)}
+              >
+                <span className="text-sm font-medium">全部</span>
+                <Badge variant="secondary">{materials.length} 条</Badge>
+              </div>
+              {Object.entries(categoryStats).map(([category, stats]) => (
+                <div 
+                  key={category} 
+                  className={cn(
+                    "flex items-center justify-between py-2 px-3 rounded-md cursor-pointer transition-colors hover:bg-accent",
+                    selectedCategory === category && "bg-accent"
+                  )}
+                  onClick={() => setSelectedCategory(category)}
+                >
+                  <div className="flex flex-col gap-1">
+                    <span className="text-sm">{category}</span>
+                    {stats.pending > 0 && (
+                      <span className="text-xs text-orange-600">
+                        还剩 {stats.pending} 条未决策
+                      </span>
+                    )}
+                  </div>
+                  <Badge variant="secondary">{stats.total} 条</Badge>
                 </div>
               ))}
             </CardContent>
@@ -560,7 +554,12 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
             <CardContent>
               <ScrollArea className="h-[600px]">
                 <div className="space-y-4">
-                  {materials.map((material) => (
+                  {filteredMaterials.length === 0 ? (
+                    <div className="text-center text-muted-foreground py-12">
+                      <p>该分类下暂无资料</p>
+                    </div>
+                  ) : (
+                    filteredMaterials.map((material) => (
                     <div
                       key={material.id}
                       id={`material-${material.id}`}
@@ -615,7 +614,8 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
                         </div>
                       </div>
                     </div>
-                  ))}
+                  ))
+                  )}
                 </div>
               </ScrollArea>
             </CardContent>
@@ -623,37 +623,72 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
         </div>
       </div>
 
-      {/* 底部日志框 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">运行日志</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <CheckCircle2 className="w-4 h-4 text-green-600" />
-              <span>资料搜索已完成</span>
+      {/* 底部固定日志栏 */}
+      {synthesisLog && (
+        <div 
+          className="fixed bottom-0 left-0 right-0 bg-black text-white border-t border-gray-800 shadow-lg z-50 cursor-pointer hover:bg-gray-900 transition-colors"
+          onClick={() => setShowLogsDialog(true)}
+        >
+          <div className="container mx-auto px-6 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Badge variant="secondary" className="bg-green-600 text-white">
+                LATEST LOG
+              </Badge>
+              <span className="text-sm">
+                {new Date().toLocaleTimeString('zh-CN')} 研究综合已完成
+              </span>
             </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <CheckCircle2 className="w-4 h-4 text-green-600" />
-              <span>研究综合已完成</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {pendingCount === 0 ? (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-white hover:text-white hover:bg-white/10"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              日志详情
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 日志详情对话框 */}
+      <Dialog open={showLogsDialog} onOpenChange={setShowLogsDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>研究综合日志</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh]">
+            <div className="space-y-4 p-4">
+              {synthesisLog ? (
                 <>
-                  <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  <span className="text-green-600">所有资料已完成决策</span>
+                  <div>
+                    <h3 className="font-semibold mb-2">思考过程 (Thought)</h3>
+                    <div className="bg-muted p-4 rounded-lg text-sm whitespace-pre-wrap prose prose-sm max-w-none">
+                      {synthesisLog.thought || '无思考过程记录'}
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-2">输入数据</h3>
+                    <pre className="bg-muted p-4 rounded-lg text-sm overflow-auto">
+                      {JSON.stringify(synthesisLog.input || {}, null, 2)}
+                    </pre>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-2">输出结果</h3>
+                    <pre className="bg-muted p-4 rounded-lg text-sm overflow-auto">
+                      {JSON.stringify(synthesisLog.synthesis || {}, null, 2)}
+                    </pre>
+                  </div>
                 </>
               ) : (
-                <>
-                  <AlertCircle className="w-4 h-4 text-orange-600" />
-                  <span className="text-orange-600">等待资料决策完成 ({decidedCount}/{materials.length})</span>
-                </>
+                <div className="text-center text-muted-foreground py-8">
+                  <Info className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>暂无日志数据</p>
+                </div>
               )}
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -794,6 +794,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     console.log('[handleNextStep] 开始进入下一阶段');
     console.log('[handleNextStep] writingSession:', writingSession);
     console.log('[handleNextStep] retrievedMaterials.length:', retrievedMaterials.length);
+    console.log('[handleNextStep] knowledge.length:', knowledge.length);
     console.log('[handleNextStep] researchStageComplete:', researchStageComplete);
 
     if (!writingSession) {
@@ -805,7 +806,10 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       return;
     }
 
-    if (retrievedMaterials.length === 0) {
+    // 如果 retrievedMaterials 为空但 knowledge 有数据，使用 knowledge
+    const materialsToUse = retrievedMaterials.length > 0 ? retrievedMaterials : knowledge;
+    
+    if (materialsToUse.length === 0) {
       toast({
         title: '暂无资料',
         description: '请先进行资料搜索',
@@ -835,7 +839,10 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         console.log('[handleNextStep] getRetrievedMaterials 返回结果:', allMaterials);
         console.log('[handleNextStep] 资料总数:', allMaterials.length);
         
-        if (allMaterials.length === 0) {
+        // 如果数据库中没有资料，使用当前的 knowledge 或 retrievedMaterials
+        const finalMaterials = allMaterials.length > 0 ? allMaterials : materialsToUse;
+        
+        if (finalMaterials.length === 0) {
           console.error('[handleNextStep] 没有可用的资料');
           toast({
             title: '暂无资料',
@@ -846,38 +853,46 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           return;
         }
 
-        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 共 ' + allMaterials.length + ' 条资料待整理']);
+        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 共 ' + finalMaterials.length + ' 条资料待整理']);
 
         // 2. 将所有资料保存到 knowledge_base 表
-        console.log('[handleNextStep] 开始保存资料到 knowledge_base，数量:', allMaterials.length);
+        console.log('[handleNextStep] 开始保存资料到 knowledge_base，数量:', finalMaterials.length);
         setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在保存资料到知识库...']);
         
         const existingKnowledge = await getKnowledgeBase(projectId);
         const existingUrls = new Set(existingKnowledge.map(k => k.source_url).filter(Boolean));
         
         let savedCount = 0;
-        for (const material of allMaterials) {
-          if (material.url && existingUrls.has(material.url)) {
+        for (const material of finalMaterials) {
+          // 处理 RetrievedMaterial 和 KnowledgeBase 类型
+          const isRetrievedMaterial = 'url' in material;
+          const materialUrl = isRetrievedMaterial ? material.url : (material as any).source_url;
+          const materialSourceType = isRetrievedMaterial ? material.source_type : (material as any).source;
+          const materialAbstract = isRetrievedMaterial ? material.abstract : '';
+          const materialYear = isRetrievedMaterial ? material.year : null;
+          const materialContent = isRetrievedMaterial ? '' : (material as any).content;
+          
+          if (materialUrl && existingUrls.has(materialUrl)) {
             console.log('[handleNextStep] 资料已存在，跳过:', material.title);
             continue;
           }
           
           try {
             let publishedAt = material.published_at;
-            if (!publishedAt && material.year) {
-              publishedAt = `${material.year}-01-01T00:00:00Z`;
+            if (!publishedAt && materialYear) {
+              publishedAt = `${materialYear}-01-01T00:00:00Z`;
             }
             
             await createKnowledgeBase({
               project_id: projectId,
               title: material.title,
-              content: material.abstract || material.full_text || '',
-              source: material.source_type,
-              source_url: material.url,
+              content: materialAbstract || material.full_text || materialContent || '',
+              source: materialSourceType,
+              source_url: materialUrl,
               published_at: publishedAt,
               collected_at: material.created_at,
               selected: true,
-              content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
+              content_status: material.full_text ? 'full_text' : materialAbstract ? 'abstract_only' : 'insufficient_content',
               extracted_content: material.full_text ? [material.full_text] : [],
               full_text: material.full_text,
             });
@@ -1520,7 +1535,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                   </span>
                 ) : (
                   <span>
-                    请先进行资料搜索
+                    已加载 {knowledge.length} 条资料，点击"进入下一阶段"开始整理
                   </span>
                 )}
               </div>
@@ -1528,7 +1543,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 <Button 
                   onClick={handleNextStep}
                   className="min-w-[140px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-                  disabled={confirming || retrievedMaterials.length === 0}
+                  disabled={confirming || (retrievedMaterials.length === 0 && knowledge.length === 0)}
                 >
                   {confirming ? '处理中...' : '进入下一阶段'}
                   <ArrowRight className="h-4 w-4 ml-2" />
