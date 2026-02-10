@@ -36,7 +36,84 @@
   - [x] 更新搜索完成后的提示信息
   - [x] 保留复选框功能（供未来扩展使用）
 
-## 重要提示：API 密钥配置
+## 重要提示：LLM 服务架构升级
+
+### 新架构（v138+）
+
+CoWrite 现在使用**双层 LLM 架构**，大幅提升服务可用性：
+
+#### 第一层：内置 Gemini 模型（主要）
+- **模型**: Google Gemini 2.5 Flash
+- **特点**: 系统内置，无需配置，免费使用
+- **优势**: 响应快速，稳定可靠
+- **状态**: ✅ 已部署并测试
+
+#### 第二层：用户配置的 Qwen 模型（备用）
+- **模型**: Qwen 2.5-7B-Instruct (通过 SiliconFlow)
+- **特点**: 需要管理员配置 API 密钥
+- **用途**: 当 Gemini 不可用时自动切换
+- **状态**: ✅ 已部署并测试
+
+### 工作原理
+
+```
+用户请求 → 尝试 Gemini → 成功 → 返回结果
+                ↓
+              失败
+                ↓
+         尝试 Qwen → 成功 → 返回结果
+                ↓
+              失败
+                ↓
+           返回错误提示
+```
+
+### 用户体验改进
+
+1. **无需配置即可使用**：大多数用户无需配置任何 API 密钥
+2. **自动回退**：Gemini 不可用时自动切换到 Qwen
+3. **透明切换**：用户无感知，系统自动选择最佳模型
+4. **详细日志**：管理员可在日志中查看使用的模型
+
+### 已移除的功能
+
+为了简化架构和提高维护性，以下功能已被移除：
+
+1. ❌ **OpenAI 集成**: 移除了 OpenAI API 调用代码
+2. ❌ **Anthropic 集成**: 移除了 Claude API 调用代码
+3. ❌ **Tavily Search**: 删除了 tavily-search Edge Function
+4. ❌ **Smart Search**: 删除了 smart-search Edge Function
+
+### 技术实现
+
+#### 更新的 Edge Functions
+1. ✅ **research-synthesis-agent**: 使用新的双层 LLM 架构
+2. ✅ **llm-generate**: 使用新的双层 LLM 架构
+3. ✅ **summarize-content**: 使用新的双层 LLM 架构
+
+#### 代码位置
+- LLM 客户端代码: 内联在每个 Edge Function 中（Line 12-155）
+- Gemini 调用: `callGemini()` 函数
+- Qwen 调用: `callQwen()` 函数
+- 统一接口: `callLLM()` 函数
+
+### 配置说明（可选）
+
+**大多数情况下不需要配置**。仅在以下情况需要配置 Qwen API Key：
+1. Gemini 服务暂时不可用
+2. 需要使用特定的 Qwen 模型特性
+3. 系统提示"Gemini 和 Qwen 均不可用"
+
+配置方法：
+1. 访问 https://cloud.siliconflow.cn 获取 API Key
+2. 在管理面板的「系统配置」→「LLM 配置」中配置
+3. 保存后立即生效
+
+详细说明请查看 API_KEY_SETUP.md 文件。
+
+---
+
+## 旧版说明（已过时，仅供参考）
 
 ### 问题（已解决）
 Research Synthesis Agent 调用失败，错误信息：
@@ -47,6 +124,8 @@ Research Synthesis Agent 调用失败，错误信息：
 Edge Function `research-synthesis-agent` 需要 LLM API 密钥来调用 SiliconFlow API，但该密钥未配置。
 
 ### 解决方案（已实现）
+
+现在系统使用内置的 Gemini 模型，无需配置即可使用。Qwen 仅作为备用方案。
 
 #### 方案 1：通过管理面板配置（推荐）✅
 

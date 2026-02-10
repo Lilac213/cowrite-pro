@@ -9,6 +9,146 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============ 统一的 LLM 调用客户端 ============
+interface LLMMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+interface LLMCallOptions {
+  messages: LLMMessage[];
+  temperature?: number;
+  maxTokens?: number;
+}
+
+interface LLMResponse {
+  content: string;
+  model: string;
+}
+
+/**
+ * 调用内置 Gemini 模型
+ */
+async function callGemini(options: LLMCallOptions): Promise<LLMResponse> {
+  const geminiUrl = "https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:generateContent";
+  
+  const systemInstruction = options.messages.find(m => m.role === 'system')?.content || '';
+  const contents = options.messages
+    .filter(m => m.role !== 'system')
+    .map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+
+  const requestBody: any = {
+    contents,
+    generationConfig: {
+      temperature: options.temperature || 0.7,
+      maxOutputTokens: options.maxTokens || 4096,
+    }
+  };
+
+  if (systemInstruction) {
+    requestBody.systemInstruction = {
+      parts: [{ text: systemInstruction }]
+    };
+  }
+
+  const response = await fetch(geminiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API 调用失败 (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  
+  return { content, model: 'gemini-2.5-flash' };
+}
+
+/**
+ * 调用用户配置的 Qwen 模型
+ */
+async function callQwen(options: LLMCallOptions, apiKey: string): Promise<LLMResponse> {
+  const response = await fetch("https://api.siliconflow.cn/v1/chat/completions", {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "Qwen/Qwen2.5-7B-Instruct",
+      messages: options.messages,
+      temperature: options.temperature || 0.7,
+      max_tokens: options.maxTokens || 4096,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Qwen API 调用失败 (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json();
+  return { content: data.choices[0].message.content, model: 'Qwen2.5-7B-Instruct' };
+}
+
+/**
+ * 获取用户配置的 API 密钥
+ */
+async function getQwenApiKey(): Promise<string | null> {
+  const { data: configData } = await supabase
+    .from("system_config")
+    .select("config_value")
+    .eq("config_key", "llm_api_key")
+    .maybeSingle();
+  
+  return configData?.config_value || Deno.env.get("QIANWEN_API_KEY") || null;
+}
+
+/**
+ * 统一的 LLM 调用接口（优先 Gemini，回退 Qwen）
+ */
+async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
+  try {
+    console.log("尝试调用内置 Gemini 模型...");
+    const response = await callGemini(options);
+    console.log("✓ Gemini 调用成功");
+    return response;
+  } catch (geminiError) {
+    console.warn("Gemini 调用失败，尝试回退到 Qwen:", geminiError);
+    
+    try {
+      const apiKey = await getQwenApiKey();
+      if (!apiKey) {
+        throw new Error(
+          "Gemini 调用失败，且未配置 Qwen API 密钥。" +
+          "请在管理面板的「系统配置」→「LLM 配置」中配置 SiliconFlow API 密钥。"
+        );
+      }
+      
+      console.log("尝试调用用户配置的 Qwen 模型...");
+      const response = await callQwen(options, apiKey);
+      console.log("✓ Qwen 调用成功（回退）");
+      return response;
+    } catch (qwenError) {
+      console.error("Qwen 调用也失败:", qwenError);
+      throw new Error(`LLM 调用失败：Gemini 和 Qwen 均不可用`);
+    }
+  }
+}
+// ============ End of LLM Client ============
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -23,35 +163,6 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    // 获取 API 密钥 - 优先从 system_config 读取，其次从环境变量
-    let apiKey = Deno.env.get("QIANWEN_API_KEY");
-    
-    // 尝试从 system_config 表读取
-    const { data: configData, error: configError } = await supabase
-      .from("system_config")
-      .select("config_value")
-      .eq("config_key", "llm_api_key")
-      .maybeSingle();
-    
-    if (configData?.config_value) {
-      apiKey = configData.config_value;
-      console.log("使用 system_config 中的 API 密钥");
-    } else if (apiKey) {
-      console.log("使用环境变量中的 API 密钥");
-    }
-    
-    if (!apiKey) {
-      console.error("API 密钥未配置");
-      return new Response(
-        JSON.stringify({ 
-          error: "API 密钥未配置。请在管理面板的「系统配置」→「LLM 配置」中配置 SiliconFlow API 密钥。\n\n获取密钥：访问 https://cloud.siliconflow.cn 注册并创建 API Key。" 
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    
-    console.log("API密钥已配置，长度:", apiKey.length);
 
     // 获取项目信息
     const { data: project, error: projectError } = await supabase
@@ -243,54 +354,19 @@ ${materialsContent}
 
 请按照 Research Synthesis Agent 的要求，将这些资料整理为可供用户选择的研究素材池。`;
 
-    // 调用 LLM
-    const llmResponse = await fetch("https://api.siliconflow.cn/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "Qwen/Qwen2.5-7B-Instruct",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage }
-        ],
-        temperature: 0.7,
-        max_tokens: 4000,
-      }),
+    // 调用 LLM（优先 Gemini，回退 Qwen）
+    console.log("开始调用 LLM 进行资料综合...");
+    const llmResult = await callLLM({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage }
+      ],
+      temperature: 0.7,
+      maxTokens: 4000,
     });
 
-    if (!llmResponse.ok) {
-      const errorText = await llmResponse.text();
-      console.error("LLM API 错误:", {
-        status: llmResponse.status,
-        statusText: llmResponse.statusText,
-        error: errorText
-      });
-      
-      // 针对 401 错误提供更详细的指导
-      let errorMessage = `LLM API 调用失败 (${llmResponse.status})`;
-      if (llmResponse.status === 401) {
-        errorMessage = "API 密钥无效或未配置。请访问 https://cloud.siliconflow.cn 获取有效的 API Key，然后在 Supabase 项目的 Edge Functions Secrets 中配置 QIANWEN_API_KEY，配置完成后需要重新部署 Edge Function。";
-      } else {
-        errorMessage += `: ${errorText.substring(0, 200)}`;
-      }
-      
-      return new Response(
-        JSON.stringify({ 
-          error: errorMessage,
-          details: {
-            status: llmResponse.status,
-            message: errorText
-          }
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const llmData = await llmResponse.json();
-    const content = llmData.choices[0].message.content;
+    console.log(`LLM 调用成功，使用模型: ${llmResult.model}`);
+    const content = llmResult.content;
 
     // 解析 JSON
     const jsonMatch = content.match(/---JSON---\s*([\s\S]*?)(?:---|\n\n|$)/);

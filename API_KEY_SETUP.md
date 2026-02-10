@@ -1,17 +1,47 @@
 # API 密钥配置指南
 
-## 问题描述
+## LLM 服务架构
 
-当您点击"资料整理"按钮时，看到以下错误：
+CoWrite 使用**双层 LLM 架构**，确保服务的稳定性和可用性：
+
+### 第一层：内置 Gemini 模型（优先）
+- **模型**: Google Gemini 2.5 Flash
+- **特点**: 系统内置，无需配置，免费使用
+- **优势**: 响应快速，稳定可靠
+
+### 第二层：用户配置的 Qwen 模型（回退）
+- **模型**: Qwen 2.5-7B-Instruct (通过 SiliconFlow)
+- **特点**: 需要管理员配置 API 密钥
+- **用途**: 当 Gemini 不可用时自动切换
+
+## 工作原理
 
 ```
-资料整理失败
-API 密钥未配置
+用户请求 → 尝试调用 Gemini
+              ↓
+         Gemini 成功？
+         ↙        ↘
+       是          否
+       ↓           ↓
+    返回结果    尝试调用 Qwen
+                   ↓
+              Qwen 成功？
+              ↙        ↘
+            是          否
+            ↓           ↓
+         返回结果    返回错误
 ```
 
-这表示 Research Synthesis Agent 无法调用 LLM API，因为 API 密钥未配置。
+## 何时需要配置 API 密钥？
 
-## 快速解决（推荐方式）
+**大多数情况下不需要配置**。系统会优先使用内置的 Gemini 模型。
+
+**仅在以下情况需要配置**：
+1. Gemini 服务暂时不可用
+2. 需要使用特定的 Qwen 模型特性
+3. 系统提示"Gemini 和 Qwen 均不可用"
+
+## 配置步骤（可选）
 
 ### 第一步：获取 SiliconFlow API 密钥
 
@@ -71,7 +101,21 @@ supabase functions deploy research-synthesis-agent
 
 ## 常见问题
 
-### Q1: 我已经配置了 API Key，为什么还是报错？
+### Q1: 我需要配置 API Key 吗？
+
+**A**: 大多数情况下**不需要**。系统默认使用内置的 Gemini 模型，无需任何配置即可使用。只有当 Gemini 不可用时，才需要配置 Qwen API Key 作为备用。
+
+### Q2: 如何知道系统正在使用哪个模型？
+
+**A**: 查看 Edge Function 日志（Supabase Dashboard → Edge Functions → Logs），会显示：
+- `✓ Gemini 调用成功` - 使用 Gemini
+- `✓ Qwen 调用成功（回退）` - 使用 Qwen
+
+### Q3: Gemini 是免费的吗？
+
+**A**: 是的，内置的 Gemini 模型由系统提供，用户无需支付任何费用。
+
+### Q4: 我已经配置了 API Key，为什么还是报错？
 
 **A**: 请确保：
 1. API Key 格式正确（通常以 `sk-` 开头）
@@ -79,38 +123,40 @@ supabase functions deploy research-synthesis-agent
 3. API Key 在 SiliconFlow 平台上是有效的（未过期、未删除）
 4. 刷新页面后重试
 
-### Q2: 我不是管理员，如何配置 API Key？
+### Q5: 我不是管理员，如何配置 API Key？
 
 **A**: API Key 配置需要管理员权限。请联系您的系统管理员进行配置。如果您是项目所有者但不是管理员，可以：
 1. 登录 Supabase Dashboard
 2. 在数据库中找到 `profiles` 表
 3. 将您的用户记录的 `role` 字段改为 `admin`
 
-### Q3: SiliconFlow 是什么？为什么要用它？
+### Q6: SiliconFlow 是什么？为什么要用它？
 
-**A**: SiliconFlow 是一个 LLM API 服务平台，提供多种开源模型的 API 接口。CoWrite 使用它来调用通义千问（Qwen）模型进行研究综合分析。选择 SiliconFlow 的原因：
+**A**: SiliconFlow 是一个 LLM API 服务平台，提供多种开源模型的 API 接口。CoWrite 使用它作为 Gemini 的备用方案。选择 SiliconFlow 的原因：
 - 提供免费额度
 - 支持高质量的开源模型
 - API 稳定可靠
 - 国内访问速度快
 
-### Q4: 使用 SiliconFlow 需要付费吗？
+### Q7: 使用 SiliconFlow 需要付费吗？
 
 **A**: SiliconFlow 提供免费额度，具体请查看其官网的定价说明。对于个人研究和小规模使用，免费额度通常足够。
 
-### Q5: 可以使用其他 LLM API 吗？
+### Q8: 可以使用其他 LLM API 吗？
 
-**A**: 目前 CoWrite 的 Research Synthesis Agent 配置为使用 SiliconFlow 的通义千问模型。如果您想使用其他 API（如 OpenAI、Claude 等），需要修改 Edge Function 代码。
+**A**: 目前 CoWrite 支持 Gemini 和 Qwen 两种模型。如果您想使用其他 API（如 OpenAI、Claude 等），需要修改 Edge Function 代码。
 
-### Q6: 如何查看 API 使用情况？
+### Q9: 如何查看 API 使用情况？
 
-**A**: 登录 SiliconFlow 控制台，在"使用统计"或"Usage"页面可以查看 API 调用次数和消费情况。
+**A**: 
+- **Gemini**: 系统内置，无需查看使用情况
+- **Qwen**: 登录 SiliconFlow 控制台，在"使用统计"或"Usage"页面可以查看 API 调用次数和消费情况
 
-### Q7: 配置保存后多久生效？
+### Q10: 配置保存后多久生效？
 
 **A**: 立即生效！系统采用动态配置读取机制，Edge Function 每次调用时都会从数据库读取最新配置，无需重启或重新部署。
 
-### Q8: 如何知道配置是否成功？
+### Q11: 如何知道配置是否成功？
 
 **A**: 在管理面板的"LLM 配置"卡片右上角，会显示配置状态：
 - ✓ 已配置：表示 API Key 已保存
@@ -120,9 +166,43 @@ supabase functions deploy research-synthesis-agent
 
 ## 技术细节
 
+### LLM 调用架构
+
+CoWrite 实现了**智能回退机制**，确保服务的高可用性：
+
+```typescript
+async function callLLM(options) {
+  try {
+    // 第一次尝试：调用内置 Gemini
+    return await callGemini(options);
+  } catch (geminiError) {
+    // 第二次尝试：调用用户配置的 Qwen
+    const apiKey = await getQwenApiKey();
+    if (!apiKey) {
+      throw new Error("两个模型均不可用");
+    }
+    return await callQwen(options, apiKey);
+  }
+}
+```
+
+### 使用的服务和模型
+
+#### 主要模型：Gemini 2.5 Flash
+- **API 端点**: `https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:generateContent`
+- **提供商**: Google (系统内置)
+- **认证方式**: 无需认证（系统级）
+- **特点**: 快速、稳定、免费
+
+#### 备用模型：Qwen 2.5-7B-Instruct
+- **API 端点**: `https://api.siliconflow.cn/v1/chat/completions`
+- **提供商**: SiliconFlow
+- **认证方式**: Bearer Token
+- **特点**: 高质量中文支持
+
 ### 配置读取机制
 
-Edge Function 按以下优先级读取 API 密钥：
+Edge Function 按以下优先级读取 Qwen API 密钥：
 
 1. **数据库配置（优先）**：
    - 表名：`system_config`
@@ -135,19 +215,25 @@ Edge Function 按以下优先级读取 API 密钥：
    - 读取时机：数据库配置不存在时
    - 优点：适合高级用户和自动化部署
 
-### 使用的服务和模型
-
-- **API 服务商**: SiliconFlow (https://api.siliconflow.cn)
-- **使用模型**: Qwen/Qwen2.5-7B-Instruct
-- **API 端点**: https://api.siliconflow.cn/v1/chat/completions
-- **认证方式**: Bearer Token
-
 ### 相关文件和代码位置
 
-#### Edge Function
-- **文件路径**: `/supabase/functions/research-synthesis-agent/index.ts`
-- **配置读取**: Line 20-48
-- **API 调用**: Line 230-280
+#### Edge Functions
+所有 Edge Function 都内置了统一的 LLM 调用逻辑：
+
+1. **research-synthesis-agent**
+   - 文件路径: `/supabase/functions/research-synthesis-agent/index.ts`
+   - LLM 客户端: Line 12-155
+   - 调用位置: Line 246-253
+
+2. **llm-generate**
+   - 文件路径: `/supabase/functions/llm-generate/index.ts`
+   - LLM 客户端: Line 8-135
+   - 调用位置: Line 171-177
+
+3. **summarize-content**
+   - 文件路径: `/supabase/functions/summarize-content/index.ts`
+   - LLM 客户端: Line 8-130
+   - 调用位置: Line 145-151
 
 #### 管理面板
 - **文件路径**: `/src/pages/AdminPage.tsx`
@@ -171,21 +257,49 @@ Edge Function 使用以下环境变量：
 | `SUPABASE_URL` | Supabase 项目 URL | ✅ 是 | 自动配置 |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase 服务密钥 | ✅ 是 | 自动配置 |
 
-### 配置流程图
+### 调用流程图
 
 ```
-管理员在 UI 输入 API Key
+用户请求（如：资料整理）
          ↓
-点击"保存配置"按钮
+Edge Function 接收请求
          ↓
-调用 updateSystemConfig API
+调用 callLLM()
          ↓
-写入 system_config 表
+尝试 Gemini API
          ↓
-立即生效（无需重启）
-         ↓
-下次调用时 Edge Function 读取最新配置
+    成功？
+    ↙  ↘
+  是    否
+  ↓     ↓
+返回  从数据库读取 Qwen API Key
+结果    ↓
+     存在？
+     ↙  ↘
+   是    否
+   ↓     ↓
+调用   返回
+Qwen  错误
+API
+   ↓
+ 成功？
+ ↙  ↘
+是    否
+↓     ↓
+返回  返回
+结果  错误
 ```
+
+### 已移除的功能
+
+为了简化架构和提高维护性，以下功能已被移除：
+
+1. **OpenAI 集成**: 移除了 OpenAI API 调用代码
+2. **Anthropic 集成**: 移除了 Claude API 调用代码
+3. **Tavily Search**: 删除了 tavily-search Edge Function
+4. **Smart Search**: 删除了 smart-search Edge Function
+
+所有 LLM 调用现在统一使用 Gemini + Qwen 双层架构。
 
 ## 需要帮助？
 

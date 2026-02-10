@@ -5,6 +5,123 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============ 统一的 LLM 调用客户端 ============
+interface LLMMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+interface LLMCallOptions {
+  messages: LLMMessage[];
+  temperature?: number;
+  maxTokens?: number;
+}
+
+interface LLMResponse {
+  content: string;
+  model: string;
+}
+
+async function callGemini(options: LLMCallOptions): Promise<LLMResponse> {
+  const geminiUrl = "https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:generateContent";
+  
+  const systemInstruction = options.messages.find(m => m.role === 'system')?.content || '';
+  const contents = options.messages
+    .filter(m => m.role !== 'system')
+    .map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+
+  const requestBody: any = {
+    contents,
+    generationConfig: {
+      temperature: options.temperature || 0.7,
+      maxOutputTokens: options.maxTokens || 4096,
+    }
+  };
+
+  if (systemInstruction) {
+    requestBody.systemInstruction = {
+      parts: [{ text: systemInstruction }]
+    };
+  }
+
+  const response = await fetch(geminiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API 调用失败 (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  
+  return { content, model: 'gemini-2.5-flash' };
+}
+
+async function callQwen(options: LLMCallOptions, apiKey: string): Promise<LLMResponse> {
+  const response = await fetch("https://api.siliconflow.cn/v1/chat/completions", {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "Qwen/Qwen2.5-7B-Instruct",
+      messages: options.messages,
+      temperature: options.temperature || 0.7,
+      max_tokens: options.maxTokens || 4096,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Qwen API 调用失败 (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json();
+  return { content: data.choices[0].message.content, model: 'Qwen2.5-7B-Instruct' };
+}
+
+async function getQwenApiKey(): Promise<string | null> {
+  return Deno.env.get("QIANWEN_API_KEY") || null;
+}
+
+async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
+  try {
+    console.log("尝试调用内置 Gemini 模型...");
+    const response = await callGemini(options);
+    console.log("✓ Gemini 调用成功");
+    return response;
+  } catch (geminiError) {
+    console.warn("Gemini 调用失败，尝试回退到 Qwen:", geminiError);
+    
+    try {
+      const apiKey = await getQwenApiKey();
+      if (!apiKey) {
+        throw new Error(
+          "Gemini 调用失败，且未配置 Qwen API 密钥。" +
+          "请在管理面板的「系统配置」→「LLM 配置」中配置 SiliconFlow API 密钥。"
+        );
+      }
+      
+      console.log("尝试调用用户配置的 Qwen 模型...");
+      const response = await callQwen(options, apiKey);
+      console.log("✓ Qwen 调用成功（回退）");
+      return response;
+    } catch (qwenError) {
+      console.error("Qwen 调用也失败:", qwenError);
+      throw new Error(`LLM 调用失败：Gemini 和 Qwen 均不可用`);
+    }
+  }
+}
+// ============ End of LLM Client ============
+
 const SUMMARIZE_PROMPT = `你是一位专业的内容分析专家。请分析以下文本内容，提取关键信息。
 
 任务：
@@ -37,40 +154,21 @@ serve(async (req) => {
       throw new Error('缺少必需参数：content');
     }
 
-    const apiKey = Deno.env.get('LLM_API_KEY');
-    const apiUrl = Deno.env.get('LLM_API_URL') || 'https://api.openai.com/v1/chat/completions';
-    const model = Deno.env.get('LLM_MODEL') || 'gpt-4o-mini';
-
-    if (!apiKey) {
-      throw new Error('未配置 LLM API 密钥');
-    }
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: 'user',
-            content: SUMMARIZE_PROMPT + content,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 1000,
-      }),
+    // 调用统一的 LLM 客户端（优先 Gemini，回退 Qwen）
+    console.log("调用 LLM 生成摘要...");
+    const llmResult = await callLLM({
+      messages: [
+        {
+          role: 'user',
+          content: SUMMARIZE_PROMPT + content,
+        },
+      ],
+      temperature: 0.3,
+      maxTokens: 1000,
     });
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      throw new Error(`LLM API 错误: ${response.status} - ${errorData}`);
-    }
-
-    const data = await response.json();
-    const resultText = data.choices[0]?.message?.content || '';
+    console.log(`LLM 调用成功，使用模型: ${llmResult.model}`);
+    const resultText = llmResult.content;
 
     // 解析 JSON 响应
     let result;

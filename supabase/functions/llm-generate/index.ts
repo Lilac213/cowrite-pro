@@ -5,6 +5,129 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============ 统一的 LLM 调用客户端 ============
+interface LLMMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+interface LLMCallOptions {
+  messages: LLMMessage[];
+  temperature?: number;
+  maxTokens?: number;
+}
+
+interface LLMResponse {
+  content: string;
+  model: string;
+}
+
+async function callGemini(options: LLMCallOptions): Promise<LLMResponse> {
+  const geminiUrl = "https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:generateContent";
+  
+  const systemInstruction = options.messages.find(m => m.role === 'system')?.content || '';
+  const contents = options.messages
+    .filter(m => m.role !== 'system')
+    .map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+
+  const requestBody: any = {
+    contents,
+    generationConfig: {
+      temperature: options.temperature || 0.7,
+      maxOutputTokens: options.maxTokens || 4096,
+    }
+  };
+
+  if (systemInstruction) {
+    requestBody.systemInstruction = {
+      parts: [{ text: systemInstruction }]
+    };
+  }
+
+  const response = await fetch(geminiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API 调用失败 (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  
+  return { content, model: 'gemini-2.5-flash' };
+}
+
+async function callQwen(options: LLMCallOptions, apiKey: string): Promise<LLMResponse> {
+  const response = await fetch("https://api.siliconflow.cn/v1/chat/completions", {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "Qwen/Qwen2.5-7B-Instruct",
+      messages: options.messages,
+      temperature: options.temperature || 0.7,
+      max_tokens: options.maxTokens || 4096,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Qwen API 调用失败 (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json();
+  return { content: data.choices[0].message.content, model: 'Qwen2.5-7B-Instruct' };
+}
+
+async function getQwenApiKey(supabaseClient: any): Promise<string | null> {
+  const { data: configData } = await supabaseClient
+    .from("system_config")
+    .select("config_value")
+    .eq("config_key", "llm_api_key")
+    .maybeSingle();
+  
+  return configData?.config_value || Deno.env.get("QIANWEN_API_KEY") || null;
+}
+
+async function callLLM(options: LLMCallOptions, supabaseClient: any): Promise<LLMResponse> {
+  try {
+    console.log("尝试调用内置 Gemini 模型...");
+    const response = await callGemini(options);
+    console.log("✓ Gemini 调用成功");
+    return response;
+  } catch (geminiError) {
+    console.warn("Gemini 调用失败，尝试回退到 Qwen:", geminiError);
+    
+    try {
+      const apiKey = await getQwenApiKey(supabaseClient);
+      if (!apiKey) {
+        throw new Error(
+          "Gemini 调用失败，且未配置 Qwen API 密钥。" +
+          "请在管理面板的「系统配置」→「LLM 配置」中配置 SiliconFlow API 密钥。"
+        );
+      }
+      
+      console.log("尝试调用用户配置的 Qwen 模型...");
+      const response = await callQwen(options, apiKey);
+      console.log("✓ Qwen 调用成功（回退）");
+      return response;
+    } catch (qwenError) {
+      console.error("Qwen 调用也失败:", qwenError);
+      throw new Error(`LLM 调用失败：Gemini 和 Qwen 均不可用`);
+    }
+  }
+}
+// ============ End of LLM Client ============
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -28,34 +151,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 获取系统配置（从 system_config 表读取）
-    const { data: configs, error: configError } = await supabaseClient
-      .from('system_config')
-      .select('config_key, config_value')
-      .in('config_key', ['llm_provider', 'llm_api_key']);
-
-    if (configError) {
-      return new Response(
-        JSON.stringify({ error: '无法获取系统配置' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const configMap = configs.reduce((acc, item) => {
-      acc[item.config_key] = item.config_value;
-      return acc;
-    }, {} as Record<string, string>);
-
-    const llmProvider = configMap['llm_provider'];
-    const llmApiKey = configMap['llm_api_key'];
-
-    if (!llmApiKey || !llmProvider) {
-      return new Response(
-        JSON.stringify({ error: '系统 LLM 配置未完成，请联系管理员配置' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     // 解析请求体
     const { prompt, context, systemMessage } = await req.json();
 
@@ -66,113 +161,35 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 根据提供商调用不同的 API
-    let result = '';
+    // 构建消息数组
+    const messages = [
+      ...(systemMessage ? [{ role: 'system' as const, content: systemMessage }] : []),
+      ...(context ? [{ role: 'user' as const, content: context }] : []),
+      { role: 'user' as const, content: prompt },
+    ];
+
+    // 调用统一的 LLM 客户端（优先 Gemini，回退 Qwen）
+    console.log("调用 LLM 生成内容...");
+    const llmResult = await callLLM({
+      messages,
+      temperature: 0.7,
+      maxTokens: 4096,
+    }, supabaseClient);
+
+    console.log(`LLM 调用成功，使用模型: ${llmResult.model}`);
+    let result = llmResult.content;
     
-    if (llmProvider === 'qwen') {
-      // 通义千问 API
-      const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${llmApiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'qwen-plus',
-          input: {
-            messages: [
-              ...(systemMessage ? [{ role: 'system', content: systemMessage }] : []),
-              ...(context ? [{ role: 'user', content: context }] : []),
-              { role: 'user', content: prompt },
-            ],
-          },
-          parameters: {
-            temperature: 0.7,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`通义千问 API 错误: ${error}`);
-      }
-
-      const data = await response.json();
-      result = data.output?.text || data.output?.choices?.[0]?.message?.content || '';
-      
-      // 清理可能的 markdown 代码块标记
-      result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    } else if (llmProvider === 'openai') {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${llmApiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            ...(systemMessage ? [{ role: 'system', content: systemMessage }] : []),
-            ...(context ? [{ role: 'user', content: context }] : []),
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.7,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`OpenAI API 错误: ${error}`);
-      }
-
-      const data = await response.json();
-      result = data.choices[0].message.content;
-      
-      // 清理可能的 markdown 代码块标记
-      result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    } else if (llmProvider === 'anthropic') {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': llmApiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 4096,
-          system: systemMessage || '',
-          messages: [
-            ...(context ? [{ role: 'user', content: context }] : []),
-            { role: 'user', content: prompt },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Anthropic API 错误: ${error}`);
-      }
-
-      const data = await response.json();
-      result = data.content[0].text;
-      
-      // 清理可能的 markdown 代码块标记
-      result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    } else {
-      return new Response(
-        JSON.stringify({ error: `不支持的 LLM 提供商: ${llmProvider}` }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // 清理可能的 markdown 代码块标记
+    result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
     return new Response(
       JSON.stringify({ result }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
+    console.error("LLM 生成错误:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message || '生成失败' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

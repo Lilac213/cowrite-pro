@@ -1381,22 +1381,12 @@ export async function academicSearchWorkflow(userQueryZh: string) {
     searchPromises.push(Promise.resolve({ papers: [] }));
   }
   
-  // TheNews + Smart Search 搜索（如果有网页意图）
+  // TheNews 搜索（如果有网页意图）
   if (webQueries.queries.length > 0) {
-    // 使用第一个查询同时搜索 TheNews 和 Smart Search
+    // 使用第一个查询搜索 TheNews
     const query = webQueries.queries[0];
     searchPromises.push(
-      Promise.all([
-        searchTheNews(query).catch(() => ({ papers: [], summary: '', sources: [] })),
-        searchSmartSearch(query).catch(() => ({ papers: [], summary: '', sources: [] })),
-      ]).then(([newsResults, webResults]) => {
-        // 合并两个搜索结果
-        return {
-          papers: [...(newsResults.papers || []), ...(webResults.papers || [])],
-          summary: newsResults.summary || webResults.summary || '',
-          sources: [...(newsResults.sources || []), ...(webResults.sources || [])],
-        };
-      })
+      searchTheNews(query).catch(() => ({ papers: [], summary: '', sources: [] }))
     );
   } else {
     searchPromises.push(Promise.resolve({ papers: [], summary: '', sources: [] }));
@@ -1455,16 +1445,6 @@ async function searchGoogleScholar(query: string) {
 async function searchTheNews(query: string) {
   const { data, error } = await supabase.functions.invoke('thenews-search', {
     body: { query, limit: 10 },
-  });
-  
-  if (error) throw error;
-  return data;
-}
-
-// Smart Search 搜索（网页搜索）
-async function searchSmartSearch(query: string) {
-  const { data, error } = await supabase.functions.invoke('smart-search', {
-    body: { query, count: 10, freshness: 'Month' },
   });
   
   if (error) throw error;
