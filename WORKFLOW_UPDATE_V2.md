@@ -325,16 +325,39 @@ const loadMaterials = async () => {
 3. 建议用户刷新页面或重新执行资料查询
 
 ### 问题 3: "JSON object requested, multiple (or no) rows returned"
-**原因**: `getWritingSession` 使用 `.maybeSingle()` 但返回了多行或零行
+**原因**: `getWritingSession` 使用 `.maybeSingle()` 但返回了多行（存在重复的 writing_sessions 记录）
 
 **排查步骤**:
 1. 检查 `writing_sessions` 表是否有重复记录
 2. 确认查询条件 `project_id` 是否正确
 
 **解决方案**:
-1. 清理重复的 writing_sessions 记录
-2. 确保每个 project 只有一个 active session
-3. 考虑添加唯一约束：`UNIQUE(project_id)`
+1. ✅ **已修复**: 更新 `getWritingSession` 函数，添加 `.order('created_at', { ascending: false }).limit(1)` 获取最新的 session
+2. ✅ **已修复**: 添加数据库唯一约束 `writing_sessions_project_id_unique` 防止重复记录
+3. ✅ **已修复**: 清理了数据库中的重复 writing_sessions 记录
+
+**修复代码**:
+```typescript
+export async function getWritingSession(projectId: string): Promise<WritingSession | null> {
+  const { data, error } = await supabase
+    .from('writing_sessions')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false })  // 按创建时间倒序
+    .limit(1)                                    // 只取最新的一条
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as WritingSession | null;
+}
+```
+
+**数据库约束**:
+```sql
+-- 确保每个项目只有一个写作会话
+ALTER TABLE writing_sessions
+ADD CONSTRAINT writing_sessions_project_id_unique UNIQUE (project_id);
+```
 
 ## 后续优化建议
 

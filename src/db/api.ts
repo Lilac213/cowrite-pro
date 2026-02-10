@@ -1915,7 +1915,23 @@ export async function getOrCreateWritingSession(projectId: string): Promise<Writ
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    // 如果是唯一约束冲突（可能是并发创建），重新获取
+    if (error.code === '23505') {
+      const { data: retry, error: retryError } = await supabase
+        .from('writing_sessions')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (retryError) throw retryError;
+      return retry as WritingSession;
+    }
+    throw error;
+  }
+  
   return data as WritingSession;
 }
 
@@ -1925,6 +1941,8 @@ export async function getWritingSession(projectId: string): Promise<WritingSessi
     .from('writing_sessions')
     .select('*')
     .eq('project_id', projectId)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) throw error;
