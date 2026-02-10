@@ -4,12 +4,13 @@ import RequirementsDocDialog from './RequirementsDocDialog';
 
 const stages = [
   { key: 'init', label: '开始', progress: 0 },
-  { key: 'confirm_brief', label: '明确需求', progress: 12 },
-  { key: 'knowledge_selected', label: '资料查询', progress: 24 },
-  { key: 'outline_confirmed', label: '文章结构', progress: 36 },
-  { key: 'paragraph_structure_confirmed', label: '段落结构', progress: 48 },
-  { key: 'drafting', label: '文章生成', progress: 60 },
-  { key: 'review_pass_1', label: '内容审校', progress: 75 },
+  { key: 'confirm_brief', label: '明确需求', progress: 10 },
+  { key: 'knowledge_selected', label: '资料查询', progress: 20 },
+  { key: 'material_review', label: '资料整理', progress: 30 },
+  { key: 'outline_confirmed', label: '文章结构', progress: 40 },
+  { key: 'paragraph_structure_confirmed', label: '段落结构', progress: 50 },
+  { key: 'drafting', label: '文章生成', progress: 65 },
+  { key: 'review_pass_1', label: '内容审校', progress: 80 },
   { key: 'layout_export', label: '排版导出', progress: 90 },
   { key: 'completed', label: '完成', progress: 100 },
 ];
