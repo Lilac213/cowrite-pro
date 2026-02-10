@@ -95,7 +95,7 @@ ResearchRetrievalPage
 
 确认条件:
 - 用户完成资料选择后,确认并进入下一步按钮启用
-- 点击后保存用户选择的资料,进入资料整理阶段
+- 点击后保存用户选择的资料,跳转至资料整理页面
 
 #### 阶段 4:资料整理
 
@@ -177,17 +177,17 @@ ResearchSynthesisInput = {
 
 ```typescript
 {
-  \"synthesized_insights\": [
+  \\"synthesized_insights\": [
     {
-      \"id\": \"insight_1\",
+      \\"id\": \"insight_1\",
       \"category\": \"AI Agent 商业失败原因\",
       \"insight\": \"多数 AI Agent 项目失败并非模型能力不足,而是缺乏清晰的用户任务闭环\",
       \"supporting_data\": [
-        \"超过 60% 的项目未能定义核心用户任务\",
+        \\"超过 60% 的项目未能定义核心用户任务\",
         \"失败案例集中在多场景泛化尝试\"
       ],
       \"source_type\": \"academic\",
-      \"recommended_usage\": \"direct\",
+      \\"recommended_usage\": \"direct\",
       \"citability\": \"direct\",
       \"limitations\": \"样本主要集中在 2020–2023 年欧美市场\",
       \"user_decision\": \"pending\"
@@ -211,9 +211,9 @@ ResearchSynthesisInput = {
 
 ```typescript
 {
-  \"contradictions_or_gaps\": [
+  \\"contradictions_or_gaps\": [
     {
-      \"id\": \"gap_1\",
+      \"id\\": \"gap_1\",
       \"issue\": \"用户定义粒度不一致\",
       \"description\": \"部分研究以行业角色定义用户,部分以具体任务定义用户,结论存在冲突\",
       \"user_decision\": \"pending\"
@@ -224,26 +224,23 @@ ResearchSynthesisInput = {
 
 **用户交互流程**
 
-1. Agent 输出 THOUGHT 以及除 user_decision 之外的所有内容
-2. 系统展示所有洞察,默认全部未决策
-3. 用户可通过以下方式进行决策:
+1. 从资料检索页点击确认并进入下一步后,跳转至资料整理页
+2. 资料整理页调用 Research Synthesis Agent,输出观点洞察(synthesized_insights)以及矛盾空白(contradictions_or_gaps)
+3. 页面采用左右结构布局:
+   - 左侧面板:显示资料类型统计和审阅指南
+   - 右侧面板:显示具体洞察内容和操作区
+4. Agent 输出 THOUGHT 以及除 user_decision 之外的所有内容
+5. 系统展示所有洞察,默认全部未决策
+6. 用户可通过以下方式进行决策:
    - 单个选择:对每条洞察选择必须使用/背景补充/排除
    - 批量选择:勾选多条洞察后批量设置为必须使用/背景补充/排除
    - 一键全选:将所有洞察设置为必须使用
-4. 系统实时统计未决策数量,显示还有xxx项未决策
-5. 点击未决策提示可直接跳转到第一条未决策资料
-6. 用户完成所有决策后,系统更新 user_decision 字段
-
-**功能说明**
-
-- 调用 Research Synthesis Agent 整理用户在资料检索阶段选择的资料
-- 左侧面板显示资料类型统计和审阅指南
-- 右侧面板显示具体资料内容和操作区
-- 支持批量选择和一键全选功能
-- 实时显示未决策数量,点击可跳转到未决策资料
-- Research Synthesis Agent 输出的结果保存在 Supabase 数据库中
-- 页面底部显示日志框,展示运行步骤
-- 日志框包含日志详情按钮,点击后弹窗显示 Research Synthesis Agent 接收到的输入、输出以及 LLM 输出的 THOUGHT 部分内容
+7. 系统实时统计未决策数量,显示还有xxx项未决策
+8. 点击未决策提示可直接跳转到第一条未决策资料
+9. 用户完成所有决策后,系统更新 user_decision 字段
+10. Research Synthesis Agent 输出的结果保存在 Supabase 数据库中
+11. 页面底部显示日志框,展示运行步骤
+12. 日志框包含日志详情按钮,点击后弹窗显示 Research Synthesis Agent 接收到的输入、输出以及 LLM 输出的 THOUGHT 部分内容
 
 **用户操作**
 
@@ -255,7 +252,7 @@ ResearchSynthesisInput = {
 **确认条件**
 
 - 用户完成所有洞察的决策后,确认并进入下一步按钮启用
-- 点击后保存用户决策,进入文章结构生成阶段
+- 点击后保存用户决策,调用 generate-article-structure 接口,进入文章结构生成页面
 
 #### 阶段 5:文章结构生成
 
@@ -270,10 +267,10 @@ const structureAgentInput = {
   audience,
 
   accepted_insights: synthesis_result.synthesized_insights
-    .filter(i => session.user_decisions.insights[i.id] === \"accept\"),
+    .filter(i => session.user_decisions.insights[i.id] === \\"accept\"),
 
   accepted_gaps: synthesis_result.contradictions_or_gaps
-    .filter(g => session.user_decisions.gaps[g.id] === \"accept\")
+    .filter(g => session.user_decisions.gaps[g.id] === \"accept\\")
 };
 ```
 
@@ -294,7 +291,7 @@ const structureAgentInput = {
       \"id\": \"insight_1\",
       \"category\": \"AI Agent 商业失败原因\",
       \"content\": \"多数 AI Agent 项目失败并非模型能力不足,而是缺乏清晰的用户任务闭环。\",
-      \"source_insight_id\": \"insight_1\"
+      \\"source_insight_id\": \"insight_1\"
     }
   ],
   \"context_flags\": {
@@ -370,39 +367,39 @@ const structureAgentInput = {
 
 ```json
 {
-  \"core_thesis\": \"AI Agent 项目的失败更多源于用户任务闭环缺失,而非模型能力不足。\",
+  \"core_thesis\": \\"AI Agent 项目的失败更多源于用户任务闭环缺失,而非模型能力不足。\",
   \"argument_blocks\": [
     {
       \"id\": \"block_1\",
       \"title\": \"用户任务闭环缺失的普遍性\",
-      \"description\": \"论证在大量 AI Agent 项目中,未能定义清晰、可执行的用户任务闭环是一种普遍现象。\",
+      \"description\": \"论证在大量 AI Agent 项目中,未能定义清晰、可执行的用户任务闭环是一种普遍现象。\\",
       \"order\": 1,
       \"relation\": \"起始论证块,提出核心问题\",
       \"derived_from\": [\"insight_1\"],
       \"user_editable\": true
     },
     {
-      \"id\": \"block_2\",
-      \"title\": \"任务不清对产品价值转化的影响\",
-      \"description\": \"说明用户任务不清如何导致 Agent 能力无法转化为稳定、可感知的产品价值。\",
+      \"id\": \\"block_2\",
+      \"title\\": \"任务不清对产品价值转化的影响\",
+      \"description\\": \"说明用户任务不清如何导致 Agent 能力无法转化为稳定、可感知的产品价值。\",
       \"order\": 2,
-      \"relation\": \"递进:从现象到影响\",
+      \"relation\\": \"递进:从现象到影响\",
       \"derived_from\": [\"insight_1\"],
       \"user_editable\": true
     },
     {
-      \"id\": \"block_3\",
+      \\"id\": \"block_3\",
       \"title\": \"从模型能力迷思回到产品设计问题\",
-      \"description\": \"对比模型能力提升与任务定义缺失之间的错位,澄清失败原因的常见误判。\",
+      \"description\": \\"对比模型能力提升与任务定义缺失之间的错位,澄清失败原因的常见误判。\",
       \"order\": 3,
       \"relation\": \"对比:纠正常见解释偏差\",
-      \"derived_from\": [\"insight_1\"],
+      \"derived_from\\": [\"insight_1\"],
       \"user_editable\": true
     }
   ],
-  \"structure_relations\": \"文章采用递进式结构,从问题现象出发,分析影响机制,并对常见误解进行澄清。\",
+  \"structure_relations\": \\"文章采用递进式结构,从问题现象出发,分析影响机制,并对常见误解进行澄清。\",
   \"status\": \"awaiting_user_confirmation\",
-  \"allowed_user_actions\": [\"edit_core_thesis\", \"delete_block\", \"reorder_blocks\"]
+  \"allowed_user_actions\": [\"edit_core_thesis\", \"delete_block\", \"reorder_blocks\\"]
 }
 ```
 
