@@ -72,20 +72,24 @@ async function callGemini(options: LLMCallOptions): Promise<LLMResponse> {
 }
 
 /**
- * 调用用户配置的 Qwen 模型
+ * 调用用户配置的 Qwen 模型（通过阿里云 DashScope）
  */
 async function callQwen(options: LLMCallOptions, apiKey: string): Promise<LLMResponse> {
-  const response = await fetch("https://api.siliconflow.cn/v1/chat/completions", {
+  const response = await fetch("https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation", {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "Qwen/Qwen2.5-7B-Instruct",
-      messages: options.messages,
-      temperature: options.temperature || 0.7,
-      max_tokens: options.maxTokens || 4096,
+      model: "qwen-plus",
+      input: {
+        messages: options.messages,
+      },
+      parameters: {
+        temperature: options.temperature || 0.7,
+        max_tokens: options.maxTokens || 4096,
+      },
     }),
   });
 
@@ -95,7 +99,9 @@ async function callQwen(options: LLMCallOptions, apiKey: string): Promise<LLMRes
   }
 
   const data = await response.json();
-  return { content: data.choices[0].message.content, model: 'Qwen2.5-7B-Instruct' };
+  const content = data.output?.text || data.output?.choices?.[0]?.message?.content || '';
+  
+  return { content, model: 'qwen-plus' };
 }
 
 /**
@@ -108,7 +114,7 @@ async function getQwenApiKey(): Promise<string | null> {
     .eq("config_key", "llm_api_key")
     .maybeSingle();
   
-  return configData?.config_value || Deno.env.get("QIANWEN_API_KEY") || null;
+  return configData?.config_value || Deno.env.get("DASHSCOPE_API_KEY") || null;
 }
 
 /**
@@ -128,7 +134,7 @@ async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
       if (!apiKey) {
         throw new Error(
           "Gemini 调用失败，且未配置 Qwen API 密钥。" +
-          "请在管理面板的「系统配置」→「LLM 配置」中配置 SiliconFlow API 密钥。"
+          "请在管理面板的「系统配置」→「LLM 配置」中配置阿里云 DashScope API 密钥。"
         );
       }
       

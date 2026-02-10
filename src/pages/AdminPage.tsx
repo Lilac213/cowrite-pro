@@ -217,63 +217,54 @@ export default function AdminPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>LLM 配置</CardTitle>
-                  <CardDescription>配置全局 LLM 服务（通义千问）</CardDescription>
+                  <CardTitle>LLM 服务状态</CardTitle>
+                  <CardDescription>系统使用双层 LLM 架构，无需配置即可使用</CardDescription>
                 </div>
-                <Badge variant={systemConfig.llm_api_key ? 'default' : 'outline'}>
-                  {systemConfig.llm_api_key ? '✓ 已配置' : '未配置'}
+                <Badge variant="default">
+                  ✓ 服务正常
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="llm-provider">LLM 提供商</Label>
-                <Input
-                  id="llm-provider"
-                  value="SiliconFlow (Qwen/Qwen2.5-7B-Instruct)"
-                  disabled
-                  className="bg-muted"
-                />
-                <p className="text-xs text-muted-foreground">
-                  系统使用 SiliconFlow 平台提供的通义千问模型
-                </p>
+              {/* 服务说明 */}
+              <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-blue-900 dark:text-blue-100">
+                  <span>🚀</span>
+                  <span>双层 LLM 架构</span>
+                </div>
+                <div className="space-y-2 text-xs text-blue-700 dark:text-blue-300">
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold min-w-[80px]">第一层：</span>
+                    <span>Google Gemini 2.5 Flash（系统内置，免费使用）</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold min-w-[80px]">第二层：</span>
+                    <span>阿里云通义千问（自动回退，可选配置）</span>
+                  </div>
+                  <div className="flex items-start gap-2 mt-3 pt-3 border-t border-blue-200 dark:border-blue-700">
+                    <span className="font-semibold min-w-[80px]">工作原理：</span>
+                    <span>系统优先使用 Gemini，当 Gemini 不可用时自动切换到通义千问</span>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="llm-api-key">API 密钥</Label>
-                <Input
-                  id="llm-api-key"
-                  type="password"
-                  placeholder="输入 SiliconFlow API 密钥（格式：sk-xxx）"
-                  value={systemConfig.llm_api_key || ''}
-                  onChange={(e) => setSystemConfig({ ...systemConfig, llm_api_key: e.target.value })}
-                />
-                <p className="text-xs text-muted-foreground">
-                  在 SiliconFlow 控制台获取：
+
+              {/* 可选配置提示 */}
+              <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <div className="flex items-center gap-2 text-sm font-medium text-amber-900 dark:text-amber-100 mb-2">
+                  <span>💡</span>
+                  <span>可选配置</span>
+                </div>
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  如需配置通义千问作为备用模型，请访问{' '}
                   <a 
-                    href="https://cloud.siliconflow.cn" 
+                    href="https://dashscope.console.aliyun.com/" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-primary hover:underline ml-1"
+                    className="text-primary hover:underline font-medium"
                   >
-                    https://cloud.siliconflow.cn
+                    阿里云 DashScope 控制台
                   </a>
-                </p>
-                <p className="text-xs text-amber-600">
-                  💡 提示：注册后在"API 密钥"页面创建新密钥，复制完整的密钥字符串（通常以 sk- 开头）
-                </p>
-              </div>
-              
-              {/* 配置说明 */}
-              <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg space-y-2">
-                <div className="flex items-center gap-2 text-sm font-medium text-blue-900 dark:text-blue-100">
-                  <span>✅</span>
-                  <span>自动生效</span>
-                </div>
-                <p className="text-xs text-blue-700 dark:text-blue-300">
-                  保存后，API 密钥将立即生效，无需额外配置或重启服务。
-                </p>
-                <p className="text-xs text-blue-700 dark:text-blue-300">
-                  Research Synthesis Agent 会自动从数据库读取最新的 API 密钥。
+                  {' '}获取 API Key，并联系技术支持配置。
                 </p>
               </div>
             </CardContent>

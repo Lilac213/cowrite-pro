@@ -10,7 +10,7 @@ CoWrite 使用**双层 LLM 架构**，确保服务的稳定性和可用性：
 - **优势**: 响应快速，稳定可靠
 
 ### 第二层：用户配置的 Qwen 模型（回退）
-- **模型**: Qwen 2.5-7B-Instruct (通过 SiliconFlow)
+- **模型**: Qwen Plus (通过阿里云 DashScope)
 - **特点**: 需要管理员配置 API 密钥
 - **用途**: 当 Gemini 不可用时自动切换
 
@@ -43,37 +43,32 @@ CoWrite 使用**双层 LLM 架构**，确保服务的稳定性和可用性：
 
 ## 配置步骤（可选）
 
-### 第一步：获取 SiliconFlow API 密钥
+**注意**：大多数情况下不需要配置。仅在 Gemini 不可用时需要配置 Qwen 作为备用。
 
-1. 访问 **SiliconFlow 官网**：https://cloud.siliconflow.cn
-2. 点击右上角"注册/登录"
-3. 完成账号注册（支持手机号或邮箱）
-4. 登录后进入控制台
-5. 在左侧菜单找到"API 密钥"或"API Keys"
-6. 点击"创建新密钥"
-7. 复制生成的 API Key（格式类似：`sk-xxxxxxxxxxxxxxxxxxxxxx`）
+### 第一步：获取阿里云 DashScope API 密钥
+
+1. 访问 **阿里云 DashScope 控制台**：https://dashscope.console.aliyun.com/
+2. 注册/登录阿里云账号
+3. 开通 DashScope 服务（可能需要实名认证）
+4. 在"API-KEY 管理"页面创建新的 API Key
+5. 复制生成的 API Key（格式类似：`sk-xxxxxxxxxxxxxxxxxxxxxx`）
 
 ⚠️ **重要**：请妥善保管您的 API Key，不要泄露给他人。
 
-### 第二步：在管理面板配置密钥
+### 第二步：联系技术支持配置
 
-1. 以**管理员身份**登录 CoWrite
-2. 点击右上角头像，进入"设置"页面
-3. 在"系统配置"卡片中，点击"前往管理面板"按钮
-4. 在管理面板中，选择"系统配置"标签页
-5. 找到"LLM 配置"卡片
-6. 在"API 密钥"输入框中粘贴您在第一步复制的 API Key
-7. 点击"保存配置"按钮
+由于系统架构调整，API Key 配置需要通过技术支持完成：
 
-✅ **完成！** 配置保存后立即生效，无需重启或重新部署。
+1. 准备好您的 DashScope API Key
+2. 联系技术支持人员
+3. 提供 API Key 给技术支持
+4. 技术人员将为您配置到系统环境变量中
 
 ### 第三步：验证配置
 
-1. 返回 CoWrite 应用
-2. 进入"知识研究"阶段
-3. 确保已有搜索结果
-4. 点击"资料整理"按钮
-5. 查看日志，应该显示"启动 Research Synthesis Agent..."并成功完成
+1. 配置完成后，系统会在 Gemini 不可用时自动使用 Qwen
+2. 您可以在 Edge Function 日志中查看模型切换情况
+3. 日志会显示"✓ Qwen 调用成功（回退）"
 
 ## 高级配置（可选）
 
@@ -87,16 +82,18 @@ CoWrite 使用**双层 LLM 架构**，确保服务的稳定性和可用性：
 4. 找到 **Secrets** 或 **Environment Variables** 部分
 5. 点击"Add Secret"或"New Secret"
 6. 填写以下信息：
-   - **Name**: `QIANWEN_API_KEY`
-   - **Value**: [粘贴您的 SiliconFlow API Key]
+   - **Name**: `DASHSCOPE_API_KEY`
+   - **Value**: [粘贴您的阿里云 DashScope API Key]
 7. 点击"Save"保存
-8. 重新部署 Edge Function（可选，系统会优先使用数据库配置）
+8. 重新部署 Edge Function
 
 ### 通过 Supabase CLI 配置
 
 ```bash
-supabase secrets set QIANWEN_API_KEY=sk-your-api-key-here
+supabase secrets set DASHSCOPE_API_KEY=sk-your-api-key-here
 supabase functions deploy research-synthesis-agent
+supabase functions deploy llm-generate
+supabase functions deploy summarize-content
 ```
 
 ## 常见问题
@@ -130,17 +127,17 @@ supabase functions deploy research-synthesis-agent
 2. 在数据库中找到 `profiles` 表
 3. 将您的用户记录的 `role` 字段改为 `admin`
 
-### Q6: SiliconFlow 是什么？为什么要用它？
+### Q6: 阿里云 DashScope 是什么？为什么要用它？
 
-**A**: SiliconFlow 是一个 LLM API 服务平台，提供多种开源模型的 API 接口。CoWrite 使用它作为 Gemini 的备用方案。选择 SiliconFlow 的原因：
-- 提供免费额度
-- 支持高质量的开源模型
-- API 稳定可靠
+**A**: 阿里云 DashScope 是阿里云提供的大模型服务平台，提供通义千问等模型的 API 接口。CoWrite 使用它作为 Gemini 的备用方案。选择 DashScope 的原因：
+- 阿里云官方服务，稳定可靠
+- 支持高质量的通义千问模型
 - 国内访问速度快
+- 提供免费额度
 
-### Q7: 使用 SiliconFlow 需要付费吗？
+### Q7: 使用阿里云 DashScope 需要付费吗？
 
-**A**: SiliconFlow 提供免费额度，具体请查看其官网的定价说明。对于个人研究和小规模使用，免费额度通常足够。
+**A**: DashScope 提供免费额度，具体请查看阿里云官网的定价说明。对于个人研究和小规模使用，免费额度通常足够。
 
 ### Q8: 可以使用其他 LLM API 吗？
 
@@ -150,19 +147,15 @@ supabase functions deploy research-synthesis-agent
 
 **A**: 
 - **Gemini**: 系统内置，无需查看使用情况
-- **Qwen**: 登录 SiliconFlow 控制台，在"使用统计"或"Usage"页面可以查看 API 调用次数和消费情况
+- **Qwen**: 登录阿里云 DashScope 控制台，在"用量中心"或"Usage"页面可以查看 API 调用次数和消费情况
 
 ### Q10: 配置保存后多久生效？
 
-**A**: 立即生效！系统采用动态配置读取机制，Edge Function 每次调用时都会从数据库读取最新配置，无需重启或重新部署。
+**A**: 配置通过环境变量设置后，需要重新部署 Edge Function 才能生效。部署完成后立即可用。
 
 ### Q11: 如何知道配置是否成功？
 
-**A**: 在管理面板的"LLM 配置"卡片右上角，会显示配置状态：
-- ✓ 已配置：表示 API Key 已保存
-- 未配置：表示还未配置 API Key
-
-实际是否有效，需要点击"资料整理"按钮测试。
+**A**: 在管理面板的"LLM 服务状态"卡片中，会显示"✓ 服务正常"。实际是否有效，需要点击"资料整理"按钮测试，并查看 Edge Function 日志中的模型使用情况。
 
 ## 技术细节
 
@@ -194,9 +187,9 @@ async function callLLM(options) {
 - **认证方式**: 无需认证（系统级）
 - **特点**: 快速、稳定、免费
 
-#### 备用模型：Qwen 2.5-7B-Instruct
-- **API 端点**: `https://api.siliconflow.cn/v1/chat/completions`
-- **提供商**: SiliconFlow
+#### 备用模型：Qwen Plus
+- **API 端点**: `https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation`
+- **提供商**: 阿里云 DashScope
 - **认证方式**: Bearer Token
 - **特点**: 高质量中文支持
 
@@ -211,7 +204,7 @@ Edge Function 按以下优先级读取 Qwen API 密钥：
    - 优点：管理员可通过 UI 配置，立即生效
 
 2. **环境变量（备用）**：
-   - 变量名：`QIANWEN_API_KEY`
+   - 变量名：`DASHSCOPE_API_KEY`
    - 读取时机：数据库配置不存在时
    - 优点：适合高级用户和自动化部署
 
@@ -253,7 +246,7 @@ Edge Function 使用以下环境变量：
 
 | 变量名 | 说明 | 必需 | 来源 |
 |--------|------|------|------|
-| `QIANWEN_API_KEY` | SiliconFlow API 密钥 | 可选 | 手动配置 |
+| `DASHSCOPE_API_KEY` | 阿里云 DashScope API 密钥 | 可选 | 手动配置 |
 | `SUPABASE_URL` | Supabase 项目 URL | ✅ 是 | 自动配置 |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase 服务密钥 | ✅ 是 | 自动配置 |
 
