@@ -1207,16 +1207,25 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       
       // 提供更详细的错误信息
       let errorMessage = '请稍后重试';
+      let errorTitle = '资料整理失败';
+      
       if (error.message) {
         errorMessage = error.message;
+        
+        // 检测 API 密钥相关错误
+        if (error.message.includes('Api key is invalid') || error.message.includes('API 密钥')) {
+          errorTitle = '⚠️ API 密钥配置问题';
+          errorMessage = 'LLM API 密钥未配置或无效。请按以下步骤配置：\n\n1. 访问 https://cloud.siliconflow.cn 获取 API Key\n2. 在 Supabase 项目的 Edge Functions Secrets 中添加 QIANWEN_API_KEY\n3. 重新部署 Edge Function\n\n详细说明请查看项目根目录的 API_KEY_SETUP.md 文件';
+        }
       } else if (error.error) {
         errorMessage = error.error;
       }
       
       toast({
-        title: '资料整理失败',
+        title: errorTitle,
         description: errorMessage,
         variant: 'destructive',
+        duration: 10000, // API 密钥错误需要更长的显示时间
       });
     } finally {
       setSynthesizing(false);

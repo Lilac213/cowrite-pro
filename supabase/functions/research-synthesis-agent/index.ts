@@ -24,12 +24,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 获取 API 密钥
-    const apiKey = Deno.env.get("QIANWEN_API_KEY");
+    // 获取 API 密钥 - 优先从 system_config 读取，其次从环境变量
+    let apiKey = Deno.env.get("QIANWEN_API_KEY");
+    
+    // 尝试从 system_config 表读取
+    const { data: configData, error: configError } = await supabase
+      .from("system_config")
+      .select("config_value")
+      .eq("config_key", "llm_api_key")
+      .maybeSingle();
+    
+    if (configData?.config_value) {
+      apiKey = configData.config_value;
+      console.log("使用 system_config 中的 API 密钥");
+    } else if (apiKey) {
+      console.log("使用环境变量中的 API 密钥");
+    }
+    
     if (!apiKey) {
-      console.error("QIANWEN_API_KEY 未配置");
+      console.error("API 密钥未配置");
       return new Response(
-        JSON.stringify({ error: "API密钥未配置，请在系统设置中配置通义千问 API 密钥，并点击'同步配置'按钮" }),
+        JSON.stringify({ 
+          error: "API 密钥未配置。请在管理面板的「系统配置」→「LLM 配置」中配置 SiliconFlow API 密钥。\n\n获取密钥：访问 https://cloud.siliconflow.cn 注册并创建 API Key。" 
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -251,9 +268,18 @@ ${materialsContent}
         statusText: llmResponse.statusText,
         error: errorText
       });
+      
+      // 针对 401 错误提供更详细的指导
+      let errorMessage = `LLM API 调用失败 (${llmResponse.status})`;
+      if (llmResponse.status === 401) {
+        errorMessage = "API 密钥无效或未配置。请访问 https://cloud.siliconflow.cn 获取有效的 API Key，然后在 Supabase 项目的 Edge Functions Secrets 中配置 QIANWEN_API_KEY，配置完成后需要重新部署 Edge Function。";
+      } else {
+        errorMessage += `: ${errorText.substring(0, 200)}`;
+      }
+      
       return new Response(
         JSON.stringify({ 
-          error: `LLM API 调用失败 (${llmResponse.status}): ${errorText.substring(0, 200)}`,
+          error: errorMessage,
           details: {
             status: llmResponse.status,
             message: errorText

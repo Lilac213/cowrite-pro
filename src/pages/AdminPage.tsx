@@ -98,22 +98,20 @@ export default function AdminPage() {
     setSaving(true);
     try {
       await Promise.all([
-        updateSystemConfig('llm_provider', systemConfig.llm_provider || 'qwen'),
+        updateSystemConfig('llm_provider', systemConfig.llm_provider || 'siliconflow'),
         updateSystemConfig('llm_api_key', systemConfig.llm_api_key || ''),
         updateSystemConfig('search_provider', systemConfig.search_provider || 'serpapi'),
         updateSystemConfig('serpapi_api_key', systemConfig.serpapi_api_key || ''),
       ]);
       
-      // 同步配置到 Edge Function Secrets
-      await syncConfigToSecrets();
-      
       toast({
         title: '保存成功',
-        description: '系统配置已更新并同步到 Edge Functions',
+        description: '系统配置已更新，立即生效',
       });
     } catch (error) {
       toast({
         title: '保存失败',
+        description: '无法保存配置，请稍后重试',
         variant: 'destructive',
       });
     } finally {
@@ -232,12 +230,12 @@ export default function AdminPage() {
                 <Label htmlFor="llm-provider">LLM 提供商</Label>
                 <Input
                   id="llm-provider"
-                  value="通义千问 (Qwen)"
+                  value="SiliconFlow (Qwen/Qwen2.5-7B-Instruct)"
                   disabled
                   className="bg-muted"
                 />
                 <p className="text-xs text-muted-foreground">
-                  系统默认使用通义千问作为 LLM 提供商
+                  系统使用 SiliconFlow 平台提供的通义千问模型
                 </p>
               </div>
               <div className="space-y-2">
@@ -245,26 +243,37 @@ export default function AdminPage() {
                 <Input
                   id="llm-api-key"
                   type="password"
-                  placeholder="输入通义千问 API 密钥"
+                  placeholder="输入 SiliconFlow API 密钥（格式：sk-xxx）"
                   value={systemConfig.llm_api_key || ''}
                   onChange={(e) => setSystemConfig({ ...systemConfig, llm_api_key: e.target.value })}
                 />
                 <p className="text-xs text-muted-foreground">
-                  在阿里云控制台获取：https://dashscope.console.aliyun.com/
+                  在 SiliconFlow 控制台获取：
+                  <a 
+                    href="https://cloud.siliconflow.cn" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline ml-1"
+                  >
+                    https://cloud.siliconflow.cn
+                  </a>
+                </p>
+                <p className="text-xs text-amber-600">
+                  💡 提示：注册后在"API 密钥"页面创建新密钥，复制完整的密钥字符串（通常以 sk- 开头）
                 </p>
               </div>
               
-              {/* 同步状态提示 */}
-              <div className="p-3 bg-muted rounded-lg space-y-2">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <span>🔄</span>
-                  <span>Edge Function 同步</span>
+              {/* 配置说明 */}
+              <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-blue-900 dark:text-blue-100">
+                  <span>✅</span>
+                  <span>自动生效</span>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  保存配置后，API 密钥将自动同步到 Edge Functions（QIANWEN_API_KEY）
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  保存后，API 密钥将立即生效，无需额外配置或重启服务。
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  ⚠️ INTEGRATIONS_API_KEY（搜索服务密钥）需要平台管理员单独配置
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  Research Synthesis Agent 会自动从数据库读取最新的 API 密钥。
                 </p>
               </div>
             </CardContent>

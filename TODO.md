@@ -38,49 +38,79 @@
 
 ## 重要提示：API 密钥配置
 
-### 问题
+### 问题（已解决）
 Research Synthesis Agent 调用失败，错误信息：
 - "Edge Function returned a non-2xx status code"
 - "LLM API 调用失败 (401): Api key is invalid"
 
 ### 原因
-Edge Function `research-synthesis-agent` 需要 `QIANWEN_API_KEY` 环境变量来调用 SiliconFlow API，但该密钥未配置或无效。
+Edge Function `research-synthesis-agent` 需要 LLM API 密钥来调用 SiliconFlow API，但该密钥未配置。
 
-### 解决方案
+### 解决方案（已实现）
 
-#### 1. 获取 API 密钥
-访问 https://cloud.siliconflow.cn 并完成以下步骤：
-1. 注册账号并登录
-2. 进入控制台
-3. 创建 API Key
-4. 复制生成的 API Key
+#### 方案 1：通过管理面板配置（推荐）✅
 
-#### 2. 配置密钥到 Supabase
-在 Supabase 项目中配置密钥：
+1. **访问管理面板**
+   - 以管理员身份登录 CoWrite
+   - 进入"设置"页面
+   - 点击"前往管理面板"按钮
+
+2. **配置 LLM API 密钥**
+   - 在管理面板中找到"系统配置"标签页
+   - 在"LLM 配置"卡片中：
+     - 点击"在 SiliconFlow 控制台获取"链接，或直接访问 https://cloud.siliconflow.cn
+     - 注册/登录 SiliconFlow 账号
+     - 在控制台的"API 密钥"页面创建新密钥
+     - 复制生成的 API Key（格式：sk-xxx）
+   - 返回管理面板，将 API Key 粘贴到"API 密钥"输入框
+   - 点击"保存配置"按钮
+
+3. **验证配置**
+   - 配置保存后立即生效，无需重启或重新部署
+   - 返回"知识研究"阶段
+   - 点击"资料整理"按钮测试
+
+#### 方案 2：通过环境变量配置（高级用户）
+
+如果您有 Supabase 项目的管理权限，也可以直接配置环境变量：
+
 1. 打开 Supabase Dashboard
 2. 进入 Project Settings → Edge Functions → Secrets
 3. 添加新的 Secret：
    - Name: `QIANWEN_API_KEY`
-   - Value: [粘贴你的 API Key]
-4. 保存
+   - Value: [您的 SiliconFlow API Key]
+4. 保存后重新部署 Edge Function
 
-#### 3. 重新部署 Edge Function
-配置密钥后，需要重新部署 Edge Function 才能生效：
-```bash
-supabase functions deploy research-synthesis-agent
-```
+### 技术实现
 
-或者在 Miaoda 平台上点击"同步配置"按钮。
+#### 配置读取优先级
+Edge Function 按以下优先级读取 API 密钥：
+1. **system_config 表**（推荐）：从数据库的 system_config 表读取 llm_api_key
+2. **环境变量**（备用）：从 QIANWEN_API_KEY 环境变量读取
+
+#### 自动生效机制
+- 管理员在管理面板保存配置后，密钥立即写入 system_config 表
+- Edge Function 每次调用时都会从数据库读取最新配置
+- 无需重启服务或重新部署
 
 ### 使用的 API
 - **服务商**: SiliconFlow (https://api.siliconflow.cn)
 - **模型**: Qwen/Qwen2.5-7B-Instruct
 - **用途**: Research Synthesis Agent 的 LLM 推理
+- **费用**: 提供免费额度，详见 SiliconFlow 官网
 
 ### 代码位置
 - Edge Function: `/supabase/functions/research-synthesis-agent/index.ts`
+- 配置读取: Line 20-48
 - API 调用: Line 230-245
-- 密钥获取: Line 28
+- 管理面板: `/src/pages/AdminPage.tsx`
+- LLM 配置 UI: Line 220-280
+
+### 错误处理改进
+- ✅ 401 错误时显示详细的配置指导
+- ✅ 错误提示包含 SiliconFlow 注册链接
+- ✅ 管理面板显示配置状态（已配置/未配置）
+- ✅ 前端错误提示延长显示时间（10秒）
 
 ## 实现详情
 
