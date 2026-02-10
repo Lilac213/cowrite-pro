@@ -2082,109 +2082,166 @@ export async function callArticleStructureAgent(
   sessionId: string,
   projectId: string
 ): Promise<any> {
-  console.log('[callArticleStructureAgent] 开始生成文章结构，sessionId:', sessionId);
+  console.log('[callArticleStructureAgent] ========== 开始生成文章结构 ==========');
+  console.log('[callArticleStructureAgent] sessionId:', sessionId);
+  console.log('[callArticleStructureAgent] projectId:', projectId);
 
-  // 1. 获取项目信息
-  const project = await getProject(projectId);
-  if (!project) {
-    throw new Error('项目不存在');
-  }
-
-  // 2. 获取需求文档
-  const brief = await getBrief(projectId);
-  let requirements: any = {};
   try {
-    if (brief?.requirements) {
-      requirements = typeof brief.requirements === 'string' 
-        ? JSON.parse(brief.requirements) 
-        : brief.requirements;
+    // 1. 获取项目信息
+    console.log('[callArticleStructureAgent] 步骤1: 获取项目信息');
+    const project = await getProject(projectId);
+    if (!project) {
+      throw new Error('项目不存在');
     }
-  } catch {
-    requirements = {};
-  }
+    console.log('[callArticleStructureAgent] 项目标题:', project.title);
 
-  // 3. 获取所有研究洞察和空白
-  const allInsights = await getResearchInsights(sessionId);
-  const allGaps = await getResearchGaps(sessionId);
+    // 2. 获取需求文档
+    console.log('[callArticleStructureAgent] 步骤2: 获取需求文档');
+    const brief = await getBrief(projectId);
+    let requirements: any = {};
+    try {
+      if (brief?.requirements) {
+        requirements = typeof brief.requirements === 'string' 
+          ? JSON.parse(brief.requirements) 
+          : brief.requirements;
+      }
+    } catch (e) {
+      console.warn('[callArticleStructureAgent] 解析需求文档失败:', e);
+      requirements = {};
+    }
+    console.log('[callArticleStructureAgent] 需求主题:', requirements.topic || '未设置');
 
-  console.log('[callArticleStructureAgent] 总洞察数:', allInsights.length);
-  console.log('[callArticleStructureAgent] 总空白数:', allGaps.length);
-  console.log('[callArticleStructureAgent] 洞察决策分布:', {
-    adopt: allInsights.filter(i => i.user_decision === 'adopt').length,
-    downgrade: allInsights.filter(i => i.user_decision === 'downgrade').length,
-    reject: allInsights.filter(i => i.user_decision === 'reject').length,
-    pending: allInsights.filter(i => i.user_decision === 'pending').length,
-  });
+    // 3. 获取所有研究洞察和空白
+    console.log('[callArticleStructureAgent] 步骤3: 获取研究洞察和空白');
+    const allInsights = await getResearchInsights(sessionId);
+    const allGaps = await getResearchGaps(sessionId);
 
-  // 4. 内容筛选（非常重要）：只保留用户采用的洞察
-  // - 只有 user_decision === 'adopt' 的洞察会被传递给结构 Agent
-  // - downgrade 和 reject 的洞察不会进入结构生成，但仍保留在 session 中供后续使用
-  const adoptedInsights = allInsights.filter(i => i.user_decision === 'adopt');
-  const respondGaps = allGaps.filter(g => g.user_decision === 'respond');
-
-  console.log('[callArticleStructureAgent] 采用的洞察数:', adoptedInsights.length);
-  console.log('[callArticleStructureAgent] 需要处理的空白数:', respondGaps.length);
-
-  if (adoptedInsights.length === 0) {
-    const totalInsights = allInsights.length;
-    const downgradedCount = allInsights.filter(i => i.user_decision === 'downgrade').length;
-    const rejectedCount = allInsights.filter(i => i.user_decision === 'reject').length;
-    const pendingCount = allInsights.filter(i => i.user_decision === 'pending').length;
+    console.log('[callArticleStructureAgent] 总洞察数:', allInsights.length);
+    console.log('[callArticleStructureAgent] 总空白数:', allGaps.length);
     
-    throw new Error(
-      `没有已采用的研究洞察，无法生成文章结构。\n` +
-      `当前状态：总计 ${totalInsights} 条洞察，` +
-      `其中 ${pendingCount} 条待决策，${downgradedCount} 条降级为背景，${rejectedCount} 条已排除。\n` +
-      `请至少选择一条洞察为"必须使用"。`
-    );
-  }
+    // 详细输出每条洞察的决策状态
+    console.log('[callArticleStructureAgent] 洞察详情:');
+    allInsights.forEach((insight, index) => {
+      console.log(`  [${index + 1}] ID: ${insight.id}, 决策: ${insight.user_decision}, 分类: ${insight.category}`);
+      console.log(`      内容: ${insight.insight.substring(0, 100)}...`);
+    });
+    
+    const decisionDistribution = {
+      adopt: allInsights.filter(i => i.user_decision === 'adopt').length,
+      downgrade: allInsights.filter(i => i.user_decision === 'downgrade').length,
+      reject: allInsights.filter(i => i.user_decision === 'reject').length,
+      pending: allInsights.filter(i => i.user_decision === 'pending').length,
+    };
+    console.log('[callArticleStructureAgent] 洞察决策分布:', decisionDistribution);
 
-  // 5. 构建输入 JSON
-  const structureInput = {
-    topic: requirements.topic || project.title,
-    user_core_thesis: null, // 可以从 session 中读取用户锁定的核心论点
-    confirmed_insights: adoptedInsights.map(insight => ({
-      id: insight.id,
-      category: insight.category,
-      content: insight.insight,
-      source_insight_id: insight.insight_id
-    })),
-    context_flags: {
-      confirmed_insight_count: adoptedInsights.length,
-      contradictions_or_gaps_present: respondGaps.length > 0
+    // 4. 内容筛选（非常重要）：只保留用户采用的洞察
+    console.log('[callArticleStructureAgent] 步骤4: 内容筛选');
+    console.log('[callArticleStructureAgent] 筛选规则: 只保留 user_decision === "adopt" 的洞察');
+    
+    const adoptedInsights = allInsights.filter(i => i.user_decision === 'adopt');
+    const respondGaps = allGaps.filter(g => g.user_decision === 'respond');
+
+    console.log('[callArticleStructureAgent] 采用的洞察数:', adoptedInsights.length);
+    console.log('[callArticleStructureAgent] 需要处理的空白数:', respondGaps.length);
+    
+    if (adoptedInsights.length > 0) {
+      console.log('[callArticleStructureAgent] 采用的洞察列表:');
+      adoptedInsights.forEach((insight, index) => {
+        console.log(`  [${index + 1}] ${insight.category}: ${insight.insight.substring(0, 80)}...`);
+      });
     }
-  };
 
-  console.log('[callArticleStructureAgent] 输入数据:', JSON.stringify(structureInput, null, 2));
+    if (adoptedInsights.length === 0) {
+      const totalInsights = allInsights.length;
+      const downgradedCount = decisionDistribution.downgrade;
+      const rejectedCount = decisionDistribution.reject;
+      const pendingCount = decisionDistribution.pending;
+      
+      const errorMsg = 
+        `没有已采用的研究洞察，无法生成文章结构。\n` +
+        `当前状态：总计 ${totalInsights} 条洞察，` +
+        `其中 ${pendingCount} 条待决策，${downgradedCount} 条降级为背景，${rejectedCount} 条已排除。\n` +
+        `请至少选择一条洞察为"必须使用"。`;
+      
+      console.error('[callArticleStructureAgent] 错误:', errorMsg);
+      throw new Error(errorMsg);
+    }
 
-  // 6. 调用 Edge Function
-  const { data, error } = await supabase.functions.invoke('generate-article-structure', {
-    body: { input: structureInput }
-  });
+    // 5. 构建输入 JSON
+    console.log('[callArticleStructureAgent] 步骤5: 构建输入数据');
+    const structureInput = {
+      topic: requirements.topic || project.title,
+      user_core_thesis: null,
+      confirmed_insights: adoptedInsights.map(insight => ({
+        id: insight.id,
+        category: insight.category,
+        content: insight.insight,
+        source_insight_id: insight.insight_id
+      })),
+      context_flags: {
+        confirmed_insight_count: adoptedInsights.length,
+        contradictions_or_gaps_present: respondGaps.length > 0
+      }
+    };
 
-  if (error) {
-    console.error('[callArticleStructureAgent] Edge Function 错误:', error);
-    throw new Error(`文章结构生成失败: ${error.message || 'Edge Function 调用失败'}`);
+    console.log('[callArticleStructureAgent] 输入数据结构:');
+    console.log('  - topic:', structureInput.topic);
+    console.log('  - confirmed_insights 数量:', structureInput.confirmed_insights.length);
+    console.log('  - contradictions_or_gaps_present:', structureInput.context_flags.contradictions_or_gaps_present);
+    console.log('[callArticleStructureAgent] 完整输入 JSON:', JSON.stringify(structureInput, null, 2));
+
+    // 6. 调用 Edge Function
+    console.log('[callArticleStructureAgent] 步骤6: 调用 generate-article-structure Edge Function');
+    const { data, error } = await supabase.functions.invoke('generate-article-structure', {
+      body: { input: structureInput }
+    });
+
+    if (error) {
+      console.error('[callArticleStructureAgent] Edge Function 错误:', error);
+      console.error('[callArticleStructureAgent] 错误详情:', JSON.stringify(error, null, 2));
+      
+      // 尝试获取更详细的错误信息
+      if (error.context) {
+        try {
+          const errorText = await error.context.text();
+          console.error('[callArticleStructureAgent] 错误响应内容:', errorText);
+          throw new Error(`文章结构生成失败: ${errorText}`);
+        } catch (e) {
+          console.error('[callArticleStructureAgent] 无法读取错误响应:', e);
+        }
+      }
+      
+      throw new Error(`文章结构生成失败: ${error.message || 'Edge Function 调用失败'}`);
+    }
+
+    console.log('[callArticleStructureAgent] Edge Function 调用成功');
+    console.log('[callArticleStructureAgent] 返回数据:', JSON.stringify(data, null, 2));
+
+    // 7. 保存结构结果到 session
+    console.log('[callArticleStructureAgent] 步骤7: 保存结构结果到数据库');
+    const { error: updateError } = await supabase
+      .from('writing_sessions')
+      .update({
+        structure_result: data,
+        current_stage: 'structure',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sessionId);
+
+    if (updateError) {
+      console.error('[callArticleStructureAgent] 保存结构失败:', updateError);
+      throw updateError;
+    }
+
+    console.log('[callArticleStructureAgent] ========== 文章结构生成完成 ==========');
+    return data;
+  } catch (error: any) {
+    console.error('[callArticleStructureAgent] ========== 发生错误 ==========');
+    console.error('[callArticleStructureAgent] 错误类型:', error.constructor.name);
+    console.error('[callArticleStructureAgent] 错误消息:', error.message);
+    console.error('[callArticleStructureAgent] 错误堆栈:', error.stack);
+    throw error;
   }
-
-  console.log('[callArticleStructureAgent] 生成成功:', data);
-
-  // 7. 保存结构结果到 session
-  const { error: updateError } = await supabase
-    .from('writing_sessions')
-    .update({
-      structure_result: data,
-      current_stage: 'structure',
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', sessionId);
-
-  if (updateError) {
-    console.error('[callArticleStructureAgent] 保存结构失败:', updateError);
-    throw updateError;
-  }
-
-  return data;
 }
 
 // 获取会话的文章结构结果

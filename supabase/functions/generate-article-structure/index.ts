@@ -28,7 +28,9 @@ serve(async (req) => {
   }
 
   try {
+    console.log('[generate-article-structure] ========== 收到请求 ==========');
     const body = await req.json();
+    console.log('[generate-article-structure] 请求体:', JSON.stringify(body, null, 2));
     
     // 支持两种输入格式：
     // 1. 新格式：{ input: StructureAgentInput }
@@ -38,13 +40,17 @@ serve(async (req) => {
     
     if (body.input) {
       // 新格式
+      console.log('[generate-article-structure] 使用新格式输入');
       input = body.input;
       inputJson = JSON.stringify(input, null, 2);
+      console.log('[generate-article-structure] 输入数据:', inputJson);
     } else {
       // 旧格式 - 转换为新格式（用于向后兼容）
+      console.log('[generate-article-structure] 使用旧格式输入（兼容模式）');
       const { topic, requirements, referenceArticles, materials, writingSummary } = body;
       
       if (!topic) {
+        console.error('[generate-article-structure] 错误: 缺少主题信息');
         return new Response(
           JSON.stringify({ error: '缺少主题信息或输入数据' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -96,17 +102,32 @@ serve(async (req) => {
       };
       
       inputJson = JSON.stringify(input, null, 2);
+      console.log('[generate-article-structure] 转换后的输入数据:', inputJson);
     }
 
     if (!input.topic) {
+      console.error('[generate-article-structure] 错误: 输入数据缺少主题');
       return new Response(
         JSON.stringify({ error: '缺少主题信息' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    if (!input.confirmed_insights || input.confirmed_insights.length === 0) {
+      console.error('[generate-article-structure] 错误: 没有确认的洞察');
+      return new Response(
+        JSON.stringify({ error: '没有确认的研究洞察，无法生成文章结构' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[generate-article-structure] 验证通过，准备调用 LLM');
+    console.log('[generate-article-structure] 主题:', input.topic);
+    console.log('[generate-article-structure] 确认的洞察数量:', input.confirmed_insights.length);
+
     const apiKey = Deno.env.get('INTEGRATIONS_API_KEY');
     if (!apiKey) {
+      console.error('[generate-article-structure] 错误: API密钥未配置');
       return new Response(
         JSON.stringify({ error: 'API密钥未配置' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -176,6 +197,7 @@ ${inputJson}
   "allowed_user_actions": ["edit_core_thesis", "delete_block", "reorder_blocks"]
 }`;
 
+    console.log('[generate-article-structure] 开始调用 Gemini API');
     const response = await fetch('https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse', {
       method: 'POST',
       headers: {
@@ -194,12 +216,14 @@ ${inputJson}
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('[generate-article-structure] API请求失败:', response.status, errorText);
       return new Response(
         JSON.stringify({ error: `API请求失败: ${errorText}` }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    console.log('[generate-article-structure] API响应成功，开始读取流式数据');
     // 读取流式响应
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
@@ -229,32 +253,51 @@ ${inputJson}
       }
     }
 
+    console.log('[generate-article-structure] 流式数据读取完成，总长度:', fullText.length);
+    console.log('[generate-article-structure] 原始响应内容（前500字符）:', fullText.substring(0, 500));
+
     // 提取JSON内容
     let structure;
     try {
+      console.log('[generate-article-structure] 尝试直接解析JSON');
       // 尝试直接解析
       structure = JSON.parse(fullText);
+      console.log('[generate-article-structure] 直接解析成功');
     } catch (e) {
+      console.log('[generate-article-structure] 直接解析失败，尝试从markdown代码块提取');
       // 尝试从markdown代码块中提取
       const jsonMatch = fullText.match(/```json\s*([\s\S]*?)\s*```/) || fullText.match(/```\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
+        console.log('[generate-article-structure] 找到代码块，尝试解析');
         structure = JSON.parse(jsonMatch[1]);
+        console.log('[generate-article-structure] 代码块解析成功');
       } else {
+        console.log('[generate-article-structure] 未找到代码块，尝试查找JSON对象');
         // 尝试查找JSON对象
         const jsonStart = fullText.indexOf('{');
         const jsonEnd = fullText.lastIndexOf('}');
         if (jsonStart !== -1 && jsonEnd !== -1) {
-          structure = JSON.parse(fullText.substring(jsonStart, jsonEnd + 1));
+          const jsonStr = fullText.substring(jsonStart, jsonEnd + 1);
+          console.log('[generate-article-structure] 提取的JSON字符串（前200字符）:', jsonStr.substring(0, 200));
+          structure = JSON.parse(jsonStr);
+          console.log('[generate-article-structure] JSON对象解析成功');
         } else {
+          console.error('[generate-article-structure] 无法找到有效的JSON结构');
           throw new Error('无法解析返回的JSON结构');
         }
       }
     }
 
+    console.log('[generate-article-structure] JSON解析完成，验证必要字段');
     // 确保返回的结构包含必要字段
     if (!structure.core_thesis || !structure.argument_blocks) {
+      console.error('[generate-article-structure] 返回的结构缺少必要字段');
+      console.error('[generate-article-structure] 结构内容:', JSON.stringify(structure, null, 2));
       throw new Error('返回的结构缺少必要字段');
     }
+
+    console.log('[generate-article-structure] 核心论点:', structure.core_thesis);
+    console.log('[generate-article-structure] 论证块数量:', structure.argument_blocks.length);
 
     // 确保包含新格式的必要字段
     if (!structure.status) {
@@ -275,13 +318,28 @@ ${inputJson}
       user_editable: block.user_editable !== false
     }));
 
+    console.log('[generate-article-structure] 结构数据处理完成');
+    console.log('[generate-article-structure] 最终结构:', JSON.stringify(structure, null, 2));
+    console.log('[generate-article-structure] ========== 请求处理成功 ==========');
+
     return new Response(
       JSON.stringify(structure),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
+    console.error('[generate-article-structure] ========== 发生错误 ==========');
+    console.error('[generate-article-structure] 错误类型:', error.constructor.name);
+    console.error('[generate-article-structure] 错误消息:', error.message);
+    console.error('[generate-article-structure] 错误堆栈:', error.stack);
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: {
+          type: error.constructor.name,
+          stack: error.stack
+        }
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

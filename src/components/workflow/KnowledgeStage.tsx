@@ -813,6 +813,36 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     try {
       setConfirming(true);
       
+      // 调试：检查当前洞察状态
+      console.log('[handleNextStep] ========== 开始进入下一阶段 ==========');
+      console.log('[handleNextStep] writingSession.id:', writingSession.id);
+      console.log('[handleNextStep] projectId:', projectId);
+      
+      // 获取当前洞察状态
+      const { getResearchInsights, getResearchGaps } = await import('@/db/api');
+      const currentInsights = await getResearchInsights(writingSession.id);
+      const currentGaps = await getResearchGaps(writingSession.id);
+      
+      console.log('[handleNextStep] 当前洞察总数:', currentInsights.length);
+      console.log('[handleNextStep] 当前空白总数:', currentGaps.length);
+      console.log('[handleNextStep] 洞察决策分布:', {
+        adopt: currentInsights.filter(i => i.user_decision === 'adopt').length,
+        downgrade: currentInsights.filter(i => i.user_decision === 'downgrade').length,
+        reject: currentInsights.filter(i => i.user_decision === 'reject').length,
+        pending: currentInsights.filter(i => i.user_decision === 'pending').length,
+      });
+      
+      // 详细输出每条洞察
+      currentInsights.forEach((insight, index) => {
+        console.log(`[handleNextStep] 洞察 ${index + 1}:`, {
+          id: insight.id,
+          insight_id: insight.insight_id,
+          decision: insight.user_decision,
+          category: insight.category,
+          content: insight.insight.substring(0, 50) + '...'
+        });
+      });
+      
       // 1. 生成文章结构（基于用户确认的洞察）
       toast({
         title: '正在生成文章结构',
@@ -835,7 +865,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       });
       onComplete();
     } catch (error: any) {
-      console.error('进入下一阶段失败:', error);
+      console.error('[handleNextStep] ========== 发生错误 ==========');
+      console.error('[handleNextStep] 错误类型:', error.constructor?.name);
+      console.error('[handleNextStep] 错误消息:', error.message);
+      console.error('[handleNextStep] 错误堆栈:', error.stack);
+      
       toast({
         title: '操作失败',
         description: error.message || '无法生成文章结构',
