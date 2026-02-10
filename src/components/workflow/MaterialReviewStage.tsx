@@ -74,9 +74,14 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
     try {
       setLoading(true);
       
+      console.log('[MaterialReviewStage] 开始加载资料，projectId:', projectId);
+      
       // 获取 writing session
       const session = await getWritingSession(projectId);
+      console.log('[MaterialReviewStage] getWritingSession 返回:', session);
+      
       if (!session) {
+        console.error('[MaterialReviewStage] 会话未找到');
         toast({
           title: '会话未找到',
           description: '请先完成资料查询阶段',
@@ -85,13 +90,27 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
         return;
       }
       
+      if (!session.id) {
+        console.error('[MaterialReviewStage] session.id 为空');
+        toast({
+          title: '会话ID无效',
+          description: '请刷新页面重试',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      console.log('[MaterialReviewStage] session.id:', session.id);
       setSessionId(session.id);
       
       // 获取研究洞察和空白
+      console.log('[MaterialReviewStage] 开始获取 insights 和 gaps');
       const [insights, gaps] = await Promise.all([
         getResearchInsights(session.id),
         getResearchGaps(session.id)
       ]);
+      
+      console.log('[MaterialReviewStage] insights:', insights.length, 'gaps:', gaps.length);
 
       // 转换为统一格式
       const insightItems: MaterialItem[] = insights.map(insight => ({
@@ -112,6 +131,7 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
         data: gap
       }));
 
+      console.log('[MaterialReviewStage] 转换后的资料数量:', insightItems.length + gapItems.length);
       setMaterials([...insightItems, ...gapItems]);
       
       // 尝试从 session 中恢复日志（从 synthesis_result 字段）
@@ -121,12 +141,22 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
             ? JSON.parse(session.synthesis_result) 
             : session.synthesis_result;
           setSynthesisLog(result);
+          console.log('[MaterialReviewStage] synthesis_result 已恢复');
         } catch (e) {
-          console.error('解析 synthesis_result 失败:', e);
+          console.error('[MaterialReviewStage] 解析 synthesis_result 失败:', e);
         }
       }
+      
+      console.log('[MaterialReviewStage] 资料加载完成');
     } catch (error: any) {
-      console.error('加载资料失败:', error);
+      console.error('[MaterialReviewStage] 加载资料失败:', error);
+      console.error('[MaterialReviewStage] 错误详情:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
+      
       toast({
         title: '加载失败',
         description: error.message || '无法加载研究资料',

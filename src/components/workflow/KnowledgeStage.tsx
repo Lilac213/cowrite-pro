@@ -791,15 +791,10 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
   // 处理进入下一步（从搜索结果直接进入）
   const handleNextStep = async () => {
-    // 检查是否已完成研究综合
-    if (!researchStageComplete) {
-      toast({
-        title: '请先完成资料整理',
-        description: '需要先点击"资料整理"并完成研究综合后才能进入下一阶段',
-        variant: 'destructive',
-      });
-      return;
-    }
+    console.log('[handleNextStep] 开始进入下一阶段');
+    console.log('[handleNextStep] writingSession:', writingSession);
+    console.log('[handleNextStep] retrievedMaterials.length:', retrievedMaterials.length);
+    console.log('[handleNextStep] researchStageComplete:', researchStageComplete);
 
     if (!writingSession) {
       toast({
@@ -810,10 +805,112 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       return;
     }
 
+    if (retrievedMaterials.length === 0) {
+      toast({
+        title: '暂无资料',
+        description: '请先进行资料搜索',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       setConfirming(true);
       
+      // 如果还没有完成研究综合，先执行综合
+      if (!researchStageComplete) {
+        console.log('[handleNextStep] 需要先执行研究综合');
+        
+        toast({
+          title: '正在整理资料',
+          description: '正在分析检索到的资料并生成研究洞察...',
+        });
+        
+        setSynthesisLogs(['[' + new Date().toLocaleTimeString('zh-CN') + '] 开始资料整理...']);
+        
+        // 1. 获取所有检索到的资料
+        console.log('[handleNextStep] 调用 getRetrievedMaterials，sessionId:', writingSession.id);
+        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在获取检索到的资料...']);
+        const allMaterials = await getRetrievedMaterials(writingSession.id);
+        console.log('[handleNextStep] getRetrievedMaterials 返回结果:', allMaterials);
+        console.log('[handleNextStep] 资料总数:', allMaterials.length);
+        
+        if (allMaterials.length === 0) {
+          console.error('[handleNextStep] 没有可用的资料');
+          toast({
+            title: '暂无资料',
+            description: '请先进行资料搜索',
+            variant: 'destructive',
+          });
+          setConfirming(false);
+          return;
+        }
+
+        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 共 ' + allMaterials.length + ' 条资料待整理']);
+
+        // 2. 将所有资料保存到 knowledge_base 表
+        console.log('[handleNextStep] 开始保存资料到 knowledge_base，数量:', allMaterials.length);
+        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在保存资料到知识库...']);
+        
+        const existingKnowledge = await getKnowledgeBase(projectId);
+        const existingUrls = new Set(existingKnowledge.map(k => k.source_url).filter(Boolean));
+        
+        let savedCount = 0;
+        for (const material of allMaterials) {
+          if (material.url && existingUrls.has(material.url)) {
+            console.log('[handleNextStep] 资料已存在，跳过:', material.title);
+            continue;
+          }
+          
+          try {
+            let publishedAt = material.published_at;
+            if (!publishedAt && material.year) {
+              publishedAt = `${material.year}-01-01T00:00:00Z`;
+            }
+            
+            await createKnowledgeBase({
+              project_id: projectId,
+              title: material.title,
+              content: material.abstract || material.full_text || '',
+              source: material.source_type,
+              source_url: material.url,
+              published_at: publishedAt,
+              collected_at: material.created_at,
+              selected: true,
+              content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
+              extracted_content: material.full_text ? [material.full_text] : [],
+              full_text: material.full_text,
+            });
+            savedCount++;
+          } catch (error: any) {
+            console.error('[handleNextStep] 保存资料失败:', material.title, error);
+            setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 保存资料失败: ' + material.title]);
+          }
+        }
+        
+        console.log('[handleNextStep] 资料保存完成，新增:', savedCount, '条，开始调用研究综合 Agent');
+        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 资料保存完成，新增 ' + savedCount + ' 条']);
+
+        // 3. 调用研究综合 Agent
+        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 🤖 启动 Research Synthesis Agent...']);
+        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在分析资料并生成研究洞察...']);
+        
+        const result: SynthesisResult = await callResearchSynthesisAgent(projectId, writingSession.id);
+        
+        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ Research Synthesis Agent 完成']);
+        
+        // 4. 获取保存的洞察和空白
+        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在加载研究洞察和空白...']);
+        const insights = await getResearchInsights(writingSession.id);
+        const gaps = await getResearchGaps(writingSession.id);
+        
+        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 已生成 ' + insights.length + ' 条研究洞察，' + gaps.length + ' 条研究空白']);
+        
+        console.log('[handleNextStep] 研究综合完成，insights:', insights.length, 'gaps:', gaps.length);
+      }
+      
       // 更新项目状态到资料整理阶段
+      console.log('[handleNextStep] 更新项目状态到 material_review');
       await updateProject(projectId, { 
         status: 'material_review'
       });
@@ -827,10 +924,26 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     } catch (error: any) {
       console.error('[handleNextStep] 进入下一阶段失败:', error);
       
+      // 记录错误日志
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ❌ 操作失败: ' + error.message]);
+      
+      let errorMessage = '请稍后重试';
+      let errorTitle = '操作失败';
+      
+      if (error.message) {
+        errorMessage = error.message;
+        
+        if (error.message.includes('Api key is invalid') || error.message.includes('API 密钥')) {
+          errorTitle = '⚠️ API 密钥配置问题';
+          errorMessage = 'LLM API 密钥未配置或无效。请按以下步骤配置：\n\n1. 访问 https://cloud.siliconflow.cn 获取 API Key\n2. 在 Supabase 项目的 Edge Functions Secrets 中添加 QIANWEN_API_KEY\n3. 重新部署 Edge Function';
+        }
+      }
+      
       toast({
-        title: '操作失败',
-        description: error.message || '无法进入下一阶段',
+        title: errorTitle,
+        description: errorMessage,
         variant: 'destructive',
+        duration: 10000,
       });
     } finally {
       setConfirming(false);
@@ -1401,14 +1514,9 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           <CardContent className="py-4">
             <div className="flex justify-between items-center">
               <div className="text-sm text-muted-foreground">
-                {researchStageComplete ? (
-                  <span className="text-green-600 font-medium flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4" />
-                    研究阶段已完成，可以进入下一阶段
-                  </span>
-                ) : retrievedMaterials.length > 0 ? (
+                {retrievedMaterials.length > 0 ? (
                   <span>
-                    点击"资料整理"将自动整理所有搜索结果
+                    已检索到 {retrievedMaterials.length} 条资料，点击"进入下一阶段"开始整理
                   </span>
                 ) : (
                   <span>
@@ -1418,20 +1526,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               </div>
               <div className="flex gap-4">
                 <Button 
-                  onClick={handleOrganize} 
-                  variant="outline"
-                  className="min-w-[140px]"
-                  disabled={synthesizing || retrievedMaterials.length === 0}
-                >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  {synthesizing ? '整理中...' : '资料整理'}
-                </Button>
-                <Button 
                   onClick={handleNextStep}
                   className="min-w-[140px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-                  disabled={!researchStageComplete}
+                  disabled={confirming || retrievedMaterials.length === 0}
                 >
-                  进入下一阶段
+                  {confirming ? '处理中...' : '进入下一阶段'}
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               </div>
