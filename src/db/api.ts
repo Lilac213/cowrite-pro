@@ -2109,8 +2109,16 @@ export async function callArticleStructureAgent(
 
   console.log('[callArticleStructureAgent] 总洞察数:', allInsights.length);
   console.log('[callArticleStructureAgent] 总空白数:', allGaps.length);
+  console.log('[callArticleStructureAgent] 洞察决策分布:', {
+    adopt: allInsights.filter(i => i.user_decision === 'adopt').length,
+    downgrade: allInsights.filter(i => i.user_decision === 'downgrade').length,
+    reject: allInsights.filter(i => i.user_decision === 'reject').length,
+    pending: allInsights.filter(i => i.user_decision === 'pending').length,
+  });
 
-  // 4. 过滤：只保留用户采用的洞察
+  // 4. 内容筛选（非常重要）：只保留用户采用的洞察
+  // - 只有 user_decision === 'adopt' 的洞察会被传递给结构 Agent
+  // - downgrade 和 reject 的洞察不会进入结构生成，但仍保留在 session 中供后续使用
   const adoptedInsights = allInsights.filter(i => i.user_decision === 'adopt');
   const respondGaps = allGaps.filter(g => g.user_decision === 'respond');
 
@@ -2118,7 +2126,17 @@ export async function callArticleStructureAgent(
   console.log('[callArticleStructureAgent] 需要处理的空白数:', respondGaps.length);
 
   if (adoptedInsights.length === 0) {
-    throw new Error('没有已采用的研究洞察，无法生成文章结构');
+    const totalInsights = allInsights.length;
+    const downgradedCount = allInsights.filter(i => i.user_decision === 'downgrade').length;
+    const rejectedCount = allInsights.filter(i => i.user_decision === 'reject').length;
+    const pendingCount = allInsights.filter(i => i.user_decision === 'pending').length;
+    
+    throw new Error(
+      `没有已采用的研究洞察，无法生成文章结构。\n` +
+      `当前状态：总计 ${totalInsights} 条洞察，` +
+      `其中 ${pendingCount} 条待决策，${downgradedCount} 条降级为背景，${rejectedCount} 条已排除。\n` +
+      `请至少选择一条洞察为"必须使用"。`
+    );
   }
 
   // 5. 构建输入 JSON

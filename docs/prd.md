@@ -242,6 +242,28 @@ ResearchSynthesisInput = {
 
 #### 阶段 5:文章结构生成
 
+**后端内容筛选**
+
+在用户完成资料整理阶段的决策后,后端需要对 Research Synthesis Agent 的输出进行内容筛选,仅将用户确认采用的内容传递给 Structure Agent:
+
+```javascript
+const structureAgentInput = {
+  topic,
+  writing_goal,
+  audience,
+
+  accepted_insights: synthesis_result.synthesized_insights
+    .filter(i => session.user_decisions.insights[i.id] === \"accept\"),
+
+  accepted_gaps: synthesis_result.contradictions_or_gaps
+    .filter(g => session.user_decisions.gaps[g.id] === \"accept\")
+};
+```
+
+**重要说明**:
+- 未被用户采用的 insights 不会传递给 Structure Agent
+- 但这些内容不会被丢弃,仍保留在 session 中,供后续写作或扩展阶段使用
+
 **输入 JSON 串**
 
 这是上一步 synthesis 输出 → 经过 user decision → 系统整理后,唯一允许传给结构 Agent 的输入形态:
@@ -275,7 +297,7 @@ ResearchSynthesisInput = {
 | category | 结构聚合提示,不是判断 |
 | context_flags | 只提示存在性,防止 AI 补全 |
 
-注意:
+**注意**:
 - 没有 supporting_data
 - 没有 pending / optional
 - 没有 contradictions_or_gaps 的具体内容
@@ -367,31 +389,7 @@ ResearchSynthesisInput = {
 }
 ```
 
-**后端实现**
-
-Structure Agent 的输入(后端拼接):
-
-后端需要进行内容筛选:
-
-```javascript
-const structureAgentInput = {
-  topic,
-  writing_goal,
-  audience,
-
-  accepted_insights: synthesis_result.synthesized_insights
-    .filter(i => session.user_decisions.insights[i.id] === \"accept\"),
-
-  accepted_gaps: synthesis_result.contradictions_or_gaps
-    .filter(g => session.user_decisions.gaps[g.id] === \"accept\")
-};
-```
-
-注意:剩下的 insights 不丢,只是:
-- 不进 structure
-- 还留在 session 里,后面写作/扩展再用
-
-Structure Agent 输出存储:
+**Structure Agent 输出存储**
 
 ```javascript
 session.structure_result = {
@@ -731,4 +729,3 @@ POST /writing/guidance
 
 1. 上传图片:image.png
 2. 上传图片:image-2.png
-3. 上传图片:image-3.png

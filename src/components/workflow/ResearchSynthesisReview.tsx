@@ -165,11 +165,11 @@ export default function ResearchSynthesisReview({
   // 获取决策图标
   const getDecisionIcon = (decision: string) => {
     switch (decision) {
-      case 'must_use':
+      case 'adopt':
         return <CheckCircle2 className="h-4 w-4 text-green-600" />;
-      case 'background':
+      case 'downgrade':
         return <Info className="h-4 w-4 text-blue-600" />;
-      case 'excluded':
+      case 'reject':
         return <XCircle className="h-4 w-4 text-red-600" />;
       default:
         return <AlertTriangle className="h-4 w-4 text-yellow-600" />;
@@ -226,7 +226,7 @@ export default function ResearchSynthesisReview({
             </CardHeader>
             <CardContent className="space-y-4">
               {categoryInsights.map((insight, index) => (
-                <div key={insight.insight_id} className="space-y-3">
+                <div key={insight.id} className="space-y-3">
                   {index > 0 && <Separator />}
                   
                   {/* 洞察内容 */}
@@ -282,19 +282,19 @@ export default function ResearchSynthesisReview({
                     className="flex gap-4"
                   >
                     <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="must_use" id={`${insight.insight_id}-must`} />
+                      <RadioGroupItem value="adopt" id={`${insight.insight_id}-must`} />
                       <Label htmlFor={`${insight.insight_id}-must`} className="cursor-pointer">
                         必须使用
                       </Label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="background" id={`${insight.insight_id}-bg`} />
+                      <RadioGroupItem value="downgrade" id={`${insight.insight_id}-bg`} />
                       <Label htmlFor={`${insight.insight_id}-bg`} className="cursor-pointer">
                         背景补充
                       </Label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="excluded" id={`${insight.insight_id}-ex`} />
+                      <RadioGroupItem value="reject" id={`${insight.insight_id}-ex`} />
                       <Label htmlFor={`${insight.insight_id}-ex`} className="cursor-pointer">
                         排除
                       </Label>
@@ -321,7 +321,7 @@ export default function ResearchSynthesisReview({
           <Card>
             <CardContent className="pt-6 space-y-4">
               {localGaps.map((gap, index) => (
-                <div key={gap.gap_id} className="space-y-3">
+                <div key={gap.id} className="space-y-3">
                   {index > 0 && <Separator />}
                   
                   <div className="space-y-2">
@@ -335,14 +335,14 @@ export default function ResearchSynthesisReview({
                     className="flex gap-4"
                   >
                     <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="respond" id={`${gap.gap_id}-respond`} />
-                      <Label htmlFor={`${gap.gap_id}-respond`} className="cursor-pointer">
+                      <RadioGroupItem value="respond" id={`${gap.id}-respond`} />
+                      <Label htmlFor={`${gap.id}-respond`} className="cursor-pointer">
                         需要处理
                       </Label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="ignore" id={`${gap.gap_id}-ignore`} />
-                      <Label htmlFor={`${gap.gap_id}-ignore`} className="cursor-pointer">
+                      <RadioGroupItem value="ignore" id={`${gap.id}-ignore`} />
+                      <Label htmlFor={`${gap.id}-ignore`} className="cursor-pointer">
                         忽略
                       </Label>
                     </div>
