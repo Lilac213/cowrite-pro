@@ -159,6 +159,13 @@
   - [x] 验证修复后的结构与原始一致
   - [x] 更新文档说明四层防护策略
 
+- [x] 修复遗留 Edge Functions 的 JSON 解析问题
+  - [x] 更新 `generate-article-structure` 使用新的 `parseEnvelope`（含 JSON 修复）
+  - [x] 更新 `verify-coherence` 使用新的 `parseEnvelope`（含 JSON 修复）
+  - [x] 将这两个函数加入 `sync-shared.sh` 同步列表
+  - [x] 更新 `.gitignore` 忽略自动生成的 llm 副本
+  - [x] 重新部署所有 9 个 Edge Functions
+
 ## 注意事项
 - ⚠️ 向量搜索需要pgvector扩展，暂未实现，使用关键词匹配替代
 - ⚠️ 引用可视化UI需要在前端实现（CitationPopover组件）

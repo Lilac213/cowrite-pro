@@ -20,6 +20,8 @@ AGENT_FUNCTIONS=(
   "draft-agent"
   "review-agent"
   "adjust-article-structure"
+  "generate-article-structure"
+  "verify-coherence"
 )
 
 echo "🔄 开始同步 _shared/llm 到各 Edge Functions..."

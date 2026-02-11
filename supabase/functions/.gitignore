@@ -8,6 +8,8 @@ structure-agent/llm/
 draft-agent/llm/
 review-agent/llm/
 adjust-article-structure/llm/
+generate-article-structure/llm/
+verify-coherence/llm/
 
 # 但保留 _shared/llm（这是源代码）
 !_shared/llm/
