@@ -245,18 +245,49 @@ Deno.serve(async (req) => {
         );
       }
 
-      // 获取知识库资料
-      const { data: knowledge, error: knowledgeError } = await supabase
-        .from("knowledge_base")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("collected_at", { ascending: false });
+      // 获取资料：优先从 retrieved_materials（如果有 sessionId），否则从 knowledge_base
+      let knowledge: any[] = [];
+      
+      if (sessionId) {
+        // 新工作流：从 retrieved_materials 获取
+        // 注意：不强制要求 is_selected = true，因为可能是自动触发的综合分析
+        const { data: retrievedMaterials, error: retrievedError } = await supabase
+          .from("retrieved_materials")
+          .select("*")
+          .eq("session_id", sessionId)
+          .order("created_at", { ascending: false });
 
-      if (knowledgeError) {
-        return new Response(
-          JSON.stringify({ error: "获取知识库失败" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        if (retrievedError) {
+          return new Response(
+            JSON.stringify({ error: "获取检索资料失败" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // 转换 retrieved_materials 格式为 knowledge_base 格式
+        knowledge = (retrievedMaterials || []).map((item: any) => ({
+          title: item.title,
+          source: item.source_type,
+          source_url: item.url,
+          content: item.full_text || item.abstract || '',
+          collected_at: item.created_at,
+        }));
+      } else {
+        // 旧工作流：从 knowledge_base 获取
+        const { data: knowledgeData, error: knowledgeError } = await supabase
+          .from("knowledge_base")
+          .select("*")
+          .eq("project_id", projectId)
+          .order("collected_at", { ascending: false });
+
+        if (knowledgeError) {
+          return new Response(
+            JSON.stringify({ error: "获取知识库失败" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        knowledge = knowledgeData || [];
       }
 
       if (!knowledge || knowledge.length === 0) {
