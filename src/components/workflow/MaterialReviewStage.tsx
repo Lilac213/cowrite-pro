@@ -555,9 +555,9 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
         </CardHeader>
         
         {/* 审阅指南 - 移到资料整理模块内 */}
-        <CardContent className="pt-0 pb-4">
-          <div className="bg-muted/30 rounded-lg p-3 md:p-4">
-            <div className="flex items-center gap-2 mb-2 md:mb-3">
+        <CardContent className="pt-0 pb-2">
+          <div className="bg-muted/30 rounded-lg p-2 md:p-3">
+            <div className="flex items-center gap-2">
               <Info className="w-4 h-4 text-primary shrink-0" />
               <span className="text-xs md:text-sm font-medium text-foreground mr-3">审阅指南</span>
               <div className="flex items-center gap-4 text-xs flex-wrap">
@@ -583,9 +583,9 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
       </Card>
 
       {/* 主内容区 */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
         {/* 左侧：分类统计 */}
-        <div className="md:col-span-3 space-y-4">
+        <div className="md:col-span-3 space-y-3">
           {/* 资料类型统计 */}
           <Card>
             <CardHeader>

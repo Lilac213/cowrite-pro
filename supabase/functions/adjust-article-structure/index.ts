@@ -6,48 +6,62 @@ const corsHeaders = {
 };
 
 /**
- * 提取JSON对象 - 只保留第一个 { 到最后一个 } 之间的内容
+ * 字符归一化清洗 - 将中文标点符号转换为英文标点
  */
-function extractJSONObject(rawText: string): string {
-  const firstBrace = rawText.indexOf('{');
-  const lastBrace = rawText.lastIndexOf('}');
-  
-  if (firstBrace === -1 || lastBrace === -1) {
-    throw new Error('未在LLM输出中找到JSON对象（缺少 { 或 }）');
-  }
-  
-  if (lastBrace <= firstBrace) {
-    throw new Error('JSON对象边界无效（} 在 { 之前）');
-  }
-  
-  return rawText.slice(firstBrace, lastBrace + 1);
+function normalizeJsonString(raw: string): string {
+  return raw
+    .replace(/[""]/g, '"')      // 中文双引号 → 英文双引号
+    .replace(/['']/g, "'")      // 中文单引号 → 英文单引号
+    .replace(/：/g, ':')        // 中文冒号 → 英文冒号
+    .replace(/，/g, ',')        // 中文逗号 → 英文逗号
+    .replace(/（/g, '(')        // 中文左括号 → 英文左括号
+    .replace(/）/g, ')')        // 中文右括号 → 英文右括号
+    .replace(/\u00A0/g, ' ')    // 不可见空格 → 普通空格
+    .replace(/\u200B/g, '')     // 零宽字符 → 删除
+    .replace(/\uFEFF/g, '');    // BOM字符 → 删除
 }
 
 /**
- * 解析信封模式JSON - 两步解析策略
+ * 提取第一个JSON对象 - 防止前后文本污染
+ */
+function extractFirstJsonBlock(text: string): string {
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) {
+    throw new Error('未找到JSON对象');
+  }
+  return match[0];
+}
+
+/**
+ * 解析信封模式JSON - 三层防护策略
  */
 function parseEnvelopeJson(rawText: string): any {
   console.log('[parseEnvelope] 原始文本长度:', rawText.length);
   
   try {
-    // Step 1: 提取并解析外层信封
-    const jsonText = extractJSONObject(rawText);
-    const envelope = JSON.parse(jsonText);
+    // Step 1: 提取第一个JSON块
+    const extracted = extractFirstJsonBlock(rawText);
     
+    // Step 2: 字符归一化清洗
+    const normalized = normalizeJsonString(extracted);
+    
+    // Step 3: 解析外层信封
+    const envelope = JSON.parse(normalized);
     console.log('[parseEnvelope] 外层信封解析成功, type:', envelope.type);
     
-    // Step 2: 验证信封结构
+    // Step 4: 验证信封结构
     if (!envelope.type || typeof envelope.payload !== 'string') {
       throw new Error('信封格式无效: 缺少 type 或 payload 不是字符串');
     }
     
-    // Step 3: 解析 payload 字符串
+    // Step 5: 归一化并解析 payload 字符串
     if (!envelope.payload || envelope.payload.trim() === '') {
       console.warn('[parseEnvelope] payload 为空');
       return null;
     }
     
-    const content = JSON.parse(envelope.payload);
+    const payloadNormalized = normalizeJsonString(envelope.payload);
+    const content = JSON.parse(payloadNormalized);
     console.log('[parseEnvelope] payload 解析成功');
     
     return content;
@@ -125,6 +139,8 @@ ${taskDescription}
 3. 不要在外层JSON之外输出任何文字
 4. 不要使用markdown代码块
 5. 如果无法生成内容, payload可以是空字符串
+6. 禁止使用中文标点符号（""''：，等），必须使用英文标点符号
+7. 所有字符串必须使用英文双引号 "
 
 输出格式示例:
 {
