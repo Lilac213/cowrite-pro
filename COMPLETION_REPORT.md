@@ -106,6 +106,8 @@
 
 **文件**：
 - `agents/researchAgent.ts` - Agent 实现（含两个函数）
+- `functions/research-retrieval/index.ts` - Edge Function（资料搜索）
+- `functions/research-synthesis/index.ts` - Edge Function（资料整理）
 
 ### 7. ✅ structure-agent（需求#4）
 **状态**：完全完成

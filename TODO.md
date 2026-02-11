@@ -51,6 +51,8 @@
     - [x] reviewAgent.ts (需求6，综合三个review prompts)
   - [x] 创建Edge Functions
     - [x] brief-agent/index.ts
+    - [x] research-retrieval/index.ts
+    - [x] research-synthesis/index.ts
     - [x] structure-agent/index.ts
     - [x] draft-agent/index.ts
     - [x] review-agent/index.ts
