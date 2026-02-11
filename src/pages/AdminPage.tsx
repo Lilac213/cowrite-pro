@@ -97,6 +97,7 @@ export default function AdminPage() {
   const handleSaveConfig = async () => {
     setSaving(true);
     try {
+      // 保存到数据库
       await Promise.all([
         updateSystemConfig('llm_provider', systemConfig.llm_provider || 'siliconflow'),
         updateSystemConfig('llm_api_key', systemConfig.llm_api_key || ''),
@@ -105,8 +106,11 @@ export default function AdminPage() {
       ]);
 
       // 同步到 Secrets
+      let syncSuccess = false;
       try {
-        await syncConfigToSecrets();
+        const syncResult = await syncConfigToSecrets();
+        console.log('同步结果:', syncResult);
+        syncSuccess = syncResult?.synced || false;
       } catch (syncError) {
         console.error('同步 Secrets 失败:', syncError);
         // 即使同步失败也提示保存成功，因为数据库已经更新，边缘函数会自动回退到数据库读取
@@ -114,9 +118,15 @@ export default function AdminPage() {
       
       toast({
         title: '保存成功',
-        description: '系统配置已更新，立即生效',
+        description: syncSuccess 
+          ? '系统配置已更新并同步到 Edge Functions，立即生效' 
+          : '系统配置已保存到数据库，Edge Functions 将从数据库读取配置',
       });
+      
+      // 重新加载配置以确保显示最新数据
+      await loadData();
     } catch (error) {
+      console.error('保存配置失败:', error);
       toast({
         title: '保存失败',
         description: '无法保存配置，请稍后重试',
@@ -289,21 +299,23 @@ export default function AdminPage() {
                 <div className="flex items-center justify-between">
                   <h3 className="font-medium">SerpAPI</h3>
                   <Badge variant={systemConfig.search_api_key ? 'default' : 'outline'}>
-                    {systemConfig.search_api_key ? '已配置' : '未配置'}
+                    {systemConfig.search_api_key ? '✓ 已配置' : '未配置'}
                   </Badge>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="serpapi-status">状态</Label>
-                  <Input
-                    id="serpapi-status"
-                    value={systemConfig.search_api_key ? '已启用' : '未启用'}
-                    disabled
-                    className="bg-muted"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    SerpAPI 提供 Google Scholar（学术搜索）、Google Search（网页搜索）、Google News（新闻搜索）的统一 API 接口
-                  </p>
-                </div>
+                
+                {/* 当前配置状态 */}
+                {systemConfig.search_api_key && (
+                  <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm font-medium text-green-900 dark:text-green-100 mb-1">
+                      <span>✓</span>
+                      <span>SerpAPI 已启用</span>
+                    </div>
+                    <p className="text-xs text-green-700 dark:text-green-300">
+                      API Key: {systemConfig.search_api_key.substring(0, 20)}...{systemConfig.search_api_key.substring(systemConfig.search_api_key.length - 10)}
+                    </p>
+                  </div>
+                )}
+                
                 <div className="space-y-2">
                   <Label htmlFor="serpapi-api-key">API 密钥</Label>
                   <Input

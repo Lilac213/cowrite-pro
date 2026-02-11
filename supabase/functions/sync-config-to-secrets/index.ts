@@ -93,15 +93,48 @@ Deno.serve(async (req) => {
 
     console.log('准备同步的密钥:', secretsToSync.map(s => s.name));
 
-    // 注意：实际的密钥同步由 MeDo 平台的 supabase_bulk_create_secrets 工具完成
-    // Edge Function 只负责准备数据
+    // 调用 Supabase Management API 同步密钥
+    // 注意：这需要 SUPABASE_ACCESS_TOKEN 和 SUPABASE_PROJECT_REF
+    const accessToken = Deno.env.get('SUPABASE_ACCESS_TOKEN');
+    const projectRef = Deno.env.get('SUPABASE_PROJECT_REF');
+    
+    let syncResult = null;
+    if (accessToken && projectRef && secretsToSync.length > 0) {
+      try {
+        // 调用 Supabase Management API 批量创建/更新密钥
+        const response = await fetch(
+          `https://api.supabase.com/v1/projects/${projectRef}/secrets`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(secretsToSync),
+          }
+        );
+        
+        if (response.ok) {
+          syncResult = await response.json();
+          console.log('密钥同步成功:', syncResult);
+        } else {
+          const errorText = await response.text();
+          console.error('密钥同步失败:', response.status, errorText);
+        }
+      } catch (syncError) {
+        console.error('调用 Management API 失败:', syncError);
+      }
+    }
     
     return new Response(
       JSON.stringify({
         success: true,
-        message: '配置已准备同步',
-        secrets: secretsToSync,
-        note: 'QIANWEN_API_KEY 和 SERPAPI_API_KEY 已配置。密钥将同步到 Edge Function 环境。'
+        message: '配置已保存到数据库',
+        secrets: secretsToSync.map(s => s.name),
+        synced: syncResult !== null,
+        note: syncResult 
+          ? 'QIANWEN_API_KEY 和 SERPAPI_API_KEY 已同步到 Edge Function 环境。' 
+          : '配置已保存到数据库，Edge Functions 将从数据库读取配置。'
       }),
       { 
         status: 200, 
