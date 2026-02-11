@@ -16,7 +16,9 @@ import {
   callArticleStructureAgent,
   updateWritingSessionStage,
   updateProject,
-  getWritingSession
+  getWritingSession,
+  getRetrievedMaterials,
+  callResearchSynthesisAgent
 } from '@/db/api';
 import type { ResearchInsight, ResearchGap } from '@/types';
 import { CheckCircle2, Circle, ChevronRight, FileText, AlertCircle, Info } from 'lucide-react';
@@ -45,6 +47,8 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
   const [synthesisLog, setSynthesisLog] = useState<any>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showLogsDialog, setShowLogsDialog] = useState(false);
+  const [synthesizing, setSynthesizing] = useState(false);
+  const [synthesisMessage, setSynthesisMessage] = useState<string>('');
   const { toast } = useToast();
 
   // 分类统计（包含未决策数量）
@@ -126,27 +130,105 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
       
       console.log('[MaterialReviewStage] insights:', insights.length, 'gaps:', gaps.length);
 
-      // 转换为统一格式
-      const insightItems: MaterialItem[] = insights.map(insight => ({
-        id: insight.id,
-        type: 'insight',
-        category: insight.category,
-        content: insight.insight,
-        decision: insight.user_decision,
-        data: insight
-      }));
+      // 如果没有 insights 和 gaps，检查是否有 retrieved_materials
+      if (insights.length === 0 && gaps.length === 0) {
+        console.log('[MaterialReviewStage] 没有找到研究洞察和空白，检查是否有检索资料...');
+        
+        const retrievedMaterials = await getRetrievedMaterials(session.id);
+        console.log('[MaterialReviewStage] 检索资料数量:', retrievedMaterials.length);
+        
+        if (retrievedMaterials.length > 0) {
+          // 有检索资料但没有综合结果，自动触发综合分析
+          console.log('[MaterialReviewStage] 发现检索资料但未综合，自动触发综合分析...');
+          setSynthesizing(true);
+          setSynthesisMessage('正在分析检索到的资料，生成研究洞察...');
+          
+          toast({
+            title: '🤖 启动资料综合分析',
+            description: '正在分析检索到的资料，请稍候...',
+          });
+          
+          try {
+            // 调用综合分析 Agent
+            await callResearchSynthesisAgent(projectId, session.id);
+            
+            // 重新获取 insights 和 gaps
+            const [newInsights, newGaps] = await Promise.all([
+              getResearchInsights(session.id),
+              getResearchGaps(session.id)
+            ]);
+            
+            console.log('[MaterialReviewStage] 综合分析完成，insights:', newInsights.length, 'gaps:', newGaps.length);
+            
+            // 转换为统一格式
+            const insightItems: MaterialItem[] = newInsights.map(insight => ({
+              id: insight.id,
+              type: 'insight',
+              category: insight.category,
+              content: insight.insight,
+              decision: insight.user_decision,
+              data: insight
+            }));
 
-      const gapItems: MaterialItem[] = gaps.map(gap => ({
-        id: gap.id,
-        type: 'gap',
-        category: '矛盾与空白',
-        content: gap.issue,
-        decision: gap.user_decision,
-        data: gap
-      }));
+            const gapItems: MaterialItem[] = newGaps.map(gap => ({
+              id: gap.id,
+              type: 'gap',
+              category: '矛盾与空白',
+              content: gap.issue,
+              decision: gap.user_decision,
+              data: gap
+            }));
 
-      console.log('[MaterialReviewStage] 转换后的资料数量:', insightItems.length + gapItems.length);
-      setMaterials([...insightItems, ...gapItems]);
+            console.log('[MaterialReviewStage] 转换后的资料数量:', insightItems.length + gapItems.length);
+            setMaterials([...insightItems, ...gapItems]);
+            
+            toast({
+              title: '✅ 综合分析完成',
+              description: `已生成 ${newInsights.length} 条研究洞察，${newGaps.length} 条研究空白`,
+            });
+          } catch (error: any) {
+            console.error('[MaterialReviewStage] 综合分析失败:', error);
+            toast({
+              title: '综合分析失败',
+              description: error.message || '请返回资料查询阶段重新操作',
+              variant: 'destructive',
+            });
+          } finally {
+            setSynthesizing(false);
+            setSynthesisMessage('');
+          }
+        } else {
+          // 既没有综合结果，也没有检索资料
+          console.log('[MaterialReviewStage] 没有找到任何资料');
+          toast({
+            title: '暂无资料',
+            description: '请先完成资料查询阶段',
+            variant: 'destructive',
+          });
+        }
+      } else {
+        // 有 insights 和 gaps，正常显示
+        const insightItems: MaterialItem[] = insights.map(insight => ({
+          id: insight.id,
+          type: 'insight',
+          category: insight.category,
+          content: insight.insight,
+          decision: insight.user_decision,
+          data: insight
+        }));
+
+        const gapItems: MaterialItem[] = gaps.map(gap => ({
+          id: gap.id,
+          type: 'gap',
+          category: '矛盾与空白',
+          content: gap.issue,
+          decision: gap.user_decision,
+          data: gap
+        }));
+
+        console.log('[MaterialReviewStage] 转换后的资料数量:', insightItems.length + gapItems.length);
+        setMaterials([...insightItems, ...gapItems]);
+      }
       
       // 尝试从 session 中恢复日志（从 synthesis_result 字段）
       if (session.synthesis_result) {
@@ -378,13 +460,50 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
     }
   };
 
-  if (loading) {
+  if (loading || synthesizing) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">加载资料中...</p>
+          <p className="text-muted-foreground">
+            {synthesizing ? synthesisMessage : '加载资料中...'}
+          </p>
         </div>
+      </div>
+    );
+  }
+
+  // 如果没有任何资料，显示提示信息
+  if (materials.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-orange-500" />
+              暂无资料
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-muted-foreground">
+              当前项目还没有完成资料查询和综合分析。请返回资料查询阶段完成以下步骤：
+            </p>
+            <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+              <li>在资料查询阶段进行搜索</li>
+              <li>选择需要的资料</li>
+              <li>点击"进入资料整理"按钮</li>
+            </ol>
+            <Button 
+              onClick={() => {
+                updateProject(projectId, { status: 'knowledge_selected' });
+                window.location.reload();
+              }}
+              className="w-full"
+            >
+              返回资料查询阶段
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
