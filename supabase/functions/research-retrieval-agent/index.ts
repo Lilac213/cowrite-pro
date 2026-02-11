@@ -762,7 +762,7 @@ Output Format:
             authors: source.authors || null,
             year: source.year || null,
             citation_count: source.citation_count || 0,
-            is_selected: false,
+            is_selected: true,  // 默认选中所有检索到的资料
             metadata: {
               content_status: source.content_status,
               extracted_content: source.extracted_content || [],
@@ -782,7 +782,7 @@ Output Format:
             full_text: source.full_text || null,
             authors: source.source || null,
             published_at: normalizeDate(source.published_at) || null,
-            is_selected: false,
+            is_selected: true,  // 默认选中所有检索到的资料
             metadata: {
               content_status: source.content_status,
               extracted_content: source.extracted_content || [],
@@ -801,7 +801,7 @@ Output Format:
             abstract: source.snippet || null,
             full_text: source.full_text || null,
             authors: source.site_name || null,
-            is_selected: false,
+            is_selected: true,  // 默认选中所有检索到的资料
             metadata: {
               content_status: source.content_status,
               extracted_content: source.extracted_content || [],
@@ -819,7 +819,7 @@ Output Format:
             title: source.title || '',
             url: source.url || null,
             full_text: source.content || null,
-            is_selected: false,
+            is_selected: true,  // 默认选中所有检索到的资料
             metadata: {
               source_type: source.source_type || '',
               created_at: source.created_at || ''
@@ -834,7 +834,7 @@ Output Format:
             source_type: 'personal',
             title: source.title || '',
             full_text: source.content || null,
-            is_selected: false,
+            is_selected: true,  // 默认选中所有检索到的资料
             metadata: {
               material_type: source.material_type || '',
               created_at: source.created_at || ''

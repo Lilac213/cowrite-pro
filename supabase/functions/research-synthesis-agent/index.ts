@@ -250,11 +250,12 @@ Deno.serve(async (req) => {
       
       if (sessionId) {
         // 新工作流：从 retrieved_materials 获取
-        // 注意：不强制要求 is_selected = true，因为可能是自动触发的综合分析
+        // 只获取用户选中的资料（is_selected = true）
         const { data: retrievedMaterials, error: retrievedError } = await supabase
           .from("retrieved_materials")
           .select("*")
           .eq("session_id", sessionId)
+          .eq("is_selected", true)
           .order("created_at", { ascending: false });
 
         if (retrievedError) {
@@ -265,13 +266,21 @@ Deno.serve(async (req) => {
         }
 
         // 转换 retrieved_materials 格式为 knowledge_base 格式
-        knowledge = (retrievedMaterials || []).map((item: any) => ({
-          title: item.title,
-          source: item.source_type,
-          source_url: item.url,
-          content: item.full_text || item.abstract || '',
-          collected_at: item.created_at,
-        }));
+        // 清理内容，移除可能导致JSON解析错误的字符
+        knowledge = (retrievedMaterials || []).map((item: any) => {
+          const content = (item.full_text || item.abstract || '')
+            .replace(/[\n\r\t]/g, ' ')  // 移除换行符和制表符
+            .replace(/\s+/g, ' ')        // 合并多个空格
+            .trim();
+          
+          return {
+            title: (item.title || '无标题').trim(),
+            source: item.source_type || 'unknown',
+            source_url: item.url || '',
+            content: content.substring(0, 2000), // 限制长度，避免过长
+            collected_at: item.created_at,
+          };
+        });
       } else {
         // 旧工作流：从 knowledge_base 获取
         const { data: knowledgeData, error: knowledgeError } = await supabase
@@ -287,7 +296,19 @@ Deno.serve(async (req) => {
           );
         }
 
-        knowledge = knowledgeData || [];
+        // 清理内容，移除可能导致JSON解析错误的字符
+        knowledge = (knowledgeData || []).map((item: any) => {
+          const content = (item.content || '')
+            .replace(/[\n\r\t]/g, ' ')  // 移除换行符和制表符
+            .replace(/\s+/g, ' ')        // 合并多个空格
+            .trim();
+          
+          return {
+            ...item,
+            title: (item.title || '无标题').trim(),
+            content: content.substring(0, 2000), // 限制长度
+          };
+        });
       }
 
       if (!knowledge || knowledge.length === 0) {

@@ -265,12 +265,13 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
     }
   };
 
-  // 批量选择
+  // 批量选择（考虑筛选）
   const handleSelectAll = () => {
-    if (selectedIds.size === materials.length) {
+    const currentMaterials = selectedCategory ? filteredMaterials : materials;
+    if (selectedIds.size === currentMaterials.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(materials.map(m => m.id)));
+      setSelectedIds(new Set(currentMaterials.map(m => m.id)));
     }
   };
 
@@ -602,10 +603,15 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
                 <CardTitle className="text-base">资料内容</CardTitle>
                 <div className="flex items-center gap-2">
                   <Checkbox
-                    checked={selectedIds.size === materials.length && materials.length > 0}
+                    checked={
+                      filteredMaterials.length > 0 && 
+                      filteredMaterials.every(m => selectedIds.has(m.id))
+                    }
                     onCheckedChange={handleSelectAll}
                   />
-                  <span className="text-sm text-muted-foreground">全选</span>
+                  <span className="text-sm text-muted-foreground">
+                    {selectedCategory ? '全选当前分类' : '全选'}
+                  </span>
                   {selectedIds.size > 0 && (
                     <>
                       <span className="text-sm text-muted-foreground ml-4">
