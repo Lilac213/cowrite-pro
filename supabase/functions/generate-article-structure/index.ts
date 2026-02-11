@@ -7,107 +7,42 @@ const corsHeaders = {
 };
 
 /**
- * 清理JSON字符串，移除控制字符和修复常见问题
+ * 确定性JSON解析器
+ * 只做最小化预处理，不猜测语义
  */
-function cleanJsonString(jsonStr: string): string {
-  return jsonStr
-    // 移除markdown代码块标记
-    .replace(/```json\s*/g, '')
-    .replace(/```\s*/g, '')
-    // 替换中文标点为英文标点（JSON中必须使用英文标点）
-    .replace(/：/g, ':')
-    .replace(/，/g, ',')
-    .replace(/"/g, '"')
-    .replace(/"/g, '"')
-    .replace(/【/g, '[')
-    .replace(/】/g, ']')
-    .replace(/（/g, '(')
-    .replace(/）/g, ')')
-    // 移除所有控制字符（除了空格、换行、制表符）
-    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
-    // 将换行符和制表符替换为空格（在JSON字符串值内）
-    .replace(/(?<!\\)(\\r|\\n|\\t)/g, ' ')
-    // 移除多余的逗号（在}或]之前）
-    .replace(/,(\s*[}\]])/g, '$1')
-    // 修复缺失的逗号（在}或]之后，下一个"之前）
-    .replace(/([}\]])(\s*)(")/g, '$1,$2$3')
-    // 合并多个空格
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/**
- * 尝试多种策略解析JSON
- */
-function parseJsonWithFallback(text: string): any {
-  // 先记录原始文本的前200个字符用于调试
-  console.log('[parseJsonWithFallback] 原始文本前200字符:', text.substring(0, 200));
-  console.log('[parseJsonWithFallback] 文本长度:', text.length);
-  console.log('[parseJsonWithFallback] 是否包含```:', text.includes('```'));
+function parseJsonDeterministic(text: string): any {
+  console.log('[parseJson] 原始文本长度:', text.length);
+  console.log('[parseJson] 原始文本前300字符:', text.substring(0, 300));
   
-  const strategies = [
-    // 策略1: 直接解析原始文本
-    () => {
-      console.log('[策略1] 尝试直接解析原始文本');
-      return JSON.parse(text);
-    },
+  let jsonStr = text.trim();
+  
+  // 步骤1: 如果文本不是以 { 开头，尝试提取 { 到 } 的边界
+  if (!jsonStr.startsWith('{')) {
+    const start = jsonStr.indexOf('{');
+    const end = jsonStr.lastIndexOf('}');
     
-    // 策略2: 从markdown代码块提取（优先处理，因为LLM经常返回代码块）
-    () => {
-      console.log('[策略2] 尝试从markdown代码块提取');
-      // 匹配 ```json ... ``` 或 ``` ... ```
-      const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (jsonMatch && jsonMatch[1]) {
-        console.log('[策略2] 找到代码块，内容前100字符:', jsonMatch[1].substring(0, 100));
-        const extracted = jsonMatch[1].trim();
-        // 清理并解析
-        const cleaned = cleanJsonString(extracted);
-        console.log('[策略2] 清理后前100字符:', cleaned.substring(0, 100));
-        return JSON.parse(cleaned);
-      }
-      throw new Error('未找到markdown代码块');
-    },
-    
-    // 策略3: 清理整个文本后解析
-    () => {
-      console.log('[策略3] 尝试清理整个文本后解析');
-      const cleaned = cleanJsonString(text);
-      console.log('[策略3] 清理后前100字符:', cleaned.substring(0, 100));
-      return JSON.parse(cleaned);
-    },
-    
-    // 策略4: 提取JSON对象边界
-    () => {
-      console.log('[策略4] 尝试提取JSON对象边界');
-      const jsonStart = text.indexOf('{');
-      const jsonEnd = text.lastIndexOf('}');
-      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-        const jsonStr = text.substring(jsonStart, jsonEnd + 1);
-        console.log('[策略4] 提取的JSON前100字符:', jsonStr.substring(0, 100));
-        const cleaned = cleanJsonString(jsonStr);
-        console.log('[策略4] 清理后前100字符:', cleaned.substring(0, 100));
-        return JSON.parse(cleaned);
-      }
-      throw new Error('未找到有效的JSON对象边界');
+    if (start === -1 || end === -1 || end <= start) {
+      throw new Error('未找到有效的JSON对象边界（缺少 { 或 }）');
     }
-  ];
-  
-  const errors: string[] = [];
-  
-  for (let i = 0; i < strategies.length; i++) {
-    try {
-      console.log(`[parseJsonWithFallback] 尝试策略 ${i + 1}`);
-      const result = strategies[i]();
-      console.log(`[parseJsonWithFallback] 策略 ${i + 1} 成功`);
-      return result;
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      errors.push(`策略${i + 1}: ${errorMsg}`);
-      console.log(`[parseJsonWithFallback] 策略 ${i + 1} 失败: ${errorMsg}`);
-    }
+    
+    jsonStr = jsonStr.substring(start, end + 1);
+    console.log('[parseJson] 提取边界后长度:', jsonStr.length);
   }
   
-  throw new Error(`所有解析策略均失败:\n${errors.join('\n')}`);
+  // 步骤2: 移除非法控制字符（保留合法的空白字符）
+  // 只移除 \x00-\x1F 中除了 \t \n \r 之外的控制字符
+  jsonStr = jsonStr.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+  
+  // 步骤3: 直接解析
+  try {
+    const result = JSON.parse(jsonStr);
+    console.log('[parseJson] 解析成功');
+    return result;
+  } catch (error) {
+    console.error('[parseJson] 解析失败:', error);
+    console.error('[parseJson] 失败时的JSON字符串前500字符:', jsonStr.substring(0, 500));
+    throw new Error(`JSON解析失败: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 // 输入接口定义
@@ -234,14 +169,9 @@ serve(async (req) => {
       );
     }
 
-    if (!input.confirmed_insights || input.confirmed_insights.length === 0) {
-      console.error('[generate-article-structure] 错误: 没有确认的洞察');
-      return new Response(
-        JSON.stringify({ error: '没有确认的研究洞察，无法生成文章结构' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
+    // 判断是否有确认的洞察，决定使用哪种prompt
+    const hasInsights = input.confirmed_insights && input.confirmed_insights.length > 0;
+    console.log('[generate-article-structure] 是否有确认的洞察:', hasInsights);
     console.log('[generate-article-structure] 验证通过，准备调用 LLM');
     console.log('[generate-article-structure] 主题:', input.topic);
     console.log('[generate-article-structure] 确认的洞察数量:', input.confirmed_insights.length);
@@ -255,7 +185,77 @@ serve(async (req) => {
       );
     }
 
-    const prompt = `你是 CoWrite 的【文章级论证架构 Agent（User-Gated）】。
+    // 根据是否有洞察选择不同的prompt
+    let prompt: string;
+    
+    if (!hasInsights) {
+      // 简单模式：仅基于需求文档生成结构
+      console.log('[generate-article-structure] 使用简单模式（无研究洞察）');
+      
+      const requirementsText = body.requirements ? JSON.stringify(body.requirements, null, 2) : '无具体要求';
+      
+      prompt = `你是写作系统中的「文章级论证架构模块」。
+
+请基于以下输入，构建文章的整体论证结构，而不是生成正文内容。
+
+【输入】
+选题：${input.topic}
+写作要求：${requirementsText}
+
+【你的任务】
+1. 提炼文章的「核心论点」（一句话）
+2. 拆分 3–5 个一级论证块（章节级）
+3. 说明每个论证块的作用（为什么需要这一块）
+4. 标注论证块之间的关系（并列 / 递进 / 因果 / 对比）
+
+【输出格式】
+- 核心论点：
+- 论证结构：
+  - 论证块 A：
+    - 作用：
+  - 论证块 B：
+    - 作用：
+  - …
+- 结构关系说明：
+
+【约束】
+- 不生成具体段落
+- 不引用案例、数据或研究
+- 输出应稳定、抽象、可编辑
+
+【输出要求】
+- 仅以 JSON 输出，不要包含任何其他文字说明
+- 确保 JSON 格式完全正确，可以被 JSON.parse() 直接解析
+- 所有字符串值必须正确转义，不能包含未转义的引号、换行符、制表符等控制字符
+- 字符串中的换行请使用 \\n，制表符使用 \\t，引号使用 \\"
+- 必须使用英文标点符号：冒号用 : 不用 ：，逗号用 , 不用 ，，引号用 " 不用 " 或 "
+- 不要在 JSON 外添加任何解释性文字
+- 不要使用 markdown 代码块包裹 JSON（不要用三个反引号）
+- 直接输出纯 JSON，确保可以被 JSON.parse() 直接解析，没有语法错误
+
+请严格按照以下 JSON 格式输出：
+{
+  "core_thesis": "核心论点（一句话，不能包含换行符）",
+  "argument_blocks": [
+    {
+      "id": "block_1",
+      "title": "论证块标题（不能包含换行符）",
+      "description": "该论证块的作用（不能包含换行符）",
+      "order": 1,
+      "relation": "与前一块的关系（起始论证块 / 递进 / 并列 / 因果 / 对比等）",
+      "derived_from": [],
+      "user_editable": true
+    }
+  ],
+  "structure_relations": "结构关系说明（不能包含换行符）",
+  "status": "awaiting_user_confirmation",
+  "allowed_user_actions": ["edit_core_thesis", "delete_block", "reorder_blocks"]
+}`;
+    } else {
+      // 复杂模式：基于研究洞察生成结构
+      console.log('[generate-article-structure] 使用复杂模式（有研究洞察）');
+      
+      prompt = `你是 CoWrite 的【文章级论证架构 Agent（User-Gated）】。
 
 你的职责不是写文章，而是：
 基于【用户已确认的研究洞察】，生成一份【可编辑、可确认的文章论证结构草案】。
@@ -346,6 +346,7 @@ ${inputJson}
     }
   ]
 }`;
+    }
 
     console.log('[generate-article-structure] 开始调用 Gemini API');
     const response = await fetch('https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse', {
@@ -410,18 +411,27 @@ ${inputJson}
     console.log('[generate-article-structure] 流式数据读取完成，总长度:', fullText.length);
     console.log('[generate-article-structure] 原始响应内容（前500字符）:', fullText.substring(0, 500));
 
-    // 使用多策略解析JSON
+    // 使用确定性解析器解析JSON
     let structure;
     try {
       console.log('[generate-article-structure] 开始解析JSON');
-      structure = parseJsonWithFallback(fullText);
+      structure = parseJsonDeterministic(fullText);
       console.log('[generate-article-structure] JSON解析成功');
     } catch (error) {
       console.error('[generate-article-structure] JSON解析失败:', error);
       console.error('[generate-article-structure] 完整响应文本:', fullText);
       
       const errorMsg = error instanceof Error ? error.message : String(error);
-      throw new Error(`JSON解析失败: ${errorMsg}`);
+      return new Response(
+        JSON.stringify({ 
+          error: `JSON解析失败: ${errorMsg}`,
+          details: {
+            type: error instanceof Error ? error.constructor.name : 'Error',
+            stack: error instanceof Error ? error.stack : undefined
+          }
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     console.log('[generate-article-structure] JSON解析完成，验证必要字段');

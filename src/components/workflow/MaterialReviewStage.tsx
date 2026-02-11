@@ -512,18 +512,18 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* 顶部操作栏 */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <CardTitle>资料整理</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 审阅研究资料，决定每项资料的使用方式
               </p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2 md:gap-4">
               <div className="text-sm">
                 <span className="text-muted-foreground">已决策：</span>
                 <span className="font-semibold text-green-600">{decidedCount}</span>
@@ -538,12 +538,14 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
                   className="text-orange-600"
                 >
                   <AlertCircle className="w-4 h-4 mr-2" />
-                  还有 {pendingCount} 项未决策
+                  <span className="hidden sm:inline">还有 </span>{pendingCount}<span className="hidden sm:inline"> 项未决策</span>
                 </Button>
               )}
               <Button
                 onClick={handleNextStage}
                 disabled={saving || pendingCount > 0}
+                size="sm"
+                className="md:size-default"
               >
                 {saving ? '处理中...' : '进入下一阶段'}
                 <ChevronRight className="w-4 h-4 ml-2" />
@@ -553,13 +555,13 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
         </CardHeader>
         
         {/* 审阅指南 - 移到资料整理模块内 */}
-        <CardContent className="pt-0">
-          <div className="bg-muted/30 rounded-lg p-4">
-            <div className="flex items-start gap-2 mb-3">
+        <CardContent className="pt-0 pb-4">
+          <div className="bg-muted/30 rounded-lg p-3 md:p-4">
+            <div className="flex items-start gap-2 mb-2 md:mb-3">
               <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-              <span className="text-sm font-medium text-foreground">审阅指南</span>
+              <span className="text-xs md:text-sm font-medium text-foreground">审阅指南</span>
             </div>
-            <div className="grid grid-cols-3 gap-4 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 text-xs">
               <div className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
                 <div>
@@ -587,9 +589,9 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
       </Card>
 
       {/* 主内容区 */}
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
         {/* 左侧：分类统计 */}
-        <div className="col-span-3 space-y-4">
+        <div className="md:col-span-3 space-y-4">
           {/* 资料类型统计 */}
           <Card>
             <CardHeader>
@@ -641,7 +643,7 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
         </div>
 
         {/* 右侧：资料列表 */}
-        <div className="col-span-9">
+        <div className="md:col-span-9">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
