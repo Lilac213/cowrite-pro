@@ -62,8 +62,8 @@ export async function runLLMAgent<T = any>(
       maxTokens: config.maxTokens,
     });
 
-    // Step 2-4: 解析信封格式（包含归一化和payload解析）
-    const parsedData = parseEnvelope(rawOutput);
+    // Step 2-4: 解析信封格式（包含归一化、payload解析、JSON修复）
+    const parsedData = await parseEnvelope(rawOutput);
 
     // Step 5: Schema验证（如果提供了schema）
     let validatedData: T;

@@ -26,18 +26,20 @@ Supabase Edge Functions 部署系统不支持 `_shared` 目录的自动打包。
 ├── runtime/                    # 统一运行时层
 │   ├── callLLM.ts             # LLM API调用
 │   ├── normalize.ts           # 字符归一化清洗
-│   ├── parseEnvelope.ts       # 信封格式解析
+│   ├── parseEnvelope.ts       # 信封格式解析（含JSON修复）
 │   ├── validateSchema.ts      # Schema验证
 │   └── LLMRuntime.ts          # 统一入口
 │
-├── agents/                     # Agent层（待实现）
+├── agents/                     # Agent层
 │   ├── briefAgent.ts          # 需求文档生成
 │   ├── researchAgent.ts       # 资料搜索与整理
 │   ├── structureAgent.ts      # 文章结构生成
 │   ├── draftAgent.ts          # 草稿生成
-│   └── reviewAgent.ts         # 内容审校
+│   ├── reviewAgent.ts         # 内容审校
+│   ├── structureAdjustmentAgent.ts  # 结构调整
+│   └── repairJSONAgent.ts     # JSON修复（自动调用）
 │
-└── schemas/                    # Schema定义（待实现）
+└── schemas/                    # Schema定义
     ├── briefSchema.ts
     ├── researchSchema.ts
     ├── structureSchema.ts
@@ -81,6 +83,12 @@ Supabase Edge Functions 部署系统不支持 `_shared` 目录的自动打包。
    - 两步解析（信封 + payload）
    - Schema验证确保数据完整性
 
+4. **Layer 4: JSON修复（自动降级）**
+   - 当JSON解析失败时，自动调用 `repairJSONAgent`
+   - 使用LLM修复格式错误（中文引号、未转义字符、多余逗号等）
+   - 验证修复后的结构与原始一致
+   - 确保100%可被 `JSON.parse()` 解析
+
 ### 3. 信封模式
 
 所有Agent输出统一使用信封格式：
@@ -101,6 +109,46 @@ Supabase Edge Functions 部署系统不支持 `_shared` 目录的自动打包。
 - 可以携带元数据（agent名称、时间戳等）
 - 便于日志记录和调试
 - 支持版本控制和向后兼容
+
+### 4. JSON修复Agent
+
+**自动触发机制**：当JSON解析失败时，系统会自动调用 `repairJSONAgent` 进行修复。
+
+**修复能力**：
+- ✅ 中文引号 → 英文引号
+- ✅ 未转义换行 → `\n`
+- ✅ 未转义引号 → `\"`
+- ✅ 末尾多余逗号 → 删除
+- ✅ 缺少引号/括号 → 补全
+- ✅ 属性名未加引号 → 加引号
+- ✅ 单引号字符串 → 双引号
+- ✅ Markdown代码块 → 去除
+- ✅ 包含解释文字 → 提取JSON
+
+**约束保证**：
+- ⚠️ 不改写业务内容
+- ⚠️ 不增删字段
+- ⚠️ 保持结构一致
+- ⚠️ 只修复语法问题
+
+**使用参数**：
+- `temperature: 0` - 确定性修复，不随机
+- `model: gemini-2.0-flash-exp` - 高性能模型
+
+**工作流程**：
+```
+JSON解析失败
+    ↓
+调用 repairJSONAgent
+    ↓
+LLM修复格式错误
+    ↓
+验证可解析性
+    ↓
+检查结构一致性
+    ↓
+返回修复后的JSON
+```
 
 ## 使用示例
 

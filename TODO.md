@@ -152,6 +152,13 @@
   - [x] 创建 `ARCHITECTURE.md` 文档说明架构设计
   - [x] 删除未使用的 Edge Functions（openalex-search, thenews-search, web-search）
 
+- [x] 增加 JSON 修复 Agent（第四层防护）
+  - [x] 创建 `repairJSONAgent.ts` 专门处理 JSON 格式错误
+  - [x] 集成到 `parseEnvelope` 中，解析失败时自动调用
+  - [x] 使用 LLM 修复中文引号、未转义字符、多余逗号等问题
+  - [x] 验证修复后的结构与原始一致
+  - [x] 更新文档说明四层防护策略
+
 ## 注意事项
 - ⚠️ 向量搜索需要pgvector扩展，暂未实现，使用关键词匹配替代
 - ⚠️ 引用可视化UI需要在前端实现（CitationPopover组件）

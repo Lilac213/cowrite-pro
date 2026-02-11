@@ -881,14 +881,16 @@ if (stage === 'review' && !userDecision.review) {
   │     ├── normalize.ts
   │     ├── parseEnvelope.ts
   │     ├── validateSchema.ts
-  │     └── LLMRuntime.ts   ← 核心统一入口
+  │     ├── repairJSON.ts          ← 新增 JSON 修复模块
+  │     └── LLMRuntime.ts          ← 核心统一入口
   │
   ├── agents/
   │     ├── briefAgent.ts
   │     ├── researchAgent.ts
   │     ├── structureAgent.ts
   │     ├── draftAgent.ts
-  │     └── reviewAgent.ts
+  │     ├── reviewAgent.ts
+  │     └── repairAgent.ts         ← 新增 JSON 修复 Agent
   │
   ├── schemas/
   │     ├── briefSchema.ts
@@ -936,7 +938,14 @@ export async function runLLMAgent(config: {
 
   const envelope = parseEnvelope(normalized)
 
-  const parsedPayload = parsePayload(envelope.payload)
+  let parsedPayload
+  try {
+    parsedPayload = parsePayload(envelope.payload)
+  } catch (e) {
+    // JSON 解析失败，调用修复 Agent
+    const repaired = await repairJSON(envelope.payload)
+    parsedPayload = parsePayload(repaired)
+  }
 
   const validated = validateSchema(parsedPayload, config.schema)
 
