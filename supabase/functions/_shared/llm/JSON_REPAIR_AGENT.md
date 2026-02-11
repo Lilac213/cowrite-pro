@@ -158,6 +158,8 @@ if (originalContent && !isSameShape(originalContent, content)) {
                   ▼
 ┌─────────────────────────────────────────┐
 │  Layer 1: 提取第一个 JSON 块             │
+│  - 尝试提取 JSON 对象                    │
+│  - 如果失败，调用 JSON 修复 Agent        │
 └─────────────────┬───────────────────────┘
                   │
                   ▼

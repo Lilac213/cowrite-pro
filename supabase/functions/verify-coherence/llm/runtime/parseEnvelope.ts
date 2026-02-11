@@ -30,9 +30,18 @@ export async function parseEnvelope(rawText: string): Promise<any> {
   console.log('[parseEnvelope] 原始文本前300字符:', rawText.substring(0, 300));
   
   try {
-    // Step 1: 提取第一个JSON块
-    const extracted = extractFirstJsonBlock(rawText);
-    console.log('[parseEnvelope] 提取后长度:', extracted.length);
+    // Step 1: 提取第一个JSON块（如果失败，尝试用 JSON 修复 Agent）
+    let extracted: string;
+    try {
+      extracted = extractFirstJsonBlock(rawText);
+      console.log('[parseEnvelope] 提取后长度:', extracted.length);
+    } catch (extractError) {
+      // 如果提取失败，尝试用 JSON 修复 Agent 处理整个文本
+      console.warn('[parseEnvelope] 未找到JSON对象，尝试使用 JSON 修复 Agent...');
+      const repaired = await repairJSONWithLLM(rawText);
+      extracted = extractFirstJsonBlock(repaired);
+      console.log('[parseEnvelope] ✅ JSON 修复后成功提取');
+    }
     
     // Step 2: 字符归一化清洗
     const normalized = normalizeLLMOutput(extracted);

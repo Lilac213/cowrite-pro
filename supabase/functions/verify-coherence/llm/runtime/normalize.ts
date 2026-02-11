@@ -35,6 +35,8 @@ export function normalizeLLMOutput(raw: string): string {
 export function extractFirstJsonBlock(text: string): string {
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) {
+    console.error('[extractFirstJsonBlock] 未找到JSON对象');
+    console.error('[extractFirstJsonBlock] 原始文本:', text.substring(0, 1000));
     throw new Error('未找到JSON对象');
   }
   return match[0];

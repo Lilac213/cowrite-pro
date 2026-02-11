@@ -166,6 +166,14 @@
   - [x] 更新 `.gitignore` 忽略自动生成的 llm 副本
   - [x] 重新部署所有 9 个 Edge Functions
 
+- [x] 增强 JSON 提取阶段的容错能力
+  - [x] 在 Layer 1（提取 JSON 块）增加降级处理
+  - [x] 提取失败时自动调用 JSON 修复 Agent
+  - [x] 修复后再次尝试提取 JSON 对象
+  - [x] 增强 `extractFirstJsonBlock` 的错误日志
+  - [x] 更新文档说明新的工作流程
+  - [x] 重新部署所有 9 个 Edge Functions
+
 ## 注意事项
 - ⚠️ 向量搜索需要pgvector扩展，暂未实现，使用关键词匹配替代
 - ⚠️ 引用可视化UI需要在前端实现（CitationPopover组件）
