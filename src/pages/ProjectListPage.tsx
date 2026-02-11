@@ -16,13 +16,15 @@ import { useToast } from '@/hooks/use-toast';
 
 const statusLabels: Record<string, string> = {
   init: '初始化',
-  confirm_brief: '需求确认',
-  knowledge_selected: '知识收集',
-  outline_confirmed: '大纲确认',
-  drafting: '草稿编写',
+  confirm_brief: '需求明确',
+  knowledge_selected: '资料搜索',
+  material_review: '资料整理',
+  outline_confirmed: '文章结构',
+  drafting: '生成草稿',
   review_pass_1: '第一轮审校',
   review_pass_2: '第二轮审校',
   review_pass_3: '第三轮审校',
+  layout_export: '排版导出',
   completed: '已完成',
 };
 
@@ -30,11 +32,13 @@ const statusColors: Record<string, string> = {
   init: 'bg-muted text-muted-foreground',
   confirm_brief: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   knowledge_selected: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+  material_review: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
   outline_confirmed: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
   drafting: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
   review_pass_1: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
   review_pass_2: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200',
   review_pass_3: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
+  layout_export: 'bg-lime-100 text-lime-800 dark:bg-lime-900 dark:text-lime-200',
   completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
 };
 
@@ -268,8 +272,8 @@ export default function ProjectListPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent onClick={() => navigate(`/project/${project.id}`)}>
-                <Badge className={statusColors[project.status]}>
-                  {statusLabels[project.status]}
+                <Badge className={statusColors[project.status] || 'bg-muted text-muted-foreground'}>
+                  {statusLabels[project.status] || project.status || '未知状态'}
                 </Badge>
               </CardContent>
             </Card>

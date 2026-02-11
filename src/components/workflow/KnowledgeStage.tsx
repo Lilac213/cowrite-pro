@@ -1460,96 +1460,79 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 </div>
               </div>
             </CardHeader>
-
             {/* 提示信息 */}
-            <CardContent className="pb-2">
-              <div className="bg-muted/50 border border-border rounded-lg p-3 text-sm">
-                <div className="flex items-start gap-2">
-                  <span className="text-base">💡</span>
-                  <div className="flex-1 space-y-1">
-                    <p className="text-muted-foreground">
-                      <strong className="text-foreground">资料查询和整理需要消耗 3 点</strong>
-                    </p>
-                    <p className="text-muted-foreground">
-                      若不是学术性论文，可跳过此步骤，直接进入下一步生成文章结构
-                    </p>
-                  </div>
+
+            {/* 搜索进度显示 */}
+            {searchProgress && (
+              <CardContent>
+                <Card className={`border-2 ${
+                  searchProgress.stage === '失败' 
+                    ? 'border-destructive bg-destructive/5' 
+                    : searchProgress.stage === '完成'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-primary bg-primary/5'
+                }`}>
+                  <CardContent className="pt-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {searchProgress.stage === '失败' ? (
+                            <span className="text-destructive text-lg">❌</span>
+                          ) : searchProgress.stage === '完成' ? (
+                            <span className="text-primary text-lg">✅</span>
+                          ) : (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                          )}
+                          <span className="font-semibold text-sm">
+                            {searchProgress.stage}
+                          </span>
+                        </div>
+                        <Badge variant={
+                          searchProgress.stage === '失败' 
+                            ? 'destructive' 
+                            : searchProgress.stage === '完成'
+                            ? 'default'
+                            : 'secondary'
+                        }>
+                          {searchProgress.stage === '失败' ? '失败' : searchProgress.stage === '完成' ? '完成' : '进行中'}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {searchProgress.message}
+                      </p>
+                      {searchProgress.details && (
+                        <></>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </CardContent>
+            )}
+            {/* 搜索计划和搜索结果 - 直接放在资料查询卡片下 */}
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 min-h-[400px]">
+                {/* 左侧：搜索计划 */}
+                <div className="lg:col-span-1 border-b lg:border-b-0 lg:border-r pb-4 lg:pb-0 lg:pr-6">
+                  <h3 className="text-base font-semibold mb-4">搜索计划</h3>
+                  <SearchPlanPanel 
+                    searchSummary={searchSummary} 
+                    isSearching={searching}
+                  />
+                </div>
+
+                {/* 右侧：搜索结果 */}
+                <div className="lg:col-span-2">
+                  <h3 className="text-base font-semibold mb-4">搜索结果</h3>
+                  <SearchResultsPanel
+                    results={knowledge}
+                    onToggleFavorite={handleToggleSelect}
+                    onDelete={handleBatchDelete}
+                    onBatchFavorite={handleBatchFavorite}
+                  />
                 </div>
               </div>
             </CardContent>
-
-        {/* 搜索进度显示 */}
-        {searchProgress && (
-          <CardContent>
-            <Card className={`border-2 ${
-              searchProgress.stage === '失败' 
-                ? 'border-destructive bg-destructive/5' 
-                : searchProgress.stage === '完成'
-                ? 'border-primary bg-primary/5'
-                : 'border-primary bg-primary/5'
-            }`}>
-              <CardContent className="pt-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {searchProgress.stage === '失败' ? (
-                        <span className="text-destructive text-lg">❌</span>
-                      ) : searchProgress.stage === '完成' ? (
-                        <span className="text-primary text-lg">✅</span>
-                      ) : (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                      )}
-                      <span className="font-semibold text-sm">
-                        {searchProgress.stage}
-                      </span>
-                    </div>
-                    <Badge variant={
-                      searchProgress.stage === '失败' 
-                        ? 'destructive' 
-                        : searchProgress.stage === '完成'
-                        ? 'default'
-                        : 'secondary'
-                    }>
-                      {searchProgress.stage === '失败' ? '失败' : searchProgress.stage === '完成' ? '完成' : '进行中'}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {searchProgress.message}
-                  </p>
-                  {searchProgress.details && (
-                    <></>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </CardContent>
-        )}
-
-        {/* 搜索计划和搜索结果 - 直接放在资料查询卡片下 */}
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 min-h-[400px]">
-            {/* 左侧：搜索计划 */}
-            <div className="lg:col-span-1 border-b lg:border-b-0 lg:border-r pb-4 lg:pb-0 lg:pr-6">
-              <h3 className="text-base font-semibold mb-4">搜索计划</h3>
-              <SearchPlanPanel 
-                searchSummary={searchSummary} 
-                isSearching={searching}
-              />
-            </div>
-
-            {/* 右侧：搜索结果 */}
-            <div className="lg:col-span-2">
-              <h3 className="text-base font-semibold mb-4">搜索结果</h3>
-              <SearchResultsPanel
-                results={knowledge}
-                onToggleFavorite={handleToggleSelect}
-                onDelete={handleBatchDelete}
-                onBatchFavorite={handleBatchFavorite}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </Card>
 
       {/* 底部操作按钮 */}
       {knowledge.length > 0 && (

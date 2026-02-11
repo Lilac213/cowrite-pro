@@ -6,7 +6,6 @@ export type ProjectStatus =
   | 'knowledge_selected'
   | 'material_review'
   | 'outline_confirmed'
-  | 'paragraph_structure_confirmed'
   | 'drafting'
   | 'review_pass_1'
   | 'review_pass_2'

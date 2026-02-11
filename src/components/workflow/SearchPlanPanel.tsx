@@ -61,7 +61,6 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
           </p>
         </div>
       )}
-
       {/* 关键维度 */}
       {searchSummary?.key_dimensions && searchSummary.key_dimensions.length > 0 && (
         <div>
@@ -75,9 +74,7 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
           </div>
         </div>
       )}
-
       <Separator />
-
       {/* 各数据源查询计划 */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -127,7 +124,7 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Newspaper className="w-4 h-4 text-orange-500" />
-              <span>行业资讯 (SerpAPI - Google News)</span>
+              <span>{"行业资讯 (Google News)"}</span>
               <Badge variant="secondary" className="ml-auto text-xs">
                 {searchSummary.news_queries.length} 条
               </Badge>
@@ -147,7 +144,7 @@ export default function SearchPlanPanel({ searchSummary, isSearching }: SearchPl
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Globe className="w-4 h-4 text-green-500" />
-              <span>网页内容 (SerpAPI - Google Search)</span>
+              <span>{"网页内容 (Google Search)"}</span>
               <Badge variant="secondary" className="ml-auto text-xs">
                 {searchSummary.web_queries.length} 条
               </Badge>

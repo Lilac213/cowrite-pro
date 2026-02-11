@@ -11,7 +11,6 @@ import BriefStage from '@/components/workflow/BriefStage';
 import KnowledgeStage from '@/components/workflow/KnowledgeStage';
 import MaterialReviewStage from '@/components/workflow/MaterialReviewStage';
 import OutlineStage from '@/components/workflow/OutlineStage';
-import ParagraphStructureStage from '@/components/workflow/ParagraphStructureStage';
 import MaterialsStage from '@/components/workflow/MaterialsStage';
 import DraftStage from '@/components/workflow/DraftStage';
 import ReviewStage from '@/components/workflow/ReviewStage';
@@ -19,14 +18,13 @@ import WorkflowProgress from '@/components/workflow/WorkflowProgress';
 
 const stages = [
   { key: 'init', label: '开始', progress: 0 },
-  { key: 'confirm_brief', label: '明确需求', progress: 10 },
-  { key: 'knowledge_selected', label: '资料查询', progress: 20 },
-  { key: 'material_review', label: '资料整理', progress: 30 },
-  { key: 'outline_confirmed', label: '文章结构', progress: 40 },
-  { key: 'paragraph_structure_confirmed', label: '段落结构', progress: 50 },
-  { key: 'drafting', label: '文章生成', progress: 65 },
+  { key: 'confirm_brief', label: '需求明确', progress: 12 },
+  { key: 'knowledge_selected', label: '资料搜索', progress: 25 },
+  { key: 'material_review', label: '资料整理', progress: 38 },
+  { key: 'outline_confirmed', label: '文章结构', progress: 50 },
+  { key: 'drafting', label: '生成草稿', progress: 65 },
   { key: 'review_pass_1', label: '内容审校', progress: 80 },
-  { key: 'layout_export', label: '排版导出', progress: 90 },
+  { key: 'layout_export', label: '排版导出', progress: 92 },
   { key: 'completed', label: '完成', progress: 100 },
 ];
 
@@ -137,8 +135,6 @@ export default function ProjectWorkflowPage() {
         return <MaterialReviewStage projectId={projectId} onComplete={loadProject} />;
       case 'outline_confirmed':
         return <OutlineStage projectId={projectId} onComplete={loadProject} />;
-      case 'paragraph_structure_confirmed':
-        return <ParagraphStructureStage projectId={projectId} onComplete={loadProject} />;
       case 'drafting':
         return <MaterialsStage projectId={projectId} onComplete={loadProject} />;
       case 'review_pass_1':

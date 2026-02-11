@@ -280,10 +280,10 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
 
     setConfirming(true);
     try {
-      await updateProject(projectId, { status: 'paragraph_structure_confirmed' });
+      await updateProject(projectId, { status: 'drafting' });
       toast({
         title: '确认成功',
-        description: '进入段落结构阶段',
+        description: '进入草稿生成阶段',
       });
       onComplete();
     } catch (error) {
