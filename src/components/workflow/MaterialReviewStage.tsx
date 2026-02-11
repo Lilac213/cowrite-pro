@@ -551,6 +551,39 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
             </div>
           </div>
         </CardHeader>
+        
+        {/* 审阅指南 - 移到资料整理模块内 */}
+        <CardContent className="pt-0">
+          <div className="bg-muted/30 rounded-lg p-4">
+            <div className="flex items-start gap-2 mb-3">
+              <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+              <span className="text-sm font-medium text-foreground">审阅指南</span>
+            </div>
+            <div className="grid grid-cols-3 gap-4 text-xs">
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-green-600 font-medium mb-1">必须使用</div>
+                  <div className="text-muted-foreground">核心观点，将直接用于文章论证</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <Circle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-blue-600 font-medium mb-1">背景补充</div>
+                  <div className="text-muted-foreground">辅助信息，可作为背景或补充说明</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <Circle className="w-4 h-4 text-gray-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-gray-600 font-medium mb-1">排除</div>
+                  <div className="text-muted-foreground">不相关或不适用的内容</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
       </Card>
 
       {/* 主内容区 */}
@@ -571,26 +604,38 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
                 onClick={() => setSelectedCategory(null)}
               >
                 <span className="text-sm font-medium">全部</span>
-                <Badge variant="secondary">{materials.length} 条</Badge>
+                <Badge variant="secondary">{materials.length}</Badge>
               </div>
-              {Object.entries(categoryStats).map(([category, stats]) => (
-                <div 
-                  key={category} 
-                  className={cn(
-                    "flex items-center justify-between py-2 px-3 rounded-md cursor-pointer transition-colors hover:bg-accent",
-                    selectedCategory === category && "bg-accent"
-                  )}
-                  onClick={() => setSelectedCategory(category)}
-                >
-                  <div className="flex flex-col gap-1">
-                    <span className="text-sm">{category}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {stats.total - stats.pending}/{stats.total}
-                    </span>
+              {Object.entries(categoryStats).map(([category, stats]) => {
+                const hasPending = stats.pending > 0;
+                const decidedInCategory = stats.total - stats.pending;
+                return (
+                  <div 
+                    key={category} 
+                    className={cn(
+                      "flex items-center justify-between py-2 px-3 rounded-md cursor-pointer transition-colors hover:bg-accent",
+                      selectedCategory === category && "bg-accent",
+                      hasPending && "border-l-2 border-orange-500"
+                    )}
+                    onClick={() => setSelectedCategory(category)}
+                  >
+                    <div className="flex items-center gap-2 flex-1">
+                      <span className={cn(
+                        "text-sm font-medium",
+                        hasPending && "text-orange-600"
+                      )}>
+                        {category}
+                      </span>
+                      <span className={cn(
+                        "text-xs",
+                        hasPending ? "text-orange-600 font-medium" : "text-muted-foreground"
+                      )}>
+                        {decidedInCategory}/{stats.total}
+                      </span>
+                    </div>
                   </div>
-                  <Badge variant="secondary">{stats.total} 条</Badge>
-                </div>
-              ))}
+                );
+              })}
             </CardContent>
           </Card>
         </div>
@@ -717,30 +762,6 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
           </Card>
         </div>
       </div>
-
-      {/* 审阅指南 - 横向小字展示 */}
-      <Card className="bg-muted/30">
-        <CardContent className="py-3">
-          <div className="flex items-center gap-8 text-xs">
-            <span className="text-muted-foreground font-medium">审阅指南：</span>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
-              <span className="text-green-600 font-medium">必须使用</span>
-              <span className="text-muted-foreground">- 核心观点，将直接用于文章论证</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Circle className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <span className="text-blue-600 font-medium">背景补充</span>
-              <span className="text-muted-foreground">- 辅助信息，可作为背景或补充说明</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Circle className="w-3.5 h-3.5 text-gray-600 shrink-0" />
-              <span className="text-gray-600 font-medium">排除</span>
-              <span className="text-muted-foreground">- 不相关或不适用的内容</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* 底部固定日志栏 */}
       {synthesisLog && (

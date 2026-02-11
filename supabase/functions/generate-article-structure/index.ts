@@ -40,31 +40,55 @@ function cleanJsonString(jsonStr: string): string {
  * 尝试多种策略解析JSON
  */
 function parseJsonWithFallback(text: string): any {
+  // 先记录原始文本的前200个字符用于调试
+  console.log('[parseJsonWithFallback] 原始文本前200字符:', text.substring(0, 200));
+  console.log('[parseJsonWithFallback] 文本长度:', text.length);
+  console.log('[parseJsonWithFallback] 是否包含```:', text.includes('```'));
+  
   const strategies = [
-    // 策略1: 直接解析
-    () => JSON.parse(text),
-    
-    // 策略2: 清理后解析
-    () => JSON.parse(cleanJsonString(text)),
-    
-    // 策略3: 从markdown代码块提取
+    // 策略1: 直接解析原始文本
     () => {
-      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/```\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        return JSON.parse(cleanJsonString(jsonMatch[1]));
-      }
-      throw new Error('未找到代码块');
+      console.log('[策略1] 尝试直接解析原始文本');
+      return JSON.parse(text);
     },
     
-    // 策略4: 提取JSON对象
+    // 策略2: 从markdown代码块提取（优先处理，因为LLM经常返回代码块）
     () => {
+      console.log('[策略2] 尝试从markdown代码块提取');
+      // 匹配 ```json ... ``` 或 ``` ... ```
+      const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch && jsonMatch[1]) {
+        console.log('[策略2] 找到代码块，内容前100字符:', jsonMatch[1].substring(0, 100));
+        const extracted = jsonMatch[1].trim();
+        // 清理并解析
+        const cleaned = cleanJsonString(extracted);
+        console.log('[策略2] 清理后前100字符:', cleaned.substring(0, 100));
+        return JSON.parse(cleaned);
+      }
+      throw new Error('未找到markdown代码块');
+    },
+    
+    // 策略3: 清理整个文本后解析
+    () => {
+      console.log('[策略3] 尝试清理整个文本后解析');
+      const cleaned = cleanJsonString(text);
+      console.log('[策略3] 清理后前100字符:', cleaned.substring(0, 100));
+      return JSON.parse(cleaned);
+    },
+    
+    // 策略4: 提取JSON对象边界
+    () => {
+      console.log('[策略4] 尝试提取JSON对象边界');
       const jsonStart = text.indexOf('{');
       const jsonEnd = text.lastIndexOf('}');
-      if (jsonStart !== -1 && jsonEnd !== -1) {
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
         const jsonStr = text.substring(jsonStart, jsonEnd + 1);
-        return JSON.parse(cleanJsonString(jsonStr));
+        console.log('[策略4] 提取的JSON前100字符:', jsonStr.substring(0, 100));
+        const cleaned = cleanJsonString(jsonStr);
+        console.log('[策略4] 清理后前100字符:', cleaned.substring(0, 100));
+        return JSON.parse(cleaned);
       }
-      throw new Error('未找到JSON对象');
+      throw new Error('未找到有效的JSON对象边界');
     }
   ];
   

@@ -1,13 +1,22 @@
 import { useState, useEffect } from 'react';
-import { getBrief, createBrief, updateBrief, updateProject, callLLMGenerate } from '@/db/api';
+import { getBrief, createBrief, updateBrief, updateProject, callLLMGenerate, checkResearchLimit } from '@/db/api';
 import type { Brief } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { CheckCircle2, ArrowRight } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Search, Sparkles } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface BriefStageProps {
   projectId: string;
@@ -21,7 +30,10 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
   const [generating, setGenerating] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [generatedRequirements, setGeneratedRequirements] = useState('');
+  const [showResearchDialog, setShowResearchDialog] = useState(false);
+  const [hasEnoughCredits, setHasEnoughCredits] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   useEffect(() => {
     loadBrief();
@@ -149,15 +161,59 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
   };
 
   const handleConfirm = async () => {
+    if (!brief || !user) return;
+
+    // 检查用户是否有足够的点数进行资料查询
+    try {
+      const hasCredits = await checkResearchLimit(user.id);
+      setHasEnoughCredits(hasCredits);
+    } catch (error) {
+      console.error('检查点数失败:', error);
+      setHasEnoughCredits(false);
+    }
+
+    // 显示资料查询选择对话框
+    setShowResearchDialog(true);
+  };
+
+  // 进行资料查询
+  const handleDoResearch = async () => {
     if (!brief) return;
 
+    setShowResearchDialog(false);
     setConfirming(true);
     try {
       await updateBrief(brief.id, { confirmed: true });
       await updateProject(projectId, { status: 'knowledge_selected' });
       toast({
         title: '确认成功',
-        description: '进入下一阶段',
+        description: '进入资料查询阶段',
+      });
+      onComplete();
+    } catch (error) {
+      toast({
+        title: '确认失败',
+        description: '无法确认需求',
+        variant: 'destructive',
+      });
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  // 跳过资料查询，直接生成结构
+  const handleSkipResearch = async () => {
+    if (!brief) return;
+
+    setShowResearchDialog(false);
+    setConfirming(true);
+    try {
+      await updateBrief(brief.id, { confirmed: true });
+      // 跳过资料查询和整理，直接进入文章结构阶段
+      await updateProject(projectId, { status: 'outline_confirmed' });
+      toast({
+        title: '确认成功',
+        description: '跳过资料查询，进入文章结构阶段',
       });
       onComplete();
     } catch (error) {
@@ -230,6 +286,58 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* 资料查询选择对话框 */}
+      <Dialog open={showResearchDialog} onOpenChange={setShowResearchDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Search className="h-5 w-5 text-primary" />
+              是否进行资料查询？
+            </DialogTitle>
+            <DialogDescription className="space-y-3 pt-2">
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  <strong className="text-foreground">适合学术论文、研究报告、需要引用文献的写作</strong>
+                </p>
+                <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 space-y-2">
+                  <p className="text-sm font-medium text-primary">
+                    将消耗 3 点
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    可获得：可靠资料 + 可引用来源
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 text-sm text-muted-foreground pt-2">
+                <span>👉</span>
+                <p>若是公众号、方案、观点类文章，可直接跳过</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-col gap-2 pt-4">
+            <Button
+              onClick={handleDoResearch}
+              disabled={!hasEnoughCredits || confirming}
+              className="w-full"
+              size="lg"
+            >
+              <Search className="h-4 w-4 mr-2" />
+              {hasEnoughCredits ? '进行资料查询（-3 点）' : '点数不足（需要 3 点）'}
+            </Button>
+            <Button
+              onClick={handleSkipResearch}
+              variant="outline"
+              disabled={confirming}
+              className="w-full"
+              size="lg"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              跳过，直接生成结构
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
