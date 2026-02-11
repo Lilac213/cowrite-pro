@@ -71,10 +71,12 @@ serve(async (req) => {
       
       if (referenceArticles && referenceArticles.length > 0) {
         referenceArticles.forEach((article: any, index: number) => {
+          // 安全地截取内容，避免JSON解析错误
+          const safeContent = (article.content || '').substring(0, 300).replace(/[\n\r]/g, ' ');
           confirmedInsights.push({
             id: `ref_${index + 1}`,
             category: '参考文章',
-            content: `${article.title}: ${article.content.substring(0, 300)}`,
+            content: `${article.title || '无标题'}: ${safeContent}`,
             source_insight_id: `ref_${index + 1}`
           });
         });
@@ -82,10 +84,12 @@ serve(async (req) => {
       
       if (materials && materials.length > 0) {
         materials.forEach((material: any, index: number) => {
+          // 安全地截取内容，避免JSON解析错误
+          const safeContent = (material.content || '').substring(0, 200).replace(/[\n\r]/g, ' ');
           confirmedInsights.push({
             id: `mat_${index + 1}`,
             category: '作者素材',
-            content: `${material.title}: ${material.content.substring(0, 200)}`,
+            content: `${material.title || '无标题'}: ${safeContent}`,
             source_insight_id: `mat_${index + 1}`
           });
         });
@@ -174,11 +178,12 @@ ${inputJson}
 ────────────────
 【输出要求】
 ────────────────
-- 仅以 JSON 输出
+- 仅以 JSON 输出，不要包含任何其他文字说明
+- 确保 JSON 格式正确，所有字符串值必须正确转义
 - 结构生成后必须停在等待用户确认状态
 - 不得进入写作阶段
 
-请严格按照以下 JSON 格式输出：
+请严格按照以下 JSON 格式输出（注意：derived_from 数组中的值必须是字符串）：
 {
   "core_thesis": "核心论点（一句话）",
   "argument_blocks": [
@@ -188,14 +193,20 @@ ${inputJson}
       "description": "论证任务说明（要证明什么）",
       "order": 1,
       "relation": "与前一块的关系（起始论证块 / 递进 / 并列 / 因果 / 对比等）",
-      "derived_from": ["insight_1", "insight_2"],
+      "derived_from": ["insight_id_1", "insight_id_2"],
       "user_editable": true
     }
   ],
   "structure_relations": "整体结构关系说明",
   "status": "awaiting_user_confirmation",
   "allowed_user_actions": ["edit_core_thesis", "delete_block", "reorder_blocks"]
-}`;
+}
+
+重要提示：
+1. 所有字符串中的引号必须转义
+2. derived_from 数组中只能包含字符串类型的 insight ID
+3. 不要在 JSON 外添加任何解释性文字
+4. 确保 JSON 可以被直接解析`;
 
     console.log('[generate-article-structure] 开始调用 Gemini API');
     const response = await fetch('https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse', {
@@ -269,8 +280,14 @@ ${inputJson}
       const jsonMatch = fullText.match(/```json\s*([\s\S]*?)\s*```/) || fullText.match(/```\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
         console.log('[generate-article-structure] 找到代码块，尝试解析');
-        structure = JSON.parse(jsonMatch[1]);
-        console.log('[generate-article-structure] 代码块解析成功');
+        try {
+          structure = JSON.parse(jsonMatch[1]);
+          console.log('[generate-article-structure] 代码块解析成功');
+        } catch (parseError) {
+          console.error('[generate-article-structure] 代码块解析失败:', parseError);
+          console.error('[generate-article-structure] 代码块内容:', jsonMatch[1].substring(0, 500));
+          throw new Error(`JSON解析失败: ${parseError.message}`);
+        }
       } else {
         console.log('[generate-article-structure] 未找到代码块，尝试查找JSON对象');
         // 尝试查找JSON对象
@@ -279,10 +296,17 @@ ${inputJson}
         if (jsonStart !== -1 && jsonEnd !== -1) {
           const jsonStr = fullText.substring(jsonStart, jsonEnd + 1);
           console.log('[generate-article-structure] 提取的JSON字符串（前200字符）:', jsonStr.substring(0, 200));
-          structure = JSON.parse(jsonStr);
-          console.log('[generate-article-structure] JSON对象解析成功');
+          try {
+            structure = JSON.parse(jsonStr);
+            console.log('[generate-article-structure] JSON对象解析成功');
+          } catch (parseError) {
+            console.error('[generate-article-structure] JSON对象解析失败:', parseError);
+            console.error('[generate-article-structure] JSON字符串（前500字符）:', jsonStr.substring(0, 500));
+            throw new Error(`JSON解析失败: ${parseError.message}`);
+          }
         } else {
           console.error('[generate-article-structure] 无法找到有效的JSON结构');
+          console.error('[generate-article-structure] 完整响应:', fullText);
           throw new Error('无法解析返回的JSON结构');
         }
       }

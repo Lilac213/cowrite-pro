@@ -138,8 +138,8 @@ importers:
         specifier: 2.0.6
         version: 2.0.6(@supabase/supabase-js@2.76.1)(react-dom@18.3.1(react@18.3.1))(react-router-dom@7.9.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
       miaoda-sc-plugin:
-        specifier: 1.0.52
-        version: 1.0.52(vite@5.4.19(@types/node@24.2.1)(lightningcss@1.30.1))
+        specifier: 1.0.56
+        version: 1.0.56(vite@5.4.19(@types/node@24.2.1)(lightningcss@1.30.1))
       motion:
         specifier: ^12.23.25
         version: 12.23.25(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -167,6 +167,9 @@ importers:
       react-hook-form:
         specifier: ^7.66.0
         version: 7.66.0(react@18.3.1)
+      react-markdown:
+        specifier: ^10.1.0
+        version: 10.1.0(@types/react@19.2.2)(react@18.3.1)
       react-resizable-panels:
         specifier: ^2.1.8
         version: 2.1.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -179,6 +182,9 @@ importers:
       recharts:
         specifier: ^2.15.3
         version: 2.15.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      remark-gfm:
+        specifier: ^4.0.1
+        version: 4.0.1
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -2701,10 +2707,10 @@ packages:
       react-dom: '*'
       react-router-dom: '*'
 
-  miaoda-sc-plugin@1.0.52:
-    resolution: {integrity: sha512-XeS+c6B9Ik8L78N60jA5lXccgqOJRvLT6f+zd1z2bxwPOke+s1ayGsoyF9nwA9dDSiL0O151DEEBLFKVk+P9Ow==}
+  miaoda-sc-plugin@1.0.56:
+    resolution: {integrity: sha512-Co9uOxU7CETJDX33h6ydF0DPQoS0x2zc0AMsxS9S6+KDTen2lxLH/eEvXtYzkfiX/8ylWtMGSOzFnOSAv099NQ==}
     peerDependencies:
-      vite: ^4.0.0 || ^5.0.0
+      vite: ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
 
   micromark-core-commonmark@2.0.3:
     resolution: {integrity: sha512-RDBrHEMSxVFLg6xvnXmb1Ayr2WzLAWjeSATAoxwKYJV94TeNavgoIdA0a9ytzDSVzBy2YKFK+emCPOEibLeCrg==}
@@ -6261,7 +6267,7 @@ snapshots:
       react-dom: 18.3.1(react@18.3.1)
       react-router-dom: 7.9.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
-  miaoda-sc-plugin@1.0.52(vite@5.4.19(@types/node@24.2.1)(lightningcss@1.30.1)):
+  miaoda-sc-plugin@1.0.56(vite@5.4.19(@types/node@24.2.1)(lightningcss@1.30.1)):
     dependencies:
       '@babel/parser': 7.28.0
       '@babel/traverse': 7.28.0

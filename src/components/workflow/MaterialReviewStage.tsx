@@ -8,6 +8,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   getResearchInsights, 
   getResearchGaps, 
@@ -552,7 +554,7 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
 
       {/* 主内容区 */}
       <div className="grid grid-cols-12 gap-6">
-        {/* 左侧：分类和指南 */}
+        {/* 左侧：分类统计 */}
         <div className="col-span-3 space-y-4">
           {/* 资料类型统计 */}
           <Card>
@@ -581,45 +583,13 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
                 >
                   <div className="flex flex-col gap-1">
                     <span className="text-sm">{category}</span>
-                    {stats.pending > 0 && (
-                      <span className="text-xs text-orange-600">
-                        还剩 {stats.pending} 条未决策
-                      </span>
-                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {stats.total - stats.pending}/{stats.total}
+                    </span>
                   </div>
                   <Badge variant="secondary">{stats.total} 条</Badge>
                 </div>
               ))}
-            </CardContent>
-          </Card>
-
-          {/* 审阅指南 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">审阅指南</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
-                <div>
-                  <div className="font-semibold text-green-600">必须使用</div>
-                  <div className="text-muted-foreground">核心观点，将直接用于文章论证</div>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Circle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                <div>
-                  <div className="font-semibold text-blue-600">背景补充</div>
-                  <div className="text-muted-foreground">辅助信息，可作为背景或补充说明</div>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Circle className="w-4 h-4 text-gray-600 mt-0.5 shrink-0" />
-                <div>
-                  <div className="font-semibold text-gray-600">排除</div>
-                  <div className="text-muted-foreground">不相关或不适用的内容</div>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>
@@ -742,6 +712,30 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
         </div>
       </div>
 
+      {/* 审阅指南 - 横向小字展示 */}
+      <Card className="bg-muted/30">
+        <CardContent className="py-3">
+          <div className="flex items-center gap-8 text-xs">
+            <span className="text-muted-foreground font-medium">审阅指南：</span>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+              <span className="text-green-600 font-medium">必须使用</span>
+              <span className="text-muted-foreground">- 核心观点，将直接用于文章论证</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Circle className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span className="text-blue-600 font-medium">背景补充</span>
+              <span className="text-muted-foreground">- 辅助信息，可作为背景或补充说明</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Circle className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+              <span className="text-gray-600 font-medium">排除</span>
+              <span className="text-muted-foreground">- 不相关或不适用的内容</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 底部固定日志栏 */}
       {synthesisLog && (
         <div 
@@ -773,35 +767,20 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
       <Dialog open={showLogsDialog} onOpenChange={setShowLogsDialog}>
         <DialogContent className="max-w-4xl max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle>研究综合日志</DialogTitle>
+            <DialogTitle>研究综合思考过程</DialogTitle>
           </DialogHeader>
           <ScrollArea className="h-[60vh]">
-            <div className="space-y-4 p-4">
-              {synthesisLog ? (
-                <>
-                  <div>
-                    <h3 className="font-semibold mb-2">思考过程 (Thought)</h3>
-                    <div className="bg-muted p-4 rounded-lg text-sm whitespace-pre-wrap prose prose-sm max-w-none">
-                      {synthesisLog.thought || '无思考过程记录'}
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold mb-2">输入数据</h3>
-                    <pre className="bg-muted p-4 rounded-lg text-sm overflow-auto">
-                      {JSON.stringify(synthesisLog.input || {}, null, 2)}
-                    </pre>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold mb-2">输出结果</h3>
-                    <pre className="bg-muted p-4 rounded-lg text-sm overflow-auto">
-                      {JSON.stringify(synthesisLog.synthesis || {}, null, 2)}
-                    </pre>
-                  </div>
-                </>
+            <div className="p-4">
+              {synthesisLog && synthesisLog.thought ? (
+                <div className="prose prose-sm max-w-none dark:prose-invert">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {synthesisLog.thought}
+                  </ReactMarkdown>
+                </div>
               ) : (
                 <div className="text-center text-muted-foreground py-8">
                   <Info className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>暂无日志数据</p>
+                  <p>暂无思考过程记录</p>
                 </div>
               )}
             </div>
