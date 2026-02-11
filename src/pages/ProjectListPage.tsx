@@ -27,15 +27,15 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  init: 'bg-muted',
-  confirm_brief: 'bg-secondary',
-  knowledge_selected: 'bg-secondary',
-  outline_confirmed: 'bg-secondary',
-  drafting: 'bg-accent',
-  review_pass_1: 'bg-accent',
-  review_pass_2: 'bg-accent',
-  review_pass_3: 'bg-accent',
-  completed: 'bg-primary text-primary-foreground',
+  init: 'bg-muted text-muted-foreground',
+  confirm_brief: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+  knowledge_selected: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+  outline_confirmed: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+  drafting: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+  review_pass_1: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+  review_pass_2: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200',
+  review_pass_3: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
 };
 
 export default function ProjectListPage() {

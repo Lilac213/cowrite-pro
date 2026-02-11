@@ -8,7 +8,6 @@ const corsHeaders = {
 
 /**
  * 提取JSON对象 - 只保留第一个 { 到最后一个 } 之间的内容
- * 这是处理LLM输出杂质的第一道防线
  */
 function extractJSONObject(rawText: string): string {
   const firstBrace = rawText.indexOf('{');
@@ -26,26 +25,40 @@ function extractJSONObject(rawText: string): string {
 }
 
 /**
- * 解析JSON - 先提取边界，再解析
+ * 解析信封模式JSON - 两步解析策略
+ * Step 1: 解析外层信封 { type, payload }
+ * Step 2: 解析 payload 字符串中的实际内容
  */
-function parseJsonSafely(rawText: string): any {
-  console.log('[parseJson] 原始文本长度:', rawText.length);
-  console.log('[parseJson] 原始文本前300字符:', rawText.substring(0, 300));
+function parseEnvelopeJson(rawText: string): any {
+  console.log('[parseEnvelope] 原始文本长度:', rawText.length);
+  console.log('[parseEnvelope] 原始文本前300字符:', rawText.substring(0, 300));
   
   try {
-    // Step 1: 提取JSON对象边界
+    // Step 1: 提取并解析外层信封
     const jsonText = extractJSONObject(rawText);
-    console.log('[parseJson] 提取后长度:', jsonText.length);
-    console.log('[parseJson] 提取后前300字符:', jsonText.substring(0, 300));
+    const envelope = JSON.parse(jsonText);
     
-    // Step 2: 解析JSON
-    const result = JSON.parse(jsonText);
-    console.log('[parseJson] 解析成功');
-    return result;
+    console.log('[parseEnvelope] 外层信封解析成功, type:', envelope.type);
+    
+    // Step 2: 验证信封结构
+    if (!envelope.type || typeof envelope.payload !== 'string') {
+      throw new Error('信封格式无效: 缺少 type 或 payload 不是字符串');
+    }
+    
+    // Step 3: 解析 payload 字符串
+    if (!envelope.payload || envelope.payload.trim() === '') {
+      console.warn('[parseEnvelope] payload 为空');
+      return null;
+    }
+    
+    const content = JSON.parse(envelope.payload);
+    console.log('[parseEnvelope] payload 解析成功');
+    
+    return content;
   } catch (error) {
-    console.error('[parseJson] 解析失败:', error);
-    console.error('[parseJson] 失败时的原始文本前500字符:', rawText.substring(0, 500));
-    throw new Error(`JSON解析失败: ${error instanceof Error ? error.message : String(error)}`);
+    console.error('[parseEnvelope] 解析失败:', error);
+    console.error('[parseEnvelope] 失败时的原始文本前500字符:', rawText.substring(0, 500));
+    throw new Error(`信封JSON解析失败: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -227,19 +240,25 @@ serve(async (req) => {
 - 不引用案例、数据或研究
 - 输出应稳定、抽象、可编辑
 
-【输出要求】
-- 仅以 JSON 输出，不要包含任何其他文字说明
-- 确保 JSON 格式完全正确，可以被 JSON.parse() 直接解析
-- 所有字符串值必须正确转义，不能包含未转义的引号、换行符、制表符等控制字符
-- 字符串中的换行请使用 \\n，制表符使用 \\t，引号使用 \\"
-- 必须使用英文标点符号：冒号用 : 不用 ：，逗号用 , 不用 ，，引号用 " 不用 " 或 "
-- 所有字符串字段中禁止出现中文引号, 中文逗号, 中文冒号或任何全角标点符号
-- 若语义中需要强调，请使用普通英文字符，不得使用任何中文标点
-- 不要在 JSON 外添加任何解释性文字
-- 不要使用 markdown 代码块包裹 JSON（不要用三个反引号）
-- 直接输出纯 JSON，确保可以被 JSON.parse() 直接解析，没有语法错误
+【输出要求 - 信封模式】
+你必须严格输出一个固定结构的JSON对象, 且只能包含以下两个字段:
+- type: 固定值 "generate_article_structure"
+- payload: 字符串类型, 内容是文章结构JSON的字符串形式
 
-请严格按照以下 JSON 格式输出：
+重要规则:
+1. 外层JSON必须始终合法, 只有type和payload两个字段
+2. payload是字符串, 不是JSON对象, 需要将内部JSON转换为字符串
+3. 不要在外层JSON之外输出任何文字
+4. 不要使用markdown代码块
+5. 如果无法生成内容, payload可以是空字符串
+
+输出格式示例:
+{
+  "type": "generate_article_structure",
+  "payload": "{\"core_thesis\":\"示例论点\",\"argument_blocks\":[]}"
+}
+
+payload字符串内部应包含的结构:
 {
   "core_thesis": "核心论点（一句话，不能包含换行符）",
   "argument_blocks": [
@@ -299,16 +318,27 @@ ${inputJson}
 - 输出必须保持高度可编辑性，便于用户删除或重排
 
 ────────────────
-【输出要求】
+【输出要求 - 信封模式】
 ────────────────
-- 仅以 JSON 输出，不要包含任何其他文字说明
-- 确保 JSON 格式完全正确，可以被 JSON.parse() 直接解析
-- 所有字符串值必须正确转义，不能包含未转义的引号、换行符、制表符等控制字符
-- 字符串中的换行请使用 \\n，制表符使用 \\t，引号使用 \\"
-- 结构生成后必须停在等待用户确认状态
-- 不得进入写作阶段
+你必须严格输出一个固定结构的JSON对象, 且只能包含以下两个字段:
+- type: 固定值 "generate_article_structure"
+- payload: 字符串类型, 内容是文章结构JSON的字符串形式
 
-请严格按照以下 JSON 格式输出（注意：derived_from 数组中的值必须是字符串）：
+重要规则:
+1. 外层JSON必须始终合法, 只有type和payload两个字段
+2. payload是字符串, 不是JSON对象, 需要将内部JSON转换为字符串
+3. 不要在外层JSON之外输出任何文字
+4. 不要使用markdown代码块
+5. 如果无法生成内容, payload可以是空字符串
+6. 结构生成后必须停在等待用户确认状态, 不得进入写作阶段
+
+输出格式示例:
+{
+  "type": "generate_article_structure",
+  "payload": "{\"core_thesis\":\"示例论点\",\"argument_blocks\":[]}"
+}
+
+payload字符串内部应包含的结构（注意：derived_from 数组中的值必须是字符串）:
 {
   "core_thesis": "核心论点（一句话，不能包含换行符）",
   "argument_blocks": [
@@ -325,34 +355,6 @@ ${inputJson}
   "structure_relations": "整体结构关系说明（不能包含换行符）",
   "status": "awaiting_user_confirmation",
   "allowed_user_actions": ["edit_core_thesis", "delete_block", "reorder_blocks"]
-}
-
-重要提示：
-1. 必须使用英文标点符号：冒号用 : 不用 ：，逗号用 , 不用 ，，引号用 " 不用 " 或 "
-2. 所有字符串字段中禁止出现中文引号, 中文逗号, 中文冒号或任何全角标点符号
-3. 若语义中需要强调，请使用普通英文字符，不得使用任何中文标点
-4. 所有字符串中的引号必须转义为 \\"
-5. 所有字符串中的换行符必须转义为 \\n
-6. 所有字符串中的制表符必须转义为 \\t
-7. derived_from 数组中只能包含字符串类型的 insight ID
-6. 不要在 JSON 外添加任何解释性文字
-7. 不要使用 markdown 代码块包裹 JSON（不要用三个反引号）
-8. 直接输出纯 JSON，确保可以被 JSON.parse() 直接解析，没有语法错误
-
-示例（注意使用英文标点）:
-{
-  "core_thesis": "这是核心论点",
-  "argument_blocks": [
-    {
-      "id": "block_1",
-      "title": "标题",
-      "description": "描述",
-      "order": 1,
-      "relation": "起始论证块",
-      "derived_from": ["insight_1"],
-      "user_editable": true
-    }
-  ]
 }`;
     }
 
@@ -423,7 +425,7 @@ ${inputJson}
     let structure;
     try {
       console.log('[generate-article-structure] 开始解析JSON');
-      structure = parseJsonSafely(fullText);
+      structure = parseEnvelopeJson(fullText);
       console.log('[generate-article-structure] JSON解析成功');
     } catch (error) {
       console.error('[generate-article-structure] JSON解析失败:', error);

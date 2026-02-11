@@ -24,24 +24,37 @@ function extractJSONObject(rawText: string): string {
 }
 
 /**
- * 解析JSON - 先提取边界，再解析
+ * 解析信封模式JSON - 两步解析策略
  */
-function parseJsonSafely(rawText: string): any {
-  console.log('[parseJson] 原始文本长度:', rawText.length);
+function parseEnvelopeJson(rawText: string): any {
+  console.log('[parseEnvelope] 原始文本长度:', rawText.length);
   
   try {
-    // Step 1: 提取JSON对象边界
+    // Step 1: 提取并解析外层信封
     const jsonText = extractJSONObject(rawText);
-    console.log('[parseJson] 提取后长度:', jsonText.length);
+    const envelope = JSON.parse(jsonText);
     
-    // Step 2: 解析JSON
-    const result = JSON.parse(jsonText);
-    console.log('[parseJson] 解析成功');
-    return result;
+    console.log('[parseEnvelope] 外层信封解析成功, type:', envelope.type);
+    
+    // Step 2: 验证信封结构
+    if (!envelope.type || typeof envelope.payload !== 'string') {
+      throw new Error('信封格式无效: 缺少 type 或 payload 不是字符串');
+    }
+    
+    // Step 3: 解析 payload 字符串
+    if (!envelope.payload || envelope.payload.trim() === '') {
+      console.warn('[parseEnvelope] payload 为空');
+      return null;
+    }
+    
+    const content = JSON.parse(envelope.payload);
+    console.log('[parseEnvelope] payload 解析成功');
+    
+    return content;
   } catch (error) {
-    console.error('[parseJson] 解析失败:', error);
-    console.error('[parseJson] 失败时的原始文本前500字符:', rawText.substring(0, 500));
-    throw new Error(`JSON解析失败: ${error instanceof Error ? error.message : String(error)}`);
+    console.error('[parseEnvelope] 解析失败:', error);
+    console.error('[parseEnvelope] 失败时的原始文本前500字符:', rawText.substring(0, 500));
+    throw new Error(`信封JSON解析失败: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -106,7 +119,25 @@ ${paragraphList}
 - 不生成正文
 - 不提出具体改写文本
 
-请将输出转换为JSON格式返回：
+【输出要求 - 信封模式】
+你必须严格输出一个固定结构的JSON对象, 且只能包含以下两个字段:
+- type: 固定值 "verify_coherence"
+- payload: 字符串类型, 内容是连贯性检查结果JSON的字符串形式
+
+重要规则:
+1. 外层JSON必须始终合法, 只有type和payload两个字段
+2. payload是字符串, 不是JSON对象, 需要将内部JSON转换为字符串
+3. 不要在外层JSON之外输出任何文字
+4. 不要使用markdown代码块
+5. 如果无法生成内容, payload可以是空字符串
+
+输出格式示例:
+{
+  "type": "verify_coherence",
+  "payload": "{\"coherence_check\":[],\"overall_assessment\":\"示例\"}"
+}
+
+payload字符串内部应包含的结构:
 {
   "coherence_check": [
     {
@@ -119,12 +150,7 @@ ${paragraphList}
     }
   ],
   "overall_assessment": "整体连贯性评价"
-}
-
-重要提示：
-1. 必须输出纯JSON, 不要包含markdown代码块
-2. 所有字符串字段中禁止出现中文引号, 中文逗号, 中文冒号或任何全角标点符号
-3. 确保JSON格式完全正确, 可以被JSON.parse()直接解析`;
+}`;
 
     const response = await fetch('https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse', {
       method: 'POST',
@@ -182,7 +208,7 @@ ${paragraphList}
     // 提取并解析JSON内容
     let result;
     try {
-      result = parseJsonSafely(fullText);
+      result = parseEnvelopeJson(fullText);
     } catch (error) {
       console.error('[verify-coherence] JSON解析失败:', error);
       return new Response(

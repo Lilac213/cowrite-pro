@@ -557,30 +557,24 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
         {/* 审阅指南 - 移到资料整理模块内 */}
         <CardContent className="pt-0 pb-4">
           <div className="bg-muted/30 rounded-lg p-3 md:p-4">
-            <div className="flex items-start gap-2 mb-2 md:mb-3">
-              <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-              <span className="text-xs md:text-sm font-medium text-foreground">审阅指南</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 text-xs">
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
-                <div>
-                  <div className="text-green-600 font-medium mb-1">必须使用</div>
-                  <div className="text-muted-foreground">核心观点，将直接用于文章论证</div>
+            <div className="flex items-center gap-2 mb-2 md:mb-3">
+              <Info className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-xs md:text-sm font-medium text-foreground mr-3">审阅指南</span>
+              <div className="flex items-center gap-4 text-xs flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                  <span className="text-green-600 font-medium">必须使用</span>
+                  <span className="text-muted-foreground">核心观点，将直接用于文章论证</span>
                 </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Circle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                <div>
-                  <div className="text-blue-600 font-medium mb-1">背景补充</div>
-                  <div className="text-muted-foreground">辅助信息，可作为背景或补充说明</div>
+                <div className="flex items-center gap-1.5">
+                  <Circle className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span className="text-blue-600 font-medium">背景补充</span>
+                  <span className="text-muted-foreground">辅助信息，可作为背景或补充说明</span>
                 </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Circle className="w-4 h-4 text-gray-600 shrink-0 mt-0.5" />
-                <div>
-                  <div className="text-gray-600 font-medium mb-1">排除</div>
-                  <div className="text-muted-foreground">不相关或不适用的内容</div>
+                <div className="flex items-center gap-1.5">
+                  <Circle className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+                  <span className="text-gray-600 font-medium">排除</span>
+                  <span className="text-muted-foreground">不相关或不适用的内容</span>
                 </div>
               </div>
             </div>
