@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getBrief, createBrief, updateBrief, updateProject, callLLMGenerate, checkResearchLimit } from '@/db/api';
+import { supabase } from '@/db/supabase';
+import { getBrief, createBrief, updateBrief, updateProject, callBriefAgent, checkResearchLimit } from '@/db/api';
 import type { Brief } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { CheckCircle2, ArrowRight, Search, Sparkles } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Search, Sparkles, Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface BriefStageProps {
@@ -32,12 +33,30 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
   const [generatedRequirements, setGeneratedRequirements] = useState('');
   const [showResearchDialog, setShowResearchDialog] = useState(false);
   const [hasEnoughCredits, setHasEnoughCredits] = useState(false);
+  const [isProjectCompleted, setIsProjectCompleted] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
   useEffect(() => {
     loadBrief();
+    checkProjectStatus();
   }, [projectId]);
+
+  const checkProjectStatus = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('is_completed')
+        .eq('id', projectId)
+        .single();
+      
+      if (!error && data) {
+        setIsProjectCompleted((data as any).is_completed || false);
+      }
+    } catch (error) {
+      console.error('检查项目状态失败:', error);
+    }
+  };
 
   const loadBrief = async () => {
     try {
@@ -64,65 +83,53 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
       return;
     }
 
+    if (isProjectCompleted) {
+      toast({
+        title: '项目已完稿',
+        description: '完稿后无法修改需求文档',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setGenerating(true);
     try {
-      const prompt = `请将以下写作需求结构化为需求文档：
-
-选题：${topic}
-文章类型：${formatTemplate || '无'}
-
-请生成一个结构化的需求文档，包括：
-1. 文章主题
-2. 目标读者
-3. 核心观点
-4. 预期长度
-5. 写作风格
-6. 关键要点
-
-请严格按照以下 JSON 格式返回，不要包含任何其他文字说明：
-{
-  "主题": "文章主题",
-  "目标读者": "目标读者群体",
-  "核心观点": ["观点1", "观点2"],
-  "预期长度": "字数范围",
-  "写作风格": "风格描述",
-  "关键要点": ["要点1", "要点2"]
-}`;
-
-      const result = await callLLMGenerate(prompt);
+      // 调用新的 brief-agent
+      const userInput = `选题：${topic}\n文章类型：${formatTemplate || '无'}`;
+      const result = await callBriefAgent(projectId, topic, userInput);
       
-      // 尝试提取 JSON
-      let parsedResult;
-      try {
-        // 尝试直接解析
-        parsedResult = JSON.parse(result);
-      } catch (e) {
-        // 如果失败，尝试提取 JSON 部分
-        const jsonMatch = result.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          parsedResult = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error('AI 返回的内容不是有效的 JSON 格式');
-        }
+      if (result.error) {
+        throw new Error(result.details || result.error);
       }
-      
-      setGeneratedRequirements(JSON.stringify(parsedResult, null, 2));
+
+      // 从 requirements 表读取生成的 writing_brief
+      const { data: requirement, error: reqError } = await supabase
+        .from('requirements')
+        .select('payload_jsonb')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (reqError) throw reqError;
+
+      const writingBrief = (requirement as any).payload_jsonb;
+      setGeneratedRequirements(JSON.stringify(writingBrief, null, 2));
 
       if (!brief) {
         const newBrief = await createBrief({
           project_id: projectId,
           topic,
           format_template: formatTemplate || undefined,
-          requirements: parsedResult,
+          requirements: writingBrief,
           confirmed: false,
         });
         setBrief(newBrief);
       } else {
-        // 重新生成时，重置确认状态
         const updated = await updateBrief(brief.id, {
           topic,
           format_template: formatTemplate || undefined,
-          requirements: parsedResult,
+          requirements: writingBrief,
           confirmed: false,
         });
         setBrief(updated);
@@ -137,15 +144,8 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
       
       let errorMessage = '无法生成需求文档';
       
-      // 检查是否是 API 配置问题
-      if (error.message && error.message.includes('系统 LLM 配置未完成')) {
-        errorMessage = '系统 LLM 配置未完成，请联系管理员配置通义千问 API 密钥';
-      } else if (error.message && error.message.includes('请先在设置中配置')) {
-        errorMessage = '系统 LLM 配置未完成，请联系管理员配置';
-      } else if (error.message && error.message.includes('API 错误')) {
-        errorMessage = 'API 调用失败，请联系管理员检查 API 密钥是否正确';
-      } else if (error.message && error.message.includes('JSON')) {
-        errorMessage = 'AI 返回格式错误，请重试或联系管理员';
+      if (error.message && error.message.includes('未找到 writing_brief')) {
+        errorMessage = 'Agent 运行失败，请重试';
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -254,9 +254,15 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
               onChange={(e) => setFormatTemplate(e.target.value)}
             />
           </div>
-          <Button onClick={handleGenerate} disabled={generating || !topic.trim()}>
-            {generating ? '生成中...' : '生成需求文档'}
+          <Button onClick={handleGenerate} disabled={generating || !topic.trim() || isProjectCompleted}>
+            {isProjectCompleted && <Lock className="h-4 w-4 mr-2" />}
+            {generating ? '生成中...' : isProjectCompleted ? '项目已完稿' : '生成需求文档'}
           </Button>
+          {isProjectCompleted && (
+            <p className="text-sm text-muted-foreground mt-2">
+              ⚠️ 项目已完稿，无法修改需求文档
+            </p>
+          )}
         </CardContent>
       </Card>
 

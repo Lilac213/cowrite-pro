@@ -2501,3 +2501,143 @@ export async function batchUpdateRetrievedMaterialSelection(
   console.log('[batchUpdateRetrievedMaterialSelection] 批量更新成功:', materialIds.length, '条资料');
 }
 
+// ============ New Agent API ============
+
+/**
+ * 调用 brief-agent 生成需求文档
+ */
+export async function callBriefAgent(projectId: string, topic: string, userInput: string) {
+  const { data, error } = await supabase.functions.invoke('brief-agent', {
+    body: { project_id: projectId, topic, user_input: userInput }
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 调用 research-retrieval 进行资料搜索
+ */
+export async function callResearchRetrieval(projectId: string, searchDepth: 'shallow' | 'medium' | 'deep' = 'medium') {
+  const { data, error } = await supabase.functions.invoke('research-retrieval', {
+    body: { project_id: projectId, search_depth: searchDepth }
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 调用 research-synthesis 进行资料整理
+ */
+export async function callResearchSynthesis(projectId: string) {
+  const { data, error } = await supabase.functions.invoke('research-synthesis', {
+    body: { project_id: projectId }
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 调用 structure-agent 生成文章结构
+ */
+export async function callStructureAgent(projectId: string) {
+  const { data, error } = await supabase.functions.invoke('structure-agent', {
+    body: { project_id: projectId }
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 调用 draft-agent 生成草稿
+ */
+export async function callDraftAgent(projectId: string) {
+  const { data, error } = await supabase.functions.invoke('draft-agent', {
+    body: { project_id: projectId }
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 调用 review-agent 进行审校
+ */
+export async function callReviewAgent(projectId: string) {
+  const { data, error } = await supabase.functions.invoke('review-agent', {
+    body: { project_id: projectId }
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 扣除用户点数
+ */
+export async function deductUserPoints(userId: string, points: number, reason: string) {
+  const { data: profile, error: fetchError } = await supabase
+    .from('profiles')
+    .select('points_balance')
+    .eq('id', userId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  const newBalance = (profile.points_balance || 0) - points;
+  if (newBalance < 0) {
+    throw new Error('点数不足');
+  }
+
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ points_balance: newBalance })
+    .eq('id', userId);
+
+  if (updateError) throw updateError;
+
+  // 记录点数变动日志（如果有 points_log 表）
+  console.log(`[deductUserPoints] 用户 ${userId} 扣除 ${points} 点，原因：${reason}`);
+  
+  return newBalance;
+}
+
+/**
+ * 标记项目为已完成
+ */
+export async function markProjectAsCompleted(projectId: string) {
+  const { error } = await supabase
+    .from('projects')
+    .update({ is_completed: true })
+    .eq('id', projectId);
+
+  if (error) throw error;
+}
+
+/**
+ * 增加项目的资料刷新次数
+ */
+export async function incrementResearchRefreshCount(projectId: string) {
+  const { data: project, error: fetchError } = await supabase
+    .from('projects')
+    .select('research_refreshed_count')
+    .eq('id', projectId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  const newCount = (project.research_refreshed_count || 0) + 1;
+
+  const { error: updateError } = await supabase
+    .from('projects')
+    .update({ research_refreshed_count: newCount })
+    .eq('id', projectId);
+
+  if (updateError) throw updateError;
+
+  return newCount;
+}
+

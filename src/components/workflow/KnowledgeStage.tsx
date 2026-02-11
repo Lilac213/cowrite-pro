@@ -29,6 +29,9 @@ import {
   updateInsightDecision,
   updateGapDecision,
   callArticleStructureAgent,
+  callResearchRetrieval,
+  deductUserPoints,
+  incrementResearchRefreshCount,
 } from '@/db/api';
 import type { KnowledgeBase, WritingSession, ResearchInsight, ResearchGap, SynthesisResult, RetrievedMaterial } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -39,6 +42,7 @@ import { Separator } from '@/components/ui/separator';
 import { Search, Sparkles, CheckCircle2, RefreshCw, FileText, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import SearchPlanPanel from './SearchPlanPanel';
 import SearchResultsPanel from './SearchResultsPanel';
 import SynthesisResultsDialog from './SynthesisResultsDialog';
@@ -98,6 +102,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   } | null>(null);
   
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // 新增：localStorage 缓存相关函数
   const getCacheKey = (projectId: string) => `search_cache_${projectId}`;
@@ -1201,19 +1206,46 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   };
 
   // 重新搜索
-  const handleRefreshSearch = () => {
-    // 清除缓存
-    clearSearchCache(projectId);
-    
-    setRetrievedMaterials([]);
-    setAutoSearched(false); // 重置自动搜索标记
-    
-    // 触发重新搜索
-    if (query.trim()) {
-      handleSearch();
-    } else {
-      // 如果没有查询词，尝试从需求文档自动搜索
-      autoSearchFromBrief();
+  const handleRefreshSearch = async () => {
+    if (!user) {
+      toast({
+        title: '请先登录',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // 扣除 1 点
+      await deductUserPoints(user.id, 1, '刷新资料搜索');
+      
+      // 增加刷新次数
+      await incrementResearchRefreshCount(projectId);
+      
+      toast({
+        title: '已扣除 1 点',
+        description: '开始重新搜索资料',
+      });
+      
+      // 清除缓存
+      clearSearchCache(projectId);
+      
+      setRetrievedMaterials([]);
+      setAutoSearched(false); // 重置自动搜索标记
+      
+      // 触发重新搜索
+      if (query.trim()) {
+        handleSearch();
+      } else {
+        // 如果没有查询词，尝试从需求文档自动搜索
+        autoSearchFromBrief();
+      }
+    } catch (error: any) {
+      toast({
+        title: '刷新失败',
+        description: error.message || '无法扣除点数',
+        variant: 'destructive',
+      });
     }
   };
 

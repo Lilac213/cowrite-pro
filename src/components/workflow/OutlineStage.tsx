@@ -6,6 +6,7 @@ import {
   getKnowledgeBase,
   getReferenceArticles,
   getMaterials,
+  callStructureAgent,
 } from '@/db/api';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -74,31 +75,36 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
   const handleGenerateArticleStructure = async () => {
     setGeneratingStructure(true);
     try {
-      const brief = await getBrief(projectId);
+      // 调用新的 structure-agent
+      const result = await callStructureAgent(projectId);
+      
+      if (result.error) {
+        throw new Error(result.details || result.error);
+      }
 
-      const { data, error } = await supabase.functions.invoke('generate-article-structure', {
-        body: {
-          topic: brief?.topic,
-          requirements: brief?.requirements,
-          referenceArticles,
-          materials,
-          writingSummary: project?.writing_summary, // 传递可引用版本
-        },
-      });
+      // 从 article_structures 表读取生成的结构
+      const { data: structure, error: structError } = await supabase
+        .from('article_structures')
+        .select('payload_jsonb')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-      if (error) throw error;
+      if (structError) throw structError;
 
-      setCoreThesis(data.core_thesis);
-      setArgumentBlocks(data.argument_blocks);
+      const argumentOutline = (structure as any).payload_jsonb;
+      setCoreThesis(argumentOutline.core_thesis);
+      setArgumentBlocks(argumentOutline.argument_blocks);
 
-      // 保存到数据库
+      // 保存到 projects 表（保持兼容性）
       const { error: saveError } = await supabase
         .from('projects')
         // @ts-ignore - article_argument_structure is a JSONB field
         .update({
           article_argument_structure: {
-            core_thesis: data.core_thesis,
-            argument_blocks: data.argument_blocks,
+            core_thesis: argumentOutline.core_thesis,
+            argument_blocks: argumentOutline.argument_blocks,
           },
         })
         .eq('id', projectId);
@@ -110,9 +116,18 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
         description: '文章级论证结构已生成',
       });
     } catch (error: any) {
+      console.error('生成失败详情:', error);
+      
+      let errorMessage = '无法生成论证结构';
+      if (error.message && error.message.includes('未找到 research_pack')) {
+        errorMessage = '请先完成资料搜索和整理';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: '生成失败',
-        description: error.message || '无法生成论证结构',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {

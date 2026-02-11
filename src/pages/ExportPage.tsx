@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { getProject, getLatestDraft, getTemplates, updateProject } from '@/db/api';
+import { getProject, getLatestDraft, getTemplates, updateProject, markProjectAsCompleted } from '@/db/api';
 import type { Project, Draft, Template } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -216,6 +216,14 @@ ${html}
 
       // 更新项目状态为已完成
       await updateProject(projectId!, { status: 'completed' });
+      
+      // 标记项目为已完稿（锁定需求文档）
+      await markProjectAsCompleted(projectId!);
+      
+      toast({
+        title: '项目已完稿',
+        description: '需求文档已锁定，无法再修改',
+      });
       
       // 延迟后返回项目页面
       setTimeout(() => {

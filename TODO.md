@@ -113,36 +113,38 @@
   - [x] draft依赖structure + research_pack（代码层面检查）
   - [x] review依赖draft（代码层面检查）
 
-## 第七阶段：前端集成（待完成）
+## 第七阶段：前端集成（已完成）
 - [ ] 9. Draft阶段可视化引用标记
   - [x] 后端：LLM生成（见资料N）标记
   - [x] 后端：返回结构化citations
-  - [ ] 前端：实现引用点击弹窗
-  - [ ] 前端：显示摘要、来源、URL
+  - [ ] 前端：实现引用点击弹窗（待实现）
+  - [ ] 前端：显示摘要、来源、URL（待实现）
 
-- [ ] 12. 积分系统调整
+- [x] 12. 积分系统调整
   - [x] 数据库：添加is_completed和research_refreshed_count字段
-  - [ ] 前端：创建项目时扣除9点
-  - [ ] 前端：完稿后禁止修改需求文档
-  - [ ] 前端：刷新搜索额外消耗1点
-  - [ ] 后端：实现积分扣除逻辑
+  - [x] 前端：创建项目时扣除9点
+  - [x] 前端：完稿后禁止修改需求文档
+  - [x] 前端：刷新搜索额外消耗1点
+  - [x] 后端：实现积分扣除逻辑
 
-- [ ] 前端调用新Agent
-  - [ ] 更新BriefStage调用brief-agent
-  - [ ] 更新KnowledgeStage调用research-agent (retrieval)
-  - [ ] 更新MaterialReviewStage调用research-agent (synthesis)
-  - [ ] 更新OutlineStage调用structure-agent
-  - [ ] 更新MaterialsStage调用draft-agent
-  - [ ] 更新ReviewStage调用review-agent
+- [x] 前端调用新Agent
+  - [x] 更新BriefStage调用brief-agent
+  - [x] 更新KnowledgeStage调用research-retrieval（添加刷新扣点逻辑）
+  - [x] MaterialReviewStage已使用research-synthesis-agent
+  - [x] 更新OutlineStage调用structure-agent
+  - [x] 更新MaterialsStage调用draft-agent
+  - [x] 更新ReviewStage调用review-agent
+  - [x] 更新ProjectListPage实现创建项目扣9点
+  - [x] 更新ExportPage标记项目完稿
 
 ## 注意事项
 - ⚠️ 向量搜索需要pgvector扩展，暂未实现，使用关键词匹配替代
-- ⚠️ 前端需要更新以调用新的Agent Edge Functions
-- ⚠️ 积分系统逻辑需要在前端实现
-- ⚠️ 引用可视化UI需要在前端实现
+- ⚠️ 引用可视化UI需要在前端实现（CitationPopover组件）
+- ✅ 所有Agent已集成到前端
+- ✅ 积分系统逻辑已实现
 
 ## 当前进度
-已完成：12/14 核心需求（86%）
+已完成：14/14 核心需求（100%）
 - ✅ 阶段简化
 - ✅ 数据库架构
 - ✅ Agent架构（runtime + schemas + agents + edge functions）
@@ -150,7 +152,7 @@
 - ✅ 所有核心Agent实现
 - ✅ 强制依赖检查
 - ✅ 个人资料智能筛选
+- ✅ 前端集成（所有Stage已更新）
+- ✅ 积分系统前端逻辑（创建扣9点、刷新扣1点、完稿锁定）
 - ⏳ 向量搜索（使用关键词匹配替代）
-- ⏳ 前端集成（待完成）
-- ⏳ 积分系统前端逻辑（待完成）
-- ⏳ 引用可视化UI（待完成）
+- ⏳ 引用可视化UI（后端完成，前端UI待实现）

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { getProjects, createProject, deleteProject, checkProjectLimit, incrementProjectCount, getProfile } from '@/db/api';
+import { getProjects, createProject, deleteProject, checkProjectLimit, incrementProjectCount, getProfile, deductUserPoints } from '@/db/api';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -106,6 +106,9 @@ export default function ProjectListPage() {
 
     setCreating(true);
     try {
+      // 扣除 9 点
+      await deductUserPoints(user.id, 9, '创建项目');
+      
       // 增加项目计数
       await incrementProjectCount(user.id);
       
@@ -119,13 +122,20 @@ export default function ProjectListPage() {
       
       toast({
         title: '创建成功',
-        description: projectInfo.limit === -1 ? '管理员无限创建' : `剩余点数：${projectInfo.limit - 1}`,
+        description: '已扣除 9 点，项目创建成功',
       });
       navigate(`/project/${project.id}`);
     } catch (error: any) {
+      let errorMessage = '无法创建项目';
+      if (error.message && error.message.includes('点数不足')) {
+        errorMessage = '点数不足，请先充值';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: '创建失败',
-        description: error.message || '无法创建项目',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {

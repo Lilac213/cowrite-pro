@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getLatestDraft, updateDraft, updateProject, callLLMGenerate } from '@/db/api';
+import { getLatestDraft, updateDraft, updateProject, callReviewAgent } from '@/db/api';
 import type { Draft } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { diffWords } from 'diff';
-import { DEFAULT_POLISH_PROMPT, DEFAULT_ENHANCE_PROMPT, RHYTHM_PROMPT } from '@/constants/prompts';
+import { supabase } from '@/db/supabase';
 
 interface ReviewStageProps {
   projectId: string;
@@ -81,46 +81,62 @@ export default function ReviewStage({ projectId, onComplete }: ReviewStageProps)
       setProgress((prev) => {
         if (prev >= 90) return prev;
         const next = prev + Math.random() * 15;
-        return Math.min(next, 90); // 确保不超过 90
+        return Math.min(next, 90);
       });
     }, 500);
     
     try {
-      let systemMessage = '';
+      // 调用新的 review-agent
+      const result = await callReviewAgent(projectId);
       
-      if (step === 'content') {
-        systemMessage = DEFAULT_POLISH_PROMPT;
-      } else if (step === 'style') {
-        systemMessage = DEFAULT_ENHANCE_PROMPT;
-      } else if (step === 'detail') {
-        systemMessage = RHYTHM_PROMPT;
+      if (result.error) {
+        throw new Error(result.details || result.error);
       }
 
-      const result = await callLLMGenerate(currentContent, '', systemMessage);
+      // 从 review_reports 表读取审校报告
+      const { data: report, error: reportError } = await supabase
+        .from('review_reports')
+        .select('payload_jsonb')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (reportError) throw reportError;
+
+      const reviewPayload = (report as any).payload_jsonb;
       
       clearInterval(progressInterval);
-      setProgress(100); // 完成时设置为 100
+      setProgress(100);
       
-      // 等待一下让用户看到100%
       await new Promise(resolve => setTimeout(resolve, 300));
       
-      setCurrentContent(result);
-      setCompletedSteps([...completedSteps, step]);
+      // 显示审校结果（这里简化处理，实际应该根据 reviewPayload 显示详细问题）
+      const issuesCount = 
+        (reviewPayload.logic_issues?.length || 0) +
+        (reviewPayload.citation_issues?.length || 0) +
+        (reviewPayload.style_issues?.length || 0) +
+        (reviewPayload.grammar_issues?.length || 0);
       
-      // 保存到草稿
-      if (draft) {
-        await updateDraft(draft.id, { content: result });
-      }
+      setCompletedSteps([...completedSteps, step]);
       
       toast({
         title: '审校完成',
-        description: getStepName(step) + ' 已完成',
+        description: `发现 ${issuesCount} 个问题，质量评分：${reviewPayload.overall_quality || 'N/A'}`,
       });
     } catch (error: any) {
       clearInterval(progressInterval);
+      
+      let errorMessage = '无法完成审校';
+      if (error.message && error.message.includes('未找到 draft')) {
+        errorMessage = '请先生成草稿';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: '审校失败',
-        description: error.message || '无法完成审校',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
