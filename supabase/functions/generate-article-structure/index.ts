@@ -6,6 +6,74 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+/**
+ * 清理JSON字符串，移除控制字符和修复常见问题
+ */
+function cleanJsonString(jsonStr: string): string {
+  return jsonStr
+    // 移除所有控制字符（除了空格、换行、制表符）
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+    // 将换行符和制表符替换为空格（在JSON字符串值内）
+    .replace(/(?<!\\)(\\r|\\n|\\t)/g, ' ')
+    // 移除多余的逗号（在}或]之前）
+    .replace(/,(\s*[}\]])/g, '$1')
+    // 修复缺失的逗号（在}或]之后，下一个"之前）
+    .replace(/([}\]])(\s*)(")/g, '$1,$2$3')
+    // 合并多个空格
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * 尝试多种策略解析JSON
+ */
+function parseJsonWithFallback(text: string): any {
+  const strategies = [
+    // 策略1: 直接解析
+    () => JSON.parse(text),
+    
+    // 策略2: 清理后解析
+    () => JSON.parse(cleanJsonString(text)),
+    
+    // 策略3: 从markdown代码块提取
+    () => {
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/```\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        return JSON.parse(cleanJsonString(jsonMatch[1]));
+      }
+      throw new Error('未找到代码块');
+    },
+    
+    // 策略4: 提取JSON对象
+    () => {
+      const jsonStart = text.indexOf('{');
+      const jsonEnd = text.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        const jsonStr = text.substring(jsonStart, jsonEnd + 1);
+        return JSON.parse(cleanJsonString(jsonStr));
+      }
+      throw new Error('未找到JSON对象');
+    }
+  ];
+  
+  const errors: string[] = [];
+  
+  for (let i = 0; i < strategies.length; i++) {
+    try {
+      console.log(`[parseJsonWithFallback] 尝试策略 ${i + 1}`);
+      const result = strategies[i]();
+      console.log(`[parseJsonWithFallback] 策略 ${i + 1} 成功`);
+      return result;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      errors.push(`策略${i + 1}: ${errorMsg}`);
+      console.log(`[parseJsonWithFallback] 策略 ${i + 1} 失败: ${errorMsg}`);
+    }
+  }
+  
+  throw new Error(`所有解析策略均失败:\n${errors.join('\n')}`);
+}
+
 // 输入接口定义
 interface StructureAgentInput {
   topic: string;
@@ -42,8 +110,21 @@ serve(async (req) => {
       // 新格式
       console.log('[generate-article-structure] 使用新格式输入');
       input = body.input;
+      
+      // 清理输入数据，移除控制字符
+      if (input.confirmed_insights) {
+        input.confirmed_insights = input.confirmed_insights.map(insight => ({
+          ...insight,
+          content: (insight.content || '')
+            .replace(/[\x00-\x1F\x7F]/g, ' ')  // 移除所有控制字符
+            .replace(/\s+/g, ' ')               // 合并多个空格
+            .trim()
+            .substring(0, 500)                  // 限制长度
+        }));
+      }
+      
       inputJson = JSON.stringify(input, null, 2);
-      console.log('[generate-article-structure] 输入数据:', inputJson);
+      console.log('[generate-article-structure] 输入数据（已清理）:', inputJson.substring(0, 1000));
     } else {
       // 旧格式 - 转换为新格式（用于向后兼容）
       console.log('[generate-article-structure] 使用旧格式输入（兼容模式）');
@@ -179,34 +260,39 @@ ${inputJson}
 【输出要求】
 ────────────────
 - 仅以 JSON 输出，不要包含任何其他文字说明
-- 确保 JSON 格式正确，所有字符串值必须正确转义
+- 确保 JSON 格式完全正确，可以被 JSON.parse() 直接解析
+- 所有字符串值必须正确转义，不能包含未转义的引号、换行符、制表符等控制字符
+- 字符串中的换行请使用 \\n，制表符使用 \\t，引号使用 \\"
 - 结构生成后必须停在等待用户确认状态
 - 不得进入写作阶段
 
 请严格按照以下 JSON 格式输出（注意：derived_from 数组中的值必须是字符串）：
 {
-  "core_thesis": "核心论点（一句话）",
+  "core_thesis": "核心论点（一句话，不能包含换行符）",
   "argument_blocks": [
     {
       "id": "block_1",
-      "title": "论证块标题",
-      "description": "论证任务说明（要证明什么）",
+      "title": "论证块标题（不能包含换行符）",
+      "description": "论证任务说明（要证明什么，不能包含换行符）",
       "order": 1,
       "relation": "与前一块的关系（起始论证块 / 递进 / 并列 / 因果 / 对比等）",
       "derived_from": ["insight_id_1", "insight_id_2"],
       "user_editable": true
     }
   ],
-  "structure_relations": "整体结构关系说明",
+  "structure_relations": "整体结构关系说明（不能包含换行符）",
   "status": "awaiting_user_confirmation",
   "allowed_user_actions": ["edit_core_thesis", "delete_block", "reorder_blocks"]
 }
 
 重要提示：
-1. 所有字符串中的引号必须转义
-2. derived_from 数组中只能包含字符串类型的 insight ID
-3. 不要在 JSON 外添加任何解释性文字
-4. 确保 JSON 可以被直接解析`;
+1. 所有字符串中的引号必须转义为 \\"
+2. 所有字符串中的换行符必须转义为 \\n
+3. 所有字符串中的制表符必须转义为 \\t
+4. derived_from 数组中只能包含字符串类型的 insight ID
+5. 不要在 JSON 外添加任何解释性文字
+6. 不要使用 markdown 代码块包裹 JSON
+7. 确保 JSON 可以被直接解析，没有语法错误`;
 
     console.log('[generate-article-structure] 开始调用 Gemini API');
     const response = await fetch('https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse', {
@@ -221,7 +307,11 @@ ${inputJson}
             role: 'user',
             parts: [{ text: prompt }]
           }
-        ]
+        ],
+        generationConfig: {
+          temperature: 0.3,  // 降低温度以获得更稳定的输出
+          maxOutputTokens: 4096,
+        }
       }),
     });
 
@@ -267,49 +357,18 @@ ${inputJson}
     console.log('[generate-article-structure] 流式数据读取完成，总长度:', fullText.length);
     console.log('[generate-article-structure] 原始响应内容（前500字符）:', fullText.substring(0, 500));
 
-    // 提取JSON内容
+    // 使用多策略解析JSON
     let structure;
     try {
-      console.log('[generate-article-structure] 尝试直接解析JSON');
-      // 尝试直接解析
-      structure = JSON.parse(fullText);
-      console.log('[generate-article-structure] 直接解析成功');
-    } catch (e) {
-      console.log('[generate-article-structure] 直接解析失败，尝试从markdown代码块提取');
-      // 尝试从markdown代码块中提取
-      const jsonMatch = fullText.match(/```json\s*([\s\S]*?)\s*```/) || fullText.match(/```\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        console.log('[generate-article-structure] 找到代码块，尝试解析');
-        try {
-          structure = JSON.parse(jsonMatch[1]);
-          console.log('[generate-article-structure] 代码块解析成功');
-        } catch (parseError) {
-          console.error('[generate-article-structure] 代码块解析失败:', parseError);
-          console.error('[generate-article-structure] 代码块内容:', jsonMatch[1].substring(0, 500));
-          throw new Error(`JSON解析失败: ${parseError.message}`);
-        }
-      } else {
-        console.log('[generate-article-structure] 未找到代码块，尝试查找JSON对象');
-        // 尝试查找JSON对象
-        const jsonStart = fullText.indexOf('{');
-        const jsonEnd = fullText.lastIndexOf('}');
-        if (jsonStart !== -1 && jsonEnd !== -1) {
-          const jsonStr = fullText.substring(jsonStart, jsonEnd + 1);
-          console.log('[generate-article-structure] 提取的JSON字符串（前200字符）:', jsonStr.substring(0, 200));
-          try {
-            structure = JSON.parse(jsonStr);
-            console.log('[generate-article-structure] JSON对象解析成功');
-          } catch (parseError) {
-            console.error('[generate-article-structure] JSON对象解析失败:', parseError);
-            console.error('[generate-article-structure] JSON字符串（前500字符）:', jsonStr.substring(0, 500));
-            throw new Error(`JSON解析失败: ${parseError.message}`);
-          }
-        } else {
-          console.error('[generate-article-structure] 无法找到有效的JSON结构');
-          console.error('[generate-article-structure] 完整响应:', fullText);
-          throw new Error('无法解析返回的JSON结构');
-        }
-      }
+      console.log('[generate-article-structure] 开始解析JSON');
+      structure = parseJsonWithFallback(fullText);
+      console.log('[generate-article-structure] JSON解析成功');
+    } catch (error) {
+      console.error('[generate-article-structure] JSON解析失败:', error);
+      console.error('[generate-article-structure] 完整响应文本:', fullText);
+      
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      throw new Error(`JSON解析失败: ${errorMsg}`);
     }
 
     console.log('[generate-article-structure] JSON解析完成，验证必要字段');
