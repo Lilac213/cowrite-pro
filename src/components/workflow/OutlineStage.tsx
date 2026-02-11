@@ -141,6 +141,7 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
       // 调用调整接口，确保结构连贯且最后一块是总结
       const { data, error } = await supabase.functions.invoke('adjust-article-structure', {
         body: {
+          project_id: projectId,
           coreThesis,
           argumentBlocks,
           operation: 'check',
@@ -213,6 +214,7 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
     try {
       const { data, error } = await supabase.functions.invoke('adjust-article-structure', {
         body: {
+          project_id: projectId,
           coreThesis,
           argumentBlocks: updatedBlocks,
           operation: 'add',
@@ -255,6 +257,7 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
     try {
       const { data, error } = await supabase.functions.invoke('adjust-article-structure', {
         body: {
+          project_id: projectId,
           coreThesis,
           argumentBlocks: updatedBlocks,
           operation: 'delete',

@@ -137,6 +137,14 @@
   - [x] 更新ProjectListPage实现创建项目扣9点
   - [x] 更新ExportPage标记项目完稿
 
+## 第八阶段：Bug修复与稳定性优化（已完成）
+- [x] 修复 `adjust-article-structure` 中的 JSON 解析失败问题
+  - [x] 重构为 Agent 架构，使用 `LLMRuntime`
+  - [x] 升级模型为 `gemini-2.0-flash-exp`
+  - [x] 增加信封模式三层防护解析
+  - [x] 增加 `agent_logs` 运行日志记录
+  - [x] 修复 Edge Function 部署中的 `_shared` 目录依赖问题（改为各函数独立隔离）
+
 ## 注意事项
 - ⚠️ 向量搜索需要pgvector扩展，暂未实现，使用关键词匹配替代
 - ⚠️ 引用可视化UI需要在前端实现（CitationPopover组件）
