@@ -7,40 +7,44 @@ const corsHeaders = {
 };
 
 /**
- * 确定性JSON解析器
- * 只做最小化预处理，不猜测语义
+ * 提取JSON对象 - 只保留第一个 { 到最后一个 } 之间的内容
+ * 这是处理LLM输出杂质的第一道防线
  */
-function parseJsonDeterministic(text: string): any {
-  console.log('[parseJson] 原始文本长度:', text.length);
-  console.log('[parseJson] 原始文本前300字符:', text.substring(0, 300));
+function extractJSONObject(rawText: string): string {
+  const firstBrace = rawText.indexOf('{');
+  const lastBrace = rawText.lastIndexOf('}');
   
-  let jsonStr = text.trim();
-  
-  // 步骤1: 如果文本不是以 { 开头，尝试提取 { 到 } 的边界
-  if (!jsonStr.startsWith('{')) {
-    const start = jsonStr.indexOf('{');
-    const end = jsonStr.lastIndexOf('}');
-    
-    if (start === -1 || end === -1 || end <= start) {
-      throw new Error('未找到有效的JSON对象边界（缺少 { 或 }）');
-    }
-    
-    jsonStr = jsonStr.substring(start, end + 1);
-    console.log('[parseJson] 提取边界后长度:', jsonStr.length);
+  if (firstBrace === -1 || lastBrace === -1) {
+    throw new Error('未在LLM输出中找到JSON对象（缺少 { 或 }）');
   }
   
-  // 步骤2: 移除非法控制字符（保留合法的空白字符）
-  // 只移除 \x00-\x1F 中除了 \t \n \r 之外的控制字符
-  jsonStr = jsonStr.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+  if (lastBrace <= firstBrace) {
+    throw new Error('JSON对象边界无效（} 在 { 之前）');
+  }
   
-  // 步骤3: 直接解析
+  return rawText.slice(firstBrace, lastBrace + 1);
+}
+
+/**
+ * 解析JSON - 先提取边界，再解析
+ */
+function parseJsonSafely(rawText: string): any {
+  console.log('[parseJson] 原始文本长度:', rawText.length);
+  console.log('[parseJson] 原始文本前300字符:', rawText.substring(0, 300));
+  
   try {
-    const result = JSON.parse(jsonStr);
+    // Step 1: 提取JSON对象边界
+    const jsonText = extractJSONObject(rawText);
+    console.log('[parseJson] 提取后长度:', jsonText.length);
+    console.log('[parseJson] 提取后前300字符:', jsonText.substring(0, 300));
+    
+    // Step 2: 解析JSON
+    const result = JSON.parse(jsonText);
     console.log('[parseJson] 解析成功');
     return result;
   } catch (error) {
     console.error('[parseJson] 解析失败:', error);
-    console.error('[parseJson] 失败时的JSON字符串前500字符:', jsonStr.substring(0, 500));
+    console.error('[parseJson] 失败时的原始文本前500字符:', rawText.substring(0, 500));
     throw new Error(`JSON解析失败: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
@@ -229,6 +233,8 @@ serve(async (req) => {
 - 所有字符串值必须正确转义，不能包含未转义的引号、换行符、制表符等控制字符
 - 字符串中的换行请使用 \\n，制表符使用 \\t，引号使用 \\"
 - 必须使用英文标点符号：冒号用 : 不用 ：，逗号用 , 不用 ，，引号用 " 不用 " 或 "
+- 所有字符串字段中禁止出现中文引号, 中文逗号, 中文冒号或任何全角标点符号
+- 若语义中需要强调，请使用普通英文字符，不得使用任何中文标点
 - 不要在 JSON 外添加任何解释性文字
 - 不要使用 markdown 代码块包裹 JSON（不要用三个反引号）
 - 直接输出纯 JSON，确保可以被 JSON.parse() 直接解析，没有语法错误
@@ -323,10 +329,12 @@ ${inputJson}
 
 重要提示：
 1. 必须使用英文标点符号：冒号用 : 不用 ：，逗号用 , 不用 ，，引号用 " 不用 " 或 "
-2. 所有字符串中的引号必须转义为 \\"
-3. 所有字符串中的换行符必须转义为 \\n
-4. 所有字符串中的制表符必须转义为 \\t
-5. derived_from 数组中只能包含字符串类型的 insight ID
+2. 所有字符串字段中禁止出现中文引号, 中文逗号, 中文冒号或任何全角标点符号
+3. 若语义中需要强调，请使用普通英文字符，不得使用任何中文标点
+4. 所有字符串中的引号必须转义为 \\"
+5. 所有字符串中的换行符必须转义为 \\n
+6. 所有字符串中的制表符必须转义为 \\t
+7. derived_from 数组中只能包含字符串类型的 insight ID
 6. 不要在 JSON 外添加任何解释性文字
 7. 不要使用 markdown 代码块包裹 JSON（不要用三个反引号）
 8. 直接输出纯 JSON，确保可以被 JSON.parse() 直接解析，没有语法错误
@@ -415,7 +423,7 @@ ${inputJson}
     let structure;
     try {
       console.log('[generate-article-structure] 开始解析JSON');
-      structure = parseJsonDeterministic(fullText);
+      structure = parseJsonSafely(fullText);
       console.log('[generate-article-structure] JSON解析成功');
     } catch (error) {
       console.error('[generate-article-structure] JSON解析失败:', error);

@@ -5,6 +5,46 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/**
+ * 提取JSON对象 - 只保留第一个 { 到最后一个 } 之间的内容
+ */
+function extractJSONObject(rawText: string): string {
+  const firstBrace = rawText.indexOf('{');
+  const lastBrace = rawText.lastIndexOf('}');
+  
+  if (firstBrace === -1 || lastBrace === -1) {
+    throw new Error('未在LLM输出中找到JSON对象（缺少 { 或 }）');
+  }
+  
+  if (lastBrace <= firstBrace) {
+    throw new Error('JSON对象边界无效（} 在 { 之前）');
+  }
+  
+  return rawText.slice(firstBrace, lastBrace + 1);
+}
+
+/**
+ * 解析JSON - 先提取边界，再解析
+ */
+function parseJsonSafely(rawText: string): any {
+  console.log('[parseJson] 原始文本长度:', rawText.length);
+  
+  try {
+    // Step 1: 提取JSON对象边界
+    const jsonText = extractJSONObject(rawText);
+    console.log('[parseJson] 提取后长度:', jsonText.length);
+    
+    // Step 2: 解析JSON
+    const result = JSON.parse(jsonText);
+    console.log('[parseJson] 解析成功');
+    return result;
+  } catch (error) {
+    console.error('[parseJson] 解析失败:', error);
+    console.error('[parseJson] 失败时的原始文本前500字符:', rawText.substring(0, 500));
+    throw new Error(`JSON解析失败: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -79,7 +119,12 @@ ${paragraphList}
     }
   ],
   "overall_assessment": "整体连贯性评价"
-}`;
+}
+
+重要提示：
+1. 必须输出纯JSON, 不要包含markdown代码块
+2. 所有字符串字段中禁止出现中文引号, 中文逗号, 中文冒号或任何全角标点符号
+3. 确保JSON格式完全正确, 可以被JSON.parse()直接解析`;
 
     const response = await fetch('https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse', {
       method: 'POST',
@@ -134,23 +179,19 @@ ${paragraphList}
       }
     }
 
-    // 提取JSON内容
+    // 提取并解析JSON内容
     let result;
     try {
-      result = JSON.parse(fullText);
-    } catch (e) {
-      const jsonMatch = fullText.match(/```json\s*([\s\S]*?)\s*```/) || fullText.match(/```\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        result = JSON.parse(jsonMatch[1]);
-      } else {
-        const jsonStart = fullText.indexOf('{');
-        const jsonEnd = fullText.lastIndexOf('}');
-        if (jsonStart !== -1 && jsonEnd !== -1) {
-          result = JSON.parse(fullText.substring(jsonStart, jsonEnd + 1));
-        } else {
-          throw new Error('无法解析返回的JSON结构');
-        }
-      }
+      result = parseJsonSafely(fullText);
+    } catch (error) {
+      console.error('[verify-coherence] JSON解析失败:', error);
+      return new Response(
+        JSON.stringify({ 
+          error: `JSON解析失败: ${error instanceof Error ? error.message : String(error)}`,
+          raw_output: fullText.substring(0, 500)
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     if (!result.coherence_check) {

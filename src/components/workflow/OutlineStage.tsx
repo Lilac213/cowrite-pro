@@ -51,8 +51,8 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
 
       const [projectData, refArticles, mats, kb] = await Promise.all([
         getProject(projectId),
-        getReferenceArticles(user.id),
-        getMaterials(user.id),
+        getReferenceArticles(user.id, projectId), // 只获取当前项目的参考文章
+        getMaterials(user.id, projectId), // 只获取当前项目的素材
         getKnowledgeBase(projectId),
       ]);
 
