@@ -1,0 +1,13 @@
+# Edge Functions - 自动生成的 llm 副本
+# 这些目录由 sync-shared.sh 自动生成，不应提交到版本控制
+
+brief-agent/llm/
+research-retrieval/llm/
+research-synthesis/llm/
+structure-agent/llm/
+draft-agent/llm/
+review-agent/llm/
+adjust-article-structure/llm/
+
+# 但保留 _shared/llm（这是源代码）
+!_shared/llm/

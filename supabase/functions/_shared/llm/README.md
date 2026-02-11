@@ -1,5 +1,24 @@
 # LLM Agent 架构文档
 
+## ⚠️ 重要说明
+
+**这是所有 Agent 代码的唯一真实来源（Single Source of Truth）**
+
+- ✅ 修改代码请在此目录（`_shared/llm`）进行
+- ❌ 不要修改各 Edge Function 中的 `llm` 副本
+- 🔄 修改后运行 `bash ../sync-shared.sh` 同步到各函数
+
+### 为什么需要副本？
+
+Supabase Edge Functions 部署系统不支持 `_shared` 目录的自动打包。因此：
+1. 此目录（`_shared/llm`）是源代码
+2. 各函数中的 `llm` 目录是部署前自动生成的副本
+3. 同步脚本确保所有副本与源代码保持一致
+
+详见：`../ARCHITECTURE.md`
+
+---
+
 ## 目录结构
 
 ```
