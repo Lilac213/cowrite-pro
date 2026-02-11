@@ -1343,6 +1343,16 @@ export async function researchSynthesisAgent(retrievalResults: any, requirements
  * 2. 调用 Research Synthesis Agent 整理资料
  */
 export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectId?: string, userId?: string, sessionId?: string) {
+  // 检查并扣除点数（资料查询+整理需要3点）
+  if (userId) {
+    const hasCredits = await checkResearchLimit(userId);
+    if (!hasCredits) {
+      throw new Error('点数不足，资料查询和整理需要3点');
+    }
+    // 扣除点数
+    await deductResearchCredits(userId);
+  }
+
   // 第一步：资料检索
   const retrievalResults = await researchRetrievalAgent(requirementsDoc, projectId, userId, sessionId);
 
@@ -1855,6 +1865,41 @@ export async function setUserCredits(userId: string, credits: number): Promise<v
   const { error } = await supabase
     .from('profiles')
     .update({ available_credits: credits })
+    .eq('id', userId);
+
+  if (error) throw error;
+}
+
+// 检查用户是否可以进行资料查询和整理（需要3点）
+export async function checkResearchLimit(userId: string): Promise<boolean> {
+  const profile = await getProfile(userId);
+  if (!profile) return false;
+  // 管理员无限点数
+  if (profile.unlimited_credits) return true;
+  // 普通用户检查点数（资料查询+整理需要3点）
+  return profile.available_credits >= 3;
+}
+
+// 扣除资料查询和整理的点数（3点）
+export async function deductResearchCredits(userId: string): Promise<void> {
+  const profile = await getProfile(userId);
+  if (!profile) throw new Error('用户不存在');
+  
+  // 管理员无限点数，不扣除
+  if (profile.unlimited_credits) {
+    return;
+  }
+
+  // 普通用户检查点数
+  if (profile.available_credits < 3) {
+    throw new Error('点数不足，资料查询和整理需要3点');
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ 
+      available_credits: profile.available_credits - 3,
+    })
     .eq('id', userId);
 
   if (error) throw error;

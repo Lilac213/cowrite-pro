@@ -11,6 +11,18 @@ const corsHeaders = {
  */
 function cleanJsonString(jsonStr: string): string {
   return jsonStr
+    // 移除markdown代码块标记
+    .replace(/```json\s*/g, '')
+    .replace(/```\s*/g, '')
+    // 替换中文标点为英文标点（JSON中必须使用英文标点）
+    .replace(/：/g, ':')
+    .replace(/，/g, ',')
+    .replace(/"/g, '"')
+    .replace(/"/g, '"')
+    .replace(/【/g, '[')
+    .replace(/】/g, ']')
+    .replace(/（/g, '(')
+    .replace(/）/g, ')')
     // 移除所有控制字符（除了空格、换行、制表符）
     .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
     // 将换行符和制表符替换为空格（在JSON字符串值内）
@@ -286,13 +298,30 @@ ${inputJson}
 }
 
 重要提示：
-1. 所有字符串中的引号必须转义为 \\"
-2. 所有字符串中的换行符必须转义为 \\n
-3. 所有字符串中的制表符必须转义为 \\t
-4. derived_from 数组中只能包含字符串类型的 insight ID
-5. 不要在 JSON 外添加任何解释性文字
-6. 不要使用 markdown 代码块包裹 JSON
-7. 确保 JSON 可以被直接解析，没有语法错误`;
+1. 必须使用英文标点符号：冒号用 : 不用 ：，逗号用 , 不用 ，，引号用 " 不用 " 或 "
+2. 所有字符串中的引号必须转义为 \\"
+3. 所有字符串中的换行符必须转义为 \\n
+4. 所有字符串中的制表符必须转义为 \\t
+5. derived_from 数组中只能包含字符串类型的 insight ID
+6. 不要在 JSON 外添加任何解释性文字
+7. 不要使用 markdown 代码块包裹 JSON（不要用三个反引号）
+8. 直接输出纯 JSON，确保可以被 JSON.parse() 直接解析，没有语法错误
+
+示例（注意使用英文标点）:
+{
+  "core_thesis": "这是核心论点",
+  "argument_blocks": [
+    {
+      "id": "block_1",
+      "title": "标题",
+      "description": "描述",
+      "order": 1,
+      "relation": "起始论证块",
+      "derived_from": ["insight_1"],
+      "user_editable": true
+    }
+  ]
+}`;
 
     console.log('[generate-article-structure] 开始调用 Gemini API');
     const response = await fetch('https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse', {

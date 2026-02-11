@@ -739,6 +739,17 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         variant: 'destructive',
       });
       
+      // 如果是点数不足错误，提供额外提示
+      if (errorMessage.includes('点数不足') || errorMessage.includes('需要3点')) {
+        setTimeout(() => {
+          toast({
+            title: '💡 提示',
+            description: '资料查询和整理需要 3 点。若不是学术性论文，可跳过此步骤直接生成文章结构',
+            duration: 8000,
+          });
+        }, 1000);
+      }
+      
       // 如果是 API 密钥相关错误，提供额外提示
       if (errorMessage.includes('API密钥') || errorMessage.includes('API key') || errorMessage.includes('INTEGRATIONS_API_KEY')) {
         setTimeout(() => {
@@ -1449,6 +1460,23 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 </div>
               </div>
             </CardHeader>
+
+            {/* 提示信息 */}
+            <CardContent className="pb-2">
+              <div className="bg-muted/50 border border-border rounded-lg p-3 text-sm">
+                <div className="flex items-start gap-2">
+                  <span className="text-base">💡</span>
+                  <div className="flex-1 space-y-1">
+                    <p className="text-muted-foreground">
+                      <strong className="text-foreground">资料查询和整理需要消耗 3 点</strong>
+                    </p>
+                    <p className="text-muted-foreground">
+                      若不是学术性论文，可跳过此步骤，直接进入下一步生成文章结构
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
 
         {/* 搜索进度显示 */}
         {searchProgress && (

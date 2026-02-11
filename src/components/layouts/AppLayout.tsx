@@ -77,6 +77,18 @@ function SidebarContent({
         )}
       </div>
 
+      {/* 点数显示 */}
+      {!isCollapsed && profile && (
+        <div className="px-6 py-3 border-b border-border">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">可用点数</span>
+            <span className="font-semibold text-primary">
+              {profile.unlimited_credits ? '∞' : profile.available_credits}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* 菜单内容 */}
       <div className="flex-1 overflow-y-auto py-4 flex flex-col">
         {/* 主菜单 */}
