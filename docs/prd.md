@@ -60,6 +60,7 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
 - 移动端：无需缩进/展开按钮
 - 跳转至资料搜索页时：需求文档不再显示在页面右侧，改为在进度条右侧显示需求文档图标按钮，点击后在弹窗中显示需求文档内容
 - **完稿之后无法再更改需求文档**
+- **容错机制**：brief-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，向用户提示错误信息并允许手动重新生成
 
 **需求文档 Payload 格式（writing_brief）**
 
@@ -125,6 +126,7 @@ ResearchRetrievalPage
 - 用户可点击需要的资料进行选择
 - 页面底部显示日志框，展示运行步骤
 - 日志框包含日志详情按钮，点击后弹窗显示 research_retrieval 接收到的输入、输出以及 LLM 输出的 THOUGHT 部分内容
+- **容错机制**：research-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，向用户提示错误信息并允许手动重新搜索
 
 **个人资料库整合**
 - 资料搜索阶段同时检索外部资料与个人资料库
@@ -326,6 +328,7 @@ research_synthesis 必须严格输出纯 JSON 格式，不得包含任何 Markdo
 12. 日志框包含日志详情按钮，点击后弹窗显示 research_synthesis 接收到的输入、输出以及 LLM 输出的 THOUGHT 部分内容
 13. 用户点击确认并进入下一步后，进入文章结构生成阶段
 14. **所有阶段的进度条必须显示当前状态，不得显示为 -**
+15. **容错机制**：research-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，向用户提示错误信息并允许手动重新整理
 
 **用户操作**
 
@@ -539,6 +542,8 @@ session.current_stage = WritingStage.STRUCTURE;
 
 用户可对文章结构进行确认、调整或重新生成
 
+**容错机制**：structure-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，向用户提示错误信息并允许手动重新生成
+
 #### 阶段 6：生成草稿
 
 **draft-agent 强制输入**
@@ -558,9 +563,9 @@ session.current_stage = WritingStage.STRUCTURE;
 **draft-agent 综合功能**
 
 draft-agent 综合以下功能：
-- generate_paragraph_reasoning（段落推理生成）
-- generate_evidence（证据生成）
-- verify_coherence（连贯性验证）
+- 段落推理生成
+- 证据生成
+- 连贯性验证
 - 生成正文
 
 **可视化引用标记**
@@ -618,6 +623,8 @@ UI 点击后展示：
 
 用户可对草稿进行审校和修改
 
+**容错机制**：draft-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，向用户提示错误信息并允许手动重新生成
+
 #### 阶段 7：内容审校
 
 **review-agent 综合功能**
@@ -653,6 +660,8 @@ review-agent 综合现在内容审校的三个 prompt，提供三遍审校流程
 ```
 
 用户逐步完成审校并确认
+
+**容错机制**：review-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，向用户提示错误信息并允许手动重新审校
 
 #### 阶段 8：排版导出
 
@@ -881,8 +890,8 @@ if (stage === 'review' && !userDecision.review) {
   │     ├── normalize.ts
   │     ├── parseEnvelope.ts
   │     ├── validateSchema.ts
-  │     ├── repairJSON.ts          ← 新增 JSON 修复模块
-  │     └── LLMRuntime.ts          ← 核心统一入口
+  │     ├── repairJSON.ts
+  │     └── LLMRuntime.ts
   │
   ├── agents/
   │     ├── briefAgent.ts
@@ -890,7 +899,7 @@ if (stage === 'review' && !userDecision.review) {
   │     ├── structureAgent.ts
   │     ├── draftAgent.ts
   │     ├── reviewAgent.ts
-  │     └── repairAgent.ts         ← 新增 JSON 修复 Agent
+  │     └── repairAgent.ts
   │
   ├── schemas/
   │     ├── briefSchema.ts
@@ -931,29 +940,44 @@ export async function runLLMAgent(config: {
   schema: ZodSchema
   model?: string
   temperature?: number
+  maxRetries?: number
 }) {
-  const raw = await callLLM(config)
+  const maxRetries = config.maxRetries || 3
+  let lastError: Error | null = null
 
-  const normalized = normalizeLLMOutput(raw)
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const raw = await callLLM(config)
 
-  const envelope = parseEnvelope(normalized)
+      const normalized = normalizeLLMOutput(raw)
 
-  let parsedPayload
-  try {
-    parsedPayload = parsePayload(envelope.payload)
-  } catch (e) {
-    // JSON 解析失败，调用修复 Agent
-    const repaired = await repairJSON(envelope.payload)
-    parsedPayload = parsePayload(repaired)
+      const envelope = parseEnvelope(normalized)
+
+      let parsedPayload
+      try {
+        parsedPayload = parsePayload(envelope.payload)
+      } catch (e) {
+        const repaired = await repairJSON(envelope.payload)
+        parsedPayload = parsePayload(repaired)
+      }
+
+      const validated = validateSchema(parsedPayload, config.schema)
+
+      return {
+        agent: config.agentName,
+        meta: envelope.meta,
+        data: validated
+      }
+    } catch (error) {
+      lastError = error as Error
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        continue
+      }
+    }
   }
 
-  const validated = validateSchema(parsedPayload, config.schema)
-
-  return {
-    agent: config.agentName,
-    meta: envelope.meta,
-    data: validated
-  }
+  throw new Error(`${config.agentName} 调用失败（已重试 ${maxRetries} 次）: ${lastError?.message}`)
 }
 ```
 
@@ -998,4 +1022,4 @@ export async function callLLM({
 ```typescript
 export function normalizeLLMOutput(raw: string) {
   return raw
-    .replace(/[
+    .replace(/["

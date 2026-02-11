@@ -26,9 +26,10 @@ export async function callLLM(config: LLMCallConfig): Promise<string> {
     maxTokens = 8192,
   } = config;
 
-  const apiKey = Deno.env.get('GEMINI_API_KEY');
+  // 优先使用 INTEGRATIONS_API_KEY，回退到 GEMINI_API_KEY
+  const apiKey = Deno.env.get('INTEGRATIONS_API_KEY') || Deno.env.get('GEMINI_API_KEY');
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY 未配置');
+    throw new Error('API密钥未配置（需要 INTEGRATIONS_API_KEY 或 GEMINI_API_KEY）');
   }
 
   console.log('[callLLM] 调用模型:', model);

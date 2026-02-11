@@ -12,7 +12,6 @@ import TemplatesPageEnhanced from './pages/TemplatesPageEnhanced';
 import SettingsPage from './pages/SettingsPage';
 import AdminPage from './pages/AdminPage';
 import SearchDebugPage from './pages/SearchDebugPage';
-import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import NotFound from './pages/NotFound';
 
 interface RouteConfig {
@@ -78,11 +77,6 @@ const routes: RouteConfig[] = [
     name: 'Admin',
     path: '/admin',
     element: <AdminPage />,
-  },
-  {
-    name: 'Payment Success',
-    path: '/payment-success',
-    element: <PaymentSuccessPage />,
   },
   {
     name: 'Search Debug',

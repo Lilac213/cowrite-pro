@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
 import { useInvitationCode } from '@/db/api';
-import { LogOut, User as UserIcon, ShoppingCart, Star, Gift } from 'lucide-react';
+import { LogOut, User as UserIcon, Gift } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -20,16 +20,7 @@ export default function SettingsPage() {
   const [invitationCode, setInvitationCode] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
   const [applyingCode, setApplyingCode] = useState(false);
-  const [purchaseDialogOpen, setPurchaseDialogOpen] = useState(false);
-  const { toast } = useToast();
-
-  // 积分套餐配置
-  const creditPackages = [
-    { name: '体验包', credits: 16, price: 9.9 },
-    { name: '推荐包', credits: 66, price: 29.9, recommended: true },
-    { name: '进阶包', credits: 166, price: 79.9 },
-    { name: '专业包', credits: 366, price: 149.9 },
-  ];
+  const { toast} = useToast();
 
   const handleChangePassword = async () => {
     if (!newPassword || !confirmPassword) {
@@ -87,50 +78,6 @@ export default function SettingsPage() {
   const handleSignOut = async () => {
     await signOut();
     navigate('/login');
-  };
-
-  const handlePurchase = async (pkg: typeof creditPackages[0]) => {
-    if (!user) {
-      toast({
-        title: '请先登录',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase.functions.invoke('create_stripe_checkout', {
-        body: {
-          items: [{
-            name: pkg.name,
-            price: pkg.price,
-            quantity: 1,
-            credits: pkg.credits,
-          }],
-          currency: 'cny',
-          payment_method_types: ['card', 'alipay', 'wechat_pay'],
-        },
-      });
-
-      if (error) throw error;
-
-      if (data?.data?.url) {
-        // 在新标签页打开Stripe支付页面
-        window.open(data.data.url, '_blank');
-        setPurchaseDialogOpen(false);
-        toast({
-          title: '跳转支付',
-          description: '正在打开支付页面...',
-        });
-      }
-    } catch (error: any) {
-      console.error('创建支付失败:', error);
-      toast({
-        title: '创建支付失败',
-        description: error.message || '请稍后重试',
-        variant: 'destructive',
-      });
-    }
   };
 
   const handleApplyInvitationCode = async () => {
@@ -248,63 +195,6 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
-
-            {/* 购买点数按钮 */}
-            <Dialog open={purchaseDialogOpen} onOpenChange={setPurchaseDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="w-full mt-4">
-                  <ShoppingCart className="h-4 w-4 mr-2" />
-                  购买点数
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-5xl">
-                <DialogHeader className="space-y-3">
-                  <DialogTitle className="text-2xl">购买点数</DialogTitle>
-                  <DialogDescription className="text-base">
-                    选择适合您的套餐，增加AI降重次数和项目数量
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 py-8">
-                  {creditPackages.map((pkg) => (
-                    <Card 
-                      key={pkg.name} 
-                      className={`relative ${pkg.recommended ? 'border-primary border-2' : ''}`}
-                    >
-                      {pkg.recommended && (
-                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-4 py-1.5 rounded-full text-sm font-medium flex items-center gap-1">
-                          <Star className="h-4 w-4 fill-current" />
-                          最多人选择
-                        </div>
-                      )}
-                      <CardHeader className="text-center pb-6 pt-8">
-                        <CardTitle className="text-xl mb-2">{pkg.name}</CardTitle>
-                        {pkg.recommended && (
-                          <Badge variant="default" className="w-fit mx-auto">
-                            ⭐
-                          </Badge>
-                        )}
-                      </CardHeader>
-                      <CardContent className="space-y-6 pb-8">
-                        <div className="text-center">
-                          <p className="text-4xl font-bold mb-3">¥{pkg.price}</p>
-                          <p className="text-base text-muted-foreground flex items-center justify-center gap-2">
-                            <span className="inline-block w-2 h-2 rounded-full bg-primary"></span>
-                            {pkg.credits} 点
-                          </p>
-                        </div>
-                        <Button 
-                          className="w-full text-base py-6"
-                          variant={pkg.recommended ? 'default' : 'outline'}
-                          onClick={() => handlePurchase(pkg)}
-                        >
-                          {pkg.recommended ? '立即购买' : '购买'}
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </DialogContent>
-            </Dialog>
           </CardContent>
         </Card>
 

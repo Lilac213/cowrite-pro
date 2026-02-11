@@ -174,7 +174,72 @@
   - [x] 更新文档说明新的工作流程
   - [x] 重新部署所有 9 个 Edge Functions
 
-## 注意事项
+# Task: AI写作助手系统重构与优化
+
+## Plan
+- [x] 修复 GEMINI_API_KEY 错误
+  - [x] 更新 callLLM.ts 使用 INTEGRATIONS_API_KEY
+  - [x] 部署所有 Edge Functions
+
+- [x] 第一阶段：添加重试机制到前端 API 调用
+  - [x] 创建通用的 retry wrapper 函数（src/utils/retry.ts）
+  - [x] 实现 exponential backoff 策略
+  - [x] 提供 invokeWithRetry 函数用于 Edge Function 调用
+  - [x] 修复 TypeScript 类型错误
+
+- [x] 第二阶段：删除 Stripe 支付相关代码
+  - [x] 删除 PaymentSuccessPage.tsx
+  - [x] 从 routes.tsx 删除支付路由和导入
+  - [x] 从 SettingsPage.tsx 删除支付相关代码（购买按钮、Dialog、handlePurchase）
+  - [x] 删除 create_stripe_checkout 和 verify_stripe_payment Edge Functions
+  - [x] 清理未使用的导入（ShoppingCart, Star）
+  - [x] Lint 检查通过
+
+- [ ] 第三阶段：Edge Functions 重构（保持现有功能，优化代码复用）
+  - [ ] 注意：这是一个大型重构，需要仔细测试每个步骤
+  - [ ] 子任务 3.1：合并 structure-agent 相关函数
+    - [ ] 分析 generate-article-structure 的输入输出
+    - [ ] 分析 adjust-article-structure 的输入输出
+    - [ ] 设计统一的 structure-agent API（支持两种操作）
+    - [ ] 实现新的 structure-agent
+    - [ ] 更新前端调用
+    - [ ] 测试验证
+    - [ ] 删除旧函数
+  - [ ] 子任务 3.2：合并 research-agent 相关函数
+    - [ ] 分析 4 个 research 函数的功能差异
+    - [ ] 设计统一的 research-agent API
+    - [ ] 实现新的 research-agent
+    - [ ] 更新前端调用
+    - [ ] 测试验证
+    - [ ] 删除旧函数
+  - [ ] 子任务 3.3：合并 draft-agent 相关函数
+    - [ ] 分析 5 个 draft 相关函数的功能
+    - [ ] 设计统一的 draft-agent API
+    - [ ] 实现新的 draft-agent
+    - [ ] 更新前端调用
+    - [ ] 测试验证
+    - [ ] 删除旧函数
+  - [ ] 子任务 3.4：更新 brief-agent 使用 _shared/llm
+    - [ ] 检查 brief-agent 当前实现
+    - [ ] 如果未使用 _shared/llm，则重构
+    - [ ] 测试验证
+
+- [ ] 第四阶段：应用重试机制到关键 API 调用
+  - [ ] 识别关键的 Edge Function 调用点
+  - [ ] 使用 invokeWithRetry 替换直接调用
+  - [ ] 添加用户友好的错误提示
+  - [ ] 测试重试机制
+
+- [ ] 第五阶段：测试和验证
+  - [ ] 运行 lint 检查
+  - [ ] 测试完整的写作工作流程
+  - [ ] 验证错误处理和重试机制
+  - [ ] 更新文档和 sync-shared.sh
+
+## Notes
+- 重构是一个大工程，需要分步进行，每步都要测试
+- 优先级：修复错误 > 删除支付 > 添加重试 > 合并函数
+- 合并函数时要保持向后兼容，避免破坏现有功能
 - ⚠️ 向量搜索需要pgvector扩展，暂未实现，使用关键词匹配替代
 - ⚠️ 引用可视化UI需要在前端实现（CitationPopover组件）
 - ✅ 所有Agent已集成到前端
