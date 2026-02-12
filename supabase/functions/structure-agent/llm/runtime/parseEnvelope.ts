@@ -38,9 +38,15 @@ export async function parseEnvelope(rawText: string): Promise<any> {
     } catch (extractError) {
       // 如果提取失败，尝试用 JSON 修复 Agent 处理整个文本
       console.warn('[parseEnvelope] 未找到JSON对象，尝试使用 JSON 修复 Agent...');
-      const repaired = await repairJSONWithLLM(rawText);
-      extracted = extractFirstJsonBlock(repaired);
-      console.log('[parseEnvelope] ✅ JSON 修复后成功提取');
+      try {
+        const repaired = await repairJSONWithLLM(rawText);
+        extracted = extractFirstJsonBlock(repaired);
+        console.log('[parseEnvelope] ✅ JSON 修复后成功提取');
+      } catch (repairError) {
+        console.error('[parseEnvelope] JSON 修复失败:', repairError);
+        // 如果修复失败，抛出原始错误
+        throw new Error(`未找到JSON对象且修复失败: ${repairError instanceof Error ? repairError.message : String(repairError)}`);
+      }
     }
     
     // Step 2: 字符归一化清洗
@@ -54,9 +60,14 @@ export async function parseEnvelope(rawText: string): Promise<any> {
       console.log('[parseEnvelope] 外层信封解析成功, meta:', envelope.meta);
     } catch (envelopeError) {
       console.warn('[parseEnvelope] 外层信封解析失败，尝试修复...');
-      const repairedEnvelope = await repairJSONWithLLM(normalized);
-      envelope = JSON.parse(repairedEnvelope) as Envelope;
-      console.log('[parseEnvelope] ✅ 外层信封修复成功');
+      try {
+        const repairedEnvelope = await repairJSONWithLLM(normalized);
+        envelope = JSON.parse(repairedEnvelope) as Envelope;
+        console.log('[parseEnvelope] ✅ 外层信封修复成功');
+      } catch (repairError) {
+        console.error('[parseEnvelope] 外层信封修复失败:', repairError);
+        throw new Error(`信封JSON解析失败: ${repairError instanceof Error ? repairError.message : String(repairError)}`);
+      }
     }
     
     // Step 4: 验证信封结构
@@ -79,23 +90,28 @@ export async function parseEnvelope(rawText: string): Promise<any> {
       console.log('[parseEnvelope] payload 解析成功');
     } catch (payloadError) {
       console.warn('[parseEnvelope] payload 解析失败，尝试修复...');
-      const repairedPayload = await repairJSONWithLLM(payloadNormalized);
-      
-      // 先尝试解析原始的（用于结构对比）
       try {
-        originalContent = JSON.parse(payloadNormalized);
-      } catch {
-        // 原始无法解析，跳过结构检查
-        originalContent = null;
-      }
-      
-      content = JSON.parse(repairedPayload);
-      console.log('[parseEnvelope] ✅ payload 修复成功');
-      
-      // 验证修复后的结构是否一致
-      if (originalContent && !isSameShape(originalContent, content)) {
-        console.error('[parseEnvelope] ⚠️ 警告: 修复后的结构与原始不一致');
-        // 不抛出错误，只记录警告，因为原始本身就无法解析
+        const repairedPayload = await repairJSONWithLLM(payloadNormalized);
+        
+        // 先尝试解析原始的（用于结构对比）
+        try {
+          originalContent = JSON.parse(payloadNormalized);
+        } catch {
+          // 原始无法解析，跳过结构检查
+          originalContent = null;
+        }
+        
+        content = JSON.parse(repairedPayload);
+        console.log('[parseEnvelope] ✅ payload 修复成功');
+        
+        // 验证修复后的结构是否一致
+        if (originalContent && !isSameShape(originalContent, content)) {
+          console.error('[parseEnvelope] ⚠️ 警告: 修复后的结构与原始不一致');
+          // 不抛出错误，只记录警告，因为原始本身就无法解析
+        }
+      } catch (repairError) {
+        console.error('[parseEnvelope] payload 修复失败:', repairError);
+        throw new Error(`payload解析失败: ${repairError instanceof Error ? repairError.message : String(repairError)}`);
       }
     }
     

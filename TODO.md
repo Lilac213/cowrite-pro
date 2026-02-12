@@ -181,6 +181,13 @@
   - [x] 更新 callLLM.ts 使用 INTEGRATIONS_API_KEY
   - [x] 部署所有 Edge Functions
 
+- [x] 修复 JSON 修复 Agent 的 400 Bad Request 错误
+  - [x] 添加输入长度限制（50KB）到 repairJSONAgent
+  - [x] 改进 callLLM 的错误日志
+  - [x] 在 parseEnvelope 中为所有修复调用添加 try-catch
+  - [x] 改进错误消息，明确指出失败阶段
+  - [x] 部署所有 Edge Functions
+
 - [x] 第一阶段：添加重试机制到前端 API 调用
   - [x] 创建通用的 retry wrapper 函数（src/utils/retry.ts）
   - [x] 实现 exponential backoff 策略

@@ -58,7 +58,10 @@ export async function callLLM(config: LLMCallConfig): Promise<string> {
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('[callLLM] API调用失败:', errorText);
+    console.error('[callLLM] API调用失败:', response.status, response.statusText);
+    console.error('[callLLM] 错误详情:', errorText);
+    console.error('[callLLM] Prompt长度:', prompt.length);
+    console.error('[callLLM] Prompt前500字符:', prompt.substring(0, 500));
     throw new Error(`LLM API调用失败: ${response.status} ${response.statusText}`);
   }
 

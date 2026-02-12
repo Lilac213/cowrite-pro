@@ -14,6 +14,15 @@ export async function repairJSONWithLLM(brokenJson: string): Promise<string> {
   console.log('[repairJSON] 开始修复 JSON，原始长度:', brokenJson.length);
   console.log('[repairJSON] 原始文本前500字符:', brokenJson.substring(0, 500));
 
+  // 限制输入长度，避免 API 调用失败
+  const MAX_INPUT_LENGTH = 50000; // 50KB
+  let inputText = brokenJson;
+  
+  if (brokenJson.length > MAX_INPUT_LENGTH) {
+    console.warn(`[repairJSON] 输入过长 (${brokenJson.length} 字符)，截断到 ${MAX_INPUT_LENGTH} 字符`);
+    inputText = brokenJson.substring(0, MAX_INPUT_LENGTH);
+  }
+
   const systemPrompt = `你是 CoWrite 系统的 JSON 修复 Agent。
 
 你的唯一任务是：
@@ -60,7 +69,7 @@ export async function repairJSONWithLLM(brokenJson: string): Promise<string> {
   const userPrompt = `以下 JSON 存在语法错误，请修复：
 
 ====================
-${brokenJson}
+${inputText}
 ====================
 
 请直接输出修复后的 JSON。
