@@ -2,36 +2,31 @@
 
 ## Requirements
 - Integrate paragraph structure generation, evidence generation, and coherence verification into draft-agent
-- Left panel: LLM-generated draft with streaming output
+- Left panel: Title, stats (word count, read time, AI gen rate), editable content, citation markers, log section
+- Right panel: Coaching rail with paragraph logic, suggestions, active collaboration, chat interface
 - Citation markers: Clickable markers showing research material info (summary, URL, etc.)
 - User editing: Support user editing and writing on the draft
-- Right panel: For each paragraph, show:
-  - Why it was generated this way
-  - Suggestions for personal content to add
-  - Suggestions for personal experiences to include
-  - Motivate user collaboration
+- Chat interface: Allow users to interact with AI to modify the article
 
 ## Plan
-- [x] Step 1: Analyze existing code structure
-- [x] Step 2: Create enhanced draft generation page component
-  - [x] Sub-task 2.1: Create DraftGenerationPage.tsx
-  - [x] Sub-task 2.2: Implement left panel with draft editor
-  - [x] Sub-task 2.3: Implement right panel with guidance
-- [x] Step 3: Create citation marker component
-  - [x] Sub-task 3.1: Create CitationMarker.tsx
-  - [x] Sub-task 3.2: Add popover/dialog for material details
+- [x] Step 1: Analyze existing code structure and design image
+- [x] Step 2: Recreate draft generation page based on design
+  - [x] Sub-task 2.1: Implement header with progress bar
+  - [x] Sub-task 2.2: Implement left panel with title, stats, content, log section
+  - [x] Sub-task 2.3: Implement right panel with coaching sections
+  - [x] Sub-task 2.4: Add chat interface at bottom of right panel
+- [x] Step 3: Citation marker component (already created)
 - [ ] Step 4: Implement streaming output
   - [ ] Sub-task 4.1: Add streaming support to draft-agent
   - [ ] Sub-task 4.2: Handle streaming in frontend
-- [x] Step 5: Enhance database schema
-  - [x] Sub-task 5.1: Add citations field to drafts table
-  - [x] Sub-task 5.2: Add guidance field for each paragraph
+- [x] Step 5: Database schema (already enhanced)
 - [x] Step 6: Update routes and navigation
-- [ ] Step 7: Test and refine
+- [x] Step 7: Pass lint checks
 
 ## Notes
-- Existing DraftStage component uses annotations for paragraph metadata
-- Extended types to include citations and guidance
-- Using contentEditable for better editing experience
-- Streaming will be implemented in draft-agent Edge Function
-- Added navigation button in DraftStage to access enhanced mode
+- Redesigned page to match the provided design image
+- Left panel shows title, word count, read time, AI generation rate
+- Right panel shows coaching rail with logic, suggestions, active collaboration
+- Bottom of right panel has chat interface for AI interaction
+- Log section at bottom of left panel shows generation progress
+- All components styled to match the design

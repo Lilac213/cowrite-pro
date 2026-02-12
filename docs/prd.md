@@ -573,37 +573,80 @@ draft-agent 综合以下功能：
 页面结构：
 ```
 DraftGenerationPage
-├─ LeftPanel（左侧面板 - 草稿内容区）
-│  ├─ DraftContent（草稿正文）
-│  │   ├─ 流式输出草稿内容
-│  │   ├─ 引用标记（小标）
-│  │   │   └─ 点击显示资料信息（摘要、URL等）
-│  │   └─ 用户编辑区域（支持直接编辑草稿）
-├─ RightPanel（右侧面板 - 生成说明区）
-│  └─ GenerationGuidance（生成说明）
-│      ├─ 每段生成理由
-│      ├─ 建议补充内容
-│      └─ 个人经历补充提示
+├─ TopBar（顶部状态栏）
+│  └─ 保持现有状态栏设计，不做更改
+├─ MainContent（主内容区）
+│  ├─ LeftPanel（左侧主编辑区）
+│  │   ├─ ArticleTitle（文章标题）
+│  │   ├─ MetaInfo（元信息区）
+│  │   │   ├─ WordCount（字数统计：当前已写xxx字）
+│  │   │   ├─ ReadTime（预估阅读时间：约x分钟）
+│  │   │   └─ AIGenerationRate（AI生成率：AI生成字数/总字数 = xx%）
+│  │   ├─ DraftContent（草稿正文）
+│  │   │   ├─ 流式输出草稿内容
+│  │   │   ├─ CitationMarker（引用标记 - 小标）
+│  │   │   │   └─ 点击显示资料信息弹窗（摘要、URL等）
+│  │   │   └─ ParagraphClickable（段落可点击区域）
+│  │   │       └─ 点击段落后，右侧显示该段落的分析与建议
+│  │   └─ LogPanel（日志栏）
+│  │       ├─ 显示AI生成进展
+│  │       └─ 相关日志信息
+│  └─ RightPanel（右侧AI互动与段落逻辑建议区）
+│      ├─ ParagraphAnalysis（段落分析区）
+│      │   ├─ CurrentParagraphInfo（当前段落信息）
+│      │   ├─ LogicAnalysis（段落逻辑分析）
+│      │   ├─ SuggestedAdditions（建议补充内容）
+│      │   └─ SuggestedRevisions（建议修改内容）
+│      ├─ CollaborationBox（实时协作框）
+│      │   ├─ 当有建议插入内容时显示
+│      │   ├─ 插入内容后重新考虑段落结构
+│      │   └─ 在左侧输出更新后的段落内容
+│      └─ ChatInterface（对话区）
+│          ├─ ChatHistory（对话历史）
+│          ├─ ChatInput（用户输入框）
+│          └─ SendButton（发送按钮）
 └─ BottomActionBar（底部操作栏）
     └─ 确认并进入下一步按钮
 ```
 
 **功能说明**
 
-1. **左侧草稿内容区**
-   - LLM 流式输出草稿内容，实时显示在屏幕上
-   - 在引用资料搜索内容的地方用小标标志标记
-   - 点击小标后弹窗显示资料信息，包括：
-     - 资料摘要
-     - 资料来源 URL
-     - 其他相关信息
-   - 支持用户对草稿进行直接编辑和修改
+1. **左侧主编辑区**
+   - **文章标题**：显示文章标题
+   - **元信息区**：
+     - 字数统计：实时显示当前已写字数
+     - 预估阅读时间：根据字数计算预估阅读时间（分钟）
+     - AI生成率：显示AI生成字数占总字数的百分比
+   - **草稿正文**：
+     - LLM 流式输出草稿内容，实时显示在屏幕上
+     - 在引用资料搜索内容的地方用小标标志标记
+     - 点击小标后弹窗显示资料信息，包括：
+       - 资料摘要
+       - 资料来源 URL
+       - 其他相关信息
+     - 支持用户对草稿进行直接编辑和修改
+     - **段落可点击**：点击左侧段落后，右侧显示该段落的分析与建议
+   - **日志栏**：
+     - 显示AI生成进展
+     - 显示相关日志信息
 
-2. **右侧生成说明区**
-   - 针对每一段内容，说明生成理由
-   - 提示建议补充的内容
-   - 激发用户补充个人亲身经历或独特见解
-   - 增强用户与 AI 的协作动力
+2. **右侧AI互动与段落逻辑建议区**
+   - **段落分析区**：
+     - 当用户点击左侧段落时，右侧显示该段落的分析与建议
+     - 包括：
+       - 当前段落信息
+       - 段落逻辑分析
+       - 建议补充内容
+       - 建议修改内容
+   - **实时协作框**：
+     - 当有建议插入内容时显示
+     - 用户可在此输入内容
+     - 插入内容后，系统重新考虑段落结构
+     - 在左侧输出更新后的段落内容
+   - **对话区**：
+     - 支持用户与AI进行对话
+     - 用户可通过对话修改文章内容
+     - 包括对话历史、用户输入框、发送按钮
 
 3. **引用标记可视化**
    - 当 LLM 使用资料时，在对应位置插入引用标记（如小标）
@@ -635,6 +678,7 @@ DraftGenerationPage
       ],
       \"generation_reason\": \"生成该段落的理由说明\",
       \"suggested_additions\": \"建议用户补充的内容\",
+      \"suggested_revisions\": \"建议修改的内容\",
       \"personal_experience_prompt\": \"建议补充的个人经历或见解\",
       \"requires_user_input\": false,
       \"coherence_score\": 0.89
@@ -1049,4 +1093,4 @@ export async function callLLM({
 ```typescript
 export function normalizeLLMOutput(raw: string) {
   return raw
-    .replace(/["
+    .replace(/[
