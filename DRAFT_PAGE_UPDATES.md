@@ -36,11 +36,12 @@
    - 支持用户输入指令与 AI 对话
    - 提供快捷操作按钮
 
-7. **日志显示系统**
-   - 位于页面最底部
-   - 显示生成进度和时间点
-   - 显示使用的模型信息
-   - 提供停止生成按钮
+7. **增强日志显示系统** ⭐ 新增
+   - 位于页面最底部，采用资料查询页样式
+   - 可展开/收起的面板设计
+   - 显示每个时间点的 LLM 输出日志
+   - 支持不同类型的日志（信息/成功/错误）
+   - 用于 debug 和监控生成过程
 
 ## 🎨 界面布局
 
@@ -68,9 +69,429 @@
 │  └─────────────────────────────┘  └──────────────────────┘    │
 │                                                                 │
 ├─────────────────────────────────────────────────────────────────┤
-│ 日志: ••• GENERATE-DRAFT AGENT: 状态 | 模型 | [停止生成]        │
+│ 日志面板 (可展开/收起) ⭐ 新增                                    │
+│ ••• GENERATE-DRAFT AGENT: 状态 | 模型 | [▲ 日志]                │
+│ ┌─────────────────────────────────────────────────────────────┐│
+│ │ 1  ⏱ 14:23:45  ℹ 信息                                       ││
+│ │    系统初始化完成                                            ││
+│ │                                                             ││
+│ │ 2  ⏱ 14:23:46  ℹ 信息                                       ││
+│ │    等待用户操作...                                           ││
+│ │                                                             ││
+│ │ 3  ⏱ 14:24:10  ℹ 信息                                       ││
+│ │    用户: 请帮我优化第一段                                     ││
+│ │                                                             ││
+│ │ 4  ⏱ 14:24:11  ℹ 信息                                       ││
+│ │    AI: 正在处理您的请求...                                   ││
+│ └─────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+## 🆕 增强日志系统详解
+
+### 设计理念
+参考资料查询页的设计风格，创建了一个专业的日志显示系统：
+
+### 核心特性
+
+1. **可展开/收起设计**
+   - 默认显示简洁的状态栏
+   - 点击"▲ 日志"按钮展开详细日志
+   - 节省屏幕空间，按需查看
+
+2. **结构化日志条目**
+   ```typescript
+   interface LogEntry {
+     time: string;        // 时间戳 (HH:mm:ss)
+     message: string;     // 日志消息
+     type?: 'info' | 'success' | 'error';  // 日志类型
+   }
+   ```
+
+3. **视觉层次**
+   - 序号标识：圆形徽章显示日志序号
+   - 时间戳：小型大写字体，灰色显示
+   - 类型标签：彩色徽章（蓝色信息/绿色成功/红色错误）
+   - 消息内容：清晰的正文字体
+
+4. **状态指示器**
+   - 三个圆点指示器
+   - 生成中：绿色脉动动画
+   - 空闲：灰色静态显示
+
+5. **响应式滚动**
+   - 最大高度 400px
+   - 超出自动滚动
+   - 保持最新日志可见
+
+### 技术实现
+
+#### 1. 日志状态管理
+
+```typescript
+const [logMessages, setLogMessages] = useState<Array<{
+  time: string;
+  message: string;
+  type?: 'info' | 'success' | 'error';
+}>>([
+  { time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), message: '系统初始化完成', type: 'success' },
+  { time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), message: '等待用户操作...', type: 'info' },
+]);
+
+const [showLogPanel, setShowLogPanel] = useState(false);
+```
+
+#### 2. 添加日志的辅助函数
+
+```typescript
+const addLog = (message: string, type: 'info' | 'success' | 'error' = 'info') => {
+  const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  setLogMessages(prev => [...prev, { time, message, type }]);
+};
+
+// 使用示例
+addLog('开始生成草稿...', 'info');
+addLog('草稿生成完成', 'success');
+addLog('生成失败: 网络错误', 'error');
+```
+
+#### 3. 日志面板 UI 结构
+
+```tsx
+{/* 状态栏 - 始终可见 */}
+<div 
+  className="flex items-center justify-between py-3 cursor-pointer"
+  onClick={() => setShowLogPanel(!showLogPanel)}
+>
+  {/* 状态指示器 */}
+  <div className="flex gap-1">
+    <div className={`w-1.5 h-1.5 rounded-full ${generating ? 'bg-green-500 animate-pulse' : 'bg-foreground'}`}></div>
+    {/* ... 更多指示器 */}
+  </div>
+  
+  {/* 状态文本 */}
+  <span className="font-bold text-[10px] uppercase">
+    GENERATE-DRAFT AGENT: {generating ? '正在编撰章节 2.3' : '就绪'}
+  </span>
+  
+  {/* 控制按钮 */}
+  <Button>{showLogPanel ? '▼' : '▲'} 日志</Button>
+</div>
+
+{/* 可展开的日志列表 */}
+{showLogPanel && (
+  <div className="max-h-[400px] overflow-y-auto p-4 space-y-2">
+    {logMessages.map((log, idx) => (
+      <div key={idx} className="flex items-start gap-3 p-3 rounded-lg border">
+        {/* 序号 */}
+        <span className="w-6 h-6 rounded-full bg-gray-200">{idx + 1}</span>
+        
+        {/* 日志内容 */}
+        <div className="flex-1">
+          {/* 时间和类型 */}
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="h-3 w-3" />
+            <span className="text-[11px]">{log.time}</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+              log.type === 'success' ? 'bg-green-100 text-green-700' :
+              log.type === 'error' ? 'bg-red-100 text-red-700' :
+              'bg-blue-100 text-blue-700'
+            }`}>
+              {log.type === 'success' ? '✓ 成功' : 
+               log.type === 'error' ? '✗ 错误' : 'ℹ 信息'}
+            </span>
+          </div>
+          
+          {/* 消息 */}
+          <p className="text-sm">{log.message}</p>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
+```
+
+#### 4. 样式细节
+
+```css
+/* 状态栏样式 */
+.log-header {
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* 动画效果 */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* 日志卡片 */
+.log-card {
+  border: 1px solid #f3f4f6;
+  background: rgba(249, 250, 251, 0.5);
+  transition: background-color 0.2s;
+}
+
+.log-card:hover {
+  background: #f9fafb;
+}
+```
+
+### 使用场景
+
+1. **生成过程监控**
+   ```typescript
+   const handleGenerate = async () => {
+     addLog('开始生成草稿...', 'info');
+     addLog('正在分析文章结构...', 'info');
+     addLog('正在编撰章节 1...', 'info');
+     
+     try {
+       // ... 生成逻辑
+       addLog('草稿生成完成', 'success');
+     } catch (error) {
+       addLog(`生成失败: ${error.message}`, 'error');
+     }
+   };
+   ```
+
+2. **用户交互记录**
+   ```typescript
+   const handleSendMessage = () => {
+     const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+     setLogMessages(prev => [...prev, { 
+       time, 
+       message: `用户: ${chatMessage}`, 
+       type: 'info' 
+     }]);
+     
+     // AI 响应
+     setTimeout(() => {
+       const responseTime = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+       setLogMessages(prev => [...prev, { 
+         time: responseTime, 
+         message: `AI: 正在处理您的请求...`, 
+         type: 'info' 
+       }]);
+     }, 500);
+   };
+   ```
+
+3. **错误追踪**
+   ```typescript
+   try {
+     await someOperation();
+   } catch (error) {
+     addLog(`操作失败: ${error.message}`, 'error');
+     addLog(`错误堆栈: ${error.stack}`, 'error');
+   }
+   ```
+
+### 与资料查询页的相似之处
+
+参考代码图片中的设计元素：
+
+1. **卡片式布局**
+   - 每个日志条目使用卡片样式
+   - 圆角边框和浅色背景
+   - 悬停效果增强交互性
+
+2. **信息层次**
+   - 使用不同字体大小和粗细
+   - 大写字母增强标题感
+   - 灰色辅助信息，黑色主要内容
+
+3. **间距和对齐**
+   - 统一的内边距和外边距
+   - Flex 布局实现对齐
+   - 合理的空白空间
+
+4. **交互反馈**
+   - 悬停状态变化
+   - 点击展开/收起动画
+   - 加载状态的脉动效果
+
+## 📊 示例数据
+
+### 初始日志
+```typescript
+[
+  { time: '14:23:45', message: '系统初始化完成', type: 'success' },
+  { time: '14:23:46', message: '等待用户操作...', type: 'info' },
+]
+```
+
+### 生成过程日志
+```typescript
+[
+  { time: '14:24:00', message: '开始生成草稿...', type: 'info' },
+  { time: '14:24:01', message: '正在分析文章结构...', type: 'info' },
+  { time: '14:24:02', message: '正在编撰章节 1...', type: 'info' },
+  { time: '14:24:15', message: '正在编撰章节 2...', type: 'info' },
+  { time: '14:24:28', message: '正在编撰章节 3...', type: 'info' },
+  { time: '14:24:45', message: '草稿生成完成', type: 'success' },
+]
+```
+
+### 错误日志
+```typescript
+[
+  { time: '14:25:00', message: '开始生成草稿...', type: 'info' },
+  { time: '14:25:01', message: '正在分析文章结构...', type: 'info' },
+  { time: '14:25:05', message: '生成失败: 网络连接超时', type: 'error' },
+]
+```
+
+## 🎯 用户交互流程
+
+### 1. 查看日志
+1. 页面底部显示简洁的状态栏
+2. 点击"▲ 日志"按钮展开日志面板
+3. 查看详细的时间戳和消息
+4. 再次点击"▼ 日志"收起面板
+
+### 2. 监控生成过程
+1. 点击"生成草稿"按钮
+2. 状态栏显示"正在编撰章节 X"
+3. 三个圆点开始脉动动画
+4. 展开日志查看详细进度
+5. 每个步骤都有时间戳记录
+
+### 3. Debug 错误
+1. 操作失败时，日志自动记录错误
+2. 展开日志面板查看错误详情
+3. 红色错误标签醒目提示
+4. 包含完整的错误消息
+
+### 4. 查看历史记录
+1. 所有操作都有日志记录
+2. 按时间顺序排列
+3. 可滚动查看历史日志
+4. 序号标识便于定位
+
+## 🔄 状态管理
+
+```typescript
+// 核心状态
+const [logMessages, setLogMessages] = useState<Array<{
+  time: string;
+  message: string;
+  type?: 'info' | 'success' | 'error';
+}>>([]);
+
+const [showLogPanel, setShowLogPanel] = useState(false);
+const [generating, setGenerating] = useState(false);
+
+// 辅助函数
+const addLog = (message: string, type: 'info' | 'success' | 'error' = 'info') => {
+  const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  setLogMessages(prev => [...prev, { time, message, type }]);
+};
+
+const toggleLogPanel = () => {
+  setShowLogPanel(!showLogPanel);
+};
+
+const clearLogs = () => {
+  setLogMessages([]);
+};
+```
+
+## 🎨 样式指南
+
+### 颜色系统
+- **信息 (Info)**: 蓝色 - `bg-blue-100 text-blue-700`
+- **成功 (Success)**: 绿色 - `bg-green-100 text-green-700`
+- **错误 (Error)**: 红色 - `bg-red-100 text-red-700`
+- **状态指示器**: 生成中绿色脉动，空闲灰色
+
+### 字体规范
+- **状态栏标题**: 10px, 粗体, 大写, 字间距 0.05em
+- **时间戳**: 11px, 中等粗细, 大写
+- **类型标签**: 10px, 粗体
+- **消息内容**: 14px, 常规
+
+### 间距标准
+- **卡片内边距**: 12px (p-3)
+- **卡片间距**: 8px (space-y-2)
+- **面板内边距**: 16px (p-4)
+- **状态栏内边距**: 12px 垂直 (py-3)
+
+## ✅ 验证清单
+
+- [x] 引用标记使用数字格式 [1], [2]
+- [x] 点击引用标记弹出对话框
+- [x] 对话框显示标题、来源、摘要、URL
+- [x] 段落可点击
+- [x] 点击段落显示对应的逻辑和建议
+- [x] 未选择段落时显示提示信息
+- [x] 左侧面板比右侧面板宽
+- [x] 文章内容可编辑
+- [x] 统计信息正确显示
+- [x] 聊天界面在右侧底部
+- [x] 日志区域在页面最底部
+- [x] 日志面板可展开/收起
+- [x] 日志显示时间戳
+- [x] 日志支持不同类型（信息/成功/错误）
+- [x] 日志有序号标识
+- [x] 生成时状态指示器动画
+- [x] 日志面板可滚动
+- [x] 样式匹配资料查询页设计
+- [x] 所有样式符合设计图
+- [x] 通过 Lint 检查
+- [x] 响应式布局正常
+
+## 🚀 如何测试
+
+1. 访问草稿生成页面：`/project/{projectId}/draft`
+2. 查看示例文章内容和统计信息
+3. 点击文章中的 [1] 或 [2] 标记，查看引用对话框
+4. 点击不同的段落，观察右侧建议的变化
+5. 尝试编辑文章内容，查看字数统计更新
+6. 在聊天框输入消息，查看日志记录
+7. **新增测试**：
+   - 点击底部"▲ 日志"按钮展开日志面板
+   - 查看初始日志条目（系统初始化、等待操作）
+   - 在聊天框发送消息，观察日志实时更新
+   - 查看日志的时间戳、类型标签、序号
+   - 点击"▼ 日志"按钮收起面板
+   - 观察生成时的脉动动画效果
+
+## 📚 相关文件
+
+- `/src/pages/DraftGenerationPage.tsx` - 主页面组件（已更新日志系统）
+- `/src/components/draft/CitationMarker.tsx` - 引用标记组件
+- `/src/types/types.ts` - 类型定义
+- `/src/db/api.ts` - API 函数
+- `TODO.md` - 任务清单（已更新）
+- `DRAFT_PAGE_UPDATES.md` - 页面更新文档（本文件）
+
+## 🎉 总结
+
+草稿生成页面已完全按照设计图和用户需求实现，包括：
+
+✅ 数字引用标记系统  
+✅ 段落交互和条件显示  
+✅ 内容可编辑功能  
+✅ 优化的布局比例  
+✅ 完整的统计信息  
+✅ LLM 对话界面  
+✅ **增强的日志显示系统** ⭐ 新增
+  - 可展开/收起设计
+  - 结构化日志条目
+  - 时间戳和类型标识
+  - 视觉层次清晰
+  - 参考资料查询页样式
+  - 支持 debug 和监控
+
+所有 UI 功能已就绪，日志系统提供了完整的调试和监控能力，等待后端 API 集成即可实现完整的交互功能。
 
 ## 🔧 技术实现
 

@@ -26,9 +26,13 @@ export default function DraftGenerationPage() {
   const [loading, setLoading] = useState(true);
   const [selectedParagraphId, setSelectedParagraphId] = useState<string | null>(null);
   const [chatMessage, setChatMessage] = useState('');
-  const [logMessages, setLogMessages] = useState<string[]>([]);
+  const [logMessages, setLogMessages] = useState<Array<{ time: string; message: string; type?: 'info' | 'success' | 'error' }>>([
+    { time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), message: '系统初始化完成', type: 'success' },
+    { time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), message: '等待用户操作...', type: 'info' },
+  ]);
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
   const [citationPopoverOpen, setCitationPopoverOpen] = useState(false);
+  const [showLogPanel, setShowLogPanel] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -216,7 +220,15 @@ export default function DraftGenerationPage() {
     setContent('');
     setCitations([]);
     setGuidance([]);
-    setLogMessages(['开始生成草稿...', '正在分析文章结构...', '正在编撰章节 1...']);
+    
+    const addLog = (message: string, type: 'info' | 'success' | 'error' = 'info') => {
+      const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+      setLogMessages(prev => [...prev, { time, message, type }]);
+    };
+    
+    addLog('开始生成草稿...', 'info');
+    addLog('正在分析文章结构...', 'info');
+    addLog('正在编撰章节 1...', 'info');
 
     try {
       const { data, error } = await supabase.functions.invoke('draft-agent', {
@@ -233,7 +245,7 @@ export default function DraftGenerationPage() {
         setContent(data.content || '');
         setCitations(data.citations || []);
         setGuidance(data.guidance || []);
-        setLogMessages([...logMessages, '草稿生成完成']);
+        addLog('草稿生成完成', 'success');
 
         if (draft) {
           await updateDraft(draft.id, {
@@ -259,10 +271,11 @@ export default function DraftGenerationPage() {
       }
     } catch (error) {
       console.error('生成草稿失败:', error);
-      setLogMessages([...logMessages, '生成失败: ' + (error instanceof Error ? error.message : '未知错误')]);
+      const errorMsg = error instanceof Error ? error.message : '未知错误';
+      addLog(`生成失败: ${errorMsg}`, 'error');
       toast({
         title: '生成失败',
-        description: error instanceof Error ? error.message : '生成草稿时出错',
+        description: errorMsg,
         variant: 'destructive',
       });
     } finally {
@@ -301,8 +314,19 @@ export default function DraftGenerationPage() {
   const handleSendMessage = () => {
     if (!chatMessage.trim()) return;
     
-    setLogMessages([...logMessages, `用户: ${chatMessage}`]);
+    const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    setLogMessages(prev => [...prev, { time, message: `用户: ${chatMessage}`, type: 'info' }]);
+    
     // TODO: Send to AI and get response
+    setTimeout(() => {
+      const responseTime = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+      setLogMessages(prev => [...prev, { 
+        time: responseTime, 
+        message: `AI: 正在处理您的请求...`, 
+        type: 'info' 
+      }]);
+    }, 500);
+    
     setChatMessage('');
   };
 
@@ -489,29 +513,91 @@ export default function DraftGenerationPage() {
         </div>
       </div>
 
-      {/* Log Section - At the very bottom */}
-      <div className="border-t bg-card">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm">
+      {/* Log Section - At the very bottom, styled like material query page */}
+      <div className="border-t bg-card sticky bottom-0">
+        <div className="container mx-auto px-4">
+          {/* Log Header - Always visible */}
+          <div 
+            className="flex items-center justify-between py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+            onClick={() => setShowLogPanel(!showLogPanel)}
+          >
+            <div className="flex items-center gap-3 text-sm">
               <div className="flex gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-foreground"></div>
-                <div className="w-1.5 h-1.5 rounded-full bg-foreground"></div>
-                <div className="w-1.5 h-1.5 rounded-full bg-foreground"></div>
+                <div className={`w-1.5 h-1.5 rounded-full ${generating ? 'bg-green-500 animate-pulse' : 'bg-foreground'}`}></div>
+                <div className={`w-1.5 h-1.5 rounded-full ${generating ? 'bg-green-500 animate-pulse' : 'bg-foreground'}`}></div>
+                <div className={`w-1.5 h-1.5 rounded-full ${generating ? 'bg-green-500 animate-pulse' : 'bg-foreground'}`}></div>
               </div>
-              <span className="font-medium">
-                {generating ? 'GENERATE-DRAFT AGENT: 正在编撰章节 2.3' : 'GENERATE-DRAFT AGENT: 就绪'}
+              <span className="font-bold text-[10px] uppercase tracking-wider text-gray-900">
+                GENERATE-DRAFT AGENT:
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                {generating ? '正在编撰章节 2.3' : '就绪'}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>模型：GPT-4_RESEARCH_V2</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                模型：GPT-4_RESEARCH_V2
+              </span>
               {generating && (
-                <Button variant="ghost" size="sm" className="h-6 px-2">
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] font-bold hover:text-red-500 transition-all">
                   停止生成
                 </Button>
               )}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 px-2 text-[10px] font-bold hover:bg-gray-100 transition-all"
+              >
+                {showLogPanel ? '▼' : '▲'} 日志
+              </Button>
             </div>
           </div>
+
+          {/* Expandable Log Panel */}
+          {showLogPanel && (
+            <div className="border-t border-gray-200 bg-white">
+              <div className="max-h-[400px] overflow-y-auto p-4 space-y-2">
+                {logMessages.length === 0 ? (
+                  <div className="text-center text-gray-400 py-8 text-sm">
+                    暂无日志记录
+                  </div>
+                ) : (
+                  logMessages.map((log, idx) => (
+                    <div 
+                      key={idx} 
+                      className="flex items-start gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50/50 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex-shrink-0">
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold bg-gray-200 text-gray-700">
+                          {idx + 1}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Clock className="h-3 w-3 text-gray-400" />
+                          <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
+                            {log.time}
+                          </span>
+                          {log.type && (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              log.type === 'success' ? 'bg-green-100 text-green-700' :
+                              log.type === 'error' ? 'bg-red-100 text-red-700' :
+                              'bg-blue-100 text-blue-700'
+                            }`}>
+                              {log.type === 'success' ? '✓ 成功' : log.type === 'error' ? '✗ 错误' : 'ℹ 信息'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-900 leading-relaxed">
+                          {log.message}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

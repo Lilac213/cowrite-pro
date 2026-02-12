@@ -3,20 +3,20 @@
 ## Requirements
 - ✅ Integrate draft-agent call when transitioning from outline to draft stage
 - ✅ Show draft page even if agent call fails
-- ✅ Left panel: Title, stats (word count, read time, AI gen rate), editable content, citation markers, log section
+- ✅ Left panel: Title, stats (word count, read time, AI gen rate), editable content, citation markers
 - ✅ Right panel: Coaching rail with paragraph logic, suggestions, active collaboration, chat interface
 - ✅ Citation markers: Numeric markers [1], [2] with clickable dialog showing material info
 - ✅ User editing: Support user editing and writing on the draft (contentEditable)
 - ✅ Chat interface: Allow users to interact with AI to modify the article
 - ✅ Paragraph interaction: Logic and suggestions only show when clicking left panel paragraphs
 - ✅ Layout proportions: Left panel wider than right panel (flex-[2] vs flex-1)
-- ✅ Log section: At the very bottom showing generation progress
+- ✅ Log section: At the very bottom, styled like material query page with expandable panel
 
 ## Plan
 - [x] Step 1: Analyze existing code structure and design image
 - [x] Step 2: Recreate draft generation page based on design
   - [x] Sub-task 2.1: Implement header with progress bar
-  - [x] Sub-task 2.2: Implement left panel with title, stats, content, log section
+  - [x] Sub-task 2.2: Implement left panel with title, stats, content
   - [x] Sub-task 2.3: Implement right panel with coaching sections
   - [x] Sub-task 2.4: Add chat interface at bottom of right panel
 - [x] Step 3: Citation marker component (already created)
@@ -38,14 +38,27 @@
   - [x] Sub-task 8.4: Implement citation dialog with numeric markers
   - [x] Sub-task 8.5: Move log section to bottom of page
   - [x] Sub-task 8.6: Add conditional rendering for guidance sections
-- [x] Step 9: Pass lint checks
+- [x] Step 9: Enhance log section based on reference code
+  - [x] Sub-task 9.1: Study material query page code structure
+  - [x] Sub-task 9.2: Implement expandable log panel
+  - [x] Sub-task 9.3: Add timestamped log entries with types
+  - [x] Sub-task 9.4: Style log section to match reference design
+  - [x] Sub-task 9.5: Add toggle button for log panel
+- [x] Step 10: Pass lint checks
 
 ## Notes
 - Redesigned page to match the provided design image
 - Left panel shows title, word count, read time, AI generation rate
 - Right panel shows coaching rail with logic, suggestions, active collaboration
 - Bottom of right panel has chat interface for AI interaction
-- Log section at bottom of page shows generation progress
+- **Enhanced Log Section** (styled like material query page):
+  - Sticky bottom positioning
+  - Expandable panel with toggle button
+  - Timestamped entries with type indicators (info/success/error)
+  - Numbered log entries with visual hierarchy
+  - Animated status indicators when generating
+  - Max height with scroll for many logs
+  - Clean card-based layout for each log entry
 - All components styled to match the design
 - Added sample content for demonstration purposes
 - Page is accessible at `/project/:projectId/draft`
@@ -63,7 +76,14 @@
   - Content is fully editable using contentEditable
   - Paragraph guidance only shows when clicking a paragraph
   - Citation markers use numeric format [1], [2] with Dialog popover
-  - Log section moved to bottom of entire page
+  - Log section moved to bottom of entire page with expandable design
   - Word count calculation excludes HTML tags
   - Hover effects on paragraphs for better UX
   - Sample content includes two paragraphs with different guidance
+- **Log System Features**:
+  - Structured log messages with time, message, and type
+  - Visual indicators: ✓ 成功 (green), ✗ 错误 (red), ℹ 信息 (blue)
+  - Expandable/collapsible panel to save screen space
+  - Animated dots when generating
+  - Clean typography matching reference code style
+  - Sticky positioning at bottom for always-visible status
