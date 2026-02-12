@@ -1,9 +1,10 @@
 /**
  * JSON 修复 Agent
  * 当 JSON 解析失败时，使用 LLM 修复格式错误
+ * 使用双重LLM策略：先尝试 Gemini，失败后回退到 Qwen
  */
 
-import { callLLM } from '../runtime/callLLM.ts';
+import { callLLMWithFallback } from '../runtime/callLLMWithFallback.ts';
 
 /**
  * 使用 LLM 修复格式错误的 JSON
@@ -80,9 +81,10 @@ ${inputText}
   const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
 
   try {
-    const repairedText = await callLLM({
+    // 使用双重LLM策略：先尝试 Gemini，失败后回退到 Qwen
+    const repairedText = await callLLMWithFallback({
       prompt: fullPrompt,
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-2.0-flash-exp', // 首选模型
       temperature: 0, // 确定性修复，不要随机
       maxTokens: 8192,
     });

@@ -188,6 +188,15 @@
   - [x] 改进错误消息，明确指出失败阶段
   - [x] 部署所有 Edge Functions
 
+- [x] 实现 JSON 修复 Agent 的双重 LLM 回退机制
+  - [x] 创建 callLLMWithFallback.ts 模块
+  - [x] 实现 callGemini 函数
+  - [x] 实现 callQwen 函数
+  - [x] 实现双重回退逻辑（Gemini → Qwen）
+  - [x] 更新 repairJSONAgent 使用双重 LLM
+  - [x] 同步并部署所有 Edge Functions
+  - [x] 创建详细文档（DUAL_LLM_FALLBACK.md）
+
 - [x] 第一阶段：添加重试机制到前端 API 调用
   - [x] 创建通用的 retry wrapper 函数（src/utils/retry.ts）
   - [x] 实现 exponential backoff 策略
