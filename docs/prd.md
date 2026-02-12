@@ -694,7 +694,7 @@ DraftGenerationPage
 
 用户可对草稿进行审校和修改
 
-**容错机制**：draft-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，向用户提示错误信息并允许手动重新生成
+**容错机制**：draft-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，**先展示生成草稿页面**，向用户提示错误信息并允许手动重新生成
 
 #### 阶段 7：内容审校
 
@@ -1093,4 +1093,4 @@ export async function callLLM({
 ```typescript
 export function normalizeLLMOutput(raw: string) {
   return raw
-    .replace(/["
+    .replace(/[

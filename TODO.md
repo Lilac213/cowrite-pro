@@ -1,7 +1,8 @@
 # Draft Generation Page Implementation
 
 ## Requirements
-- Integrate paragraph structure generation, evidence generation, and coherence verification into draft-agent
+- Integrate draft-agent call when transitioning from outline to draft stage
+- Show draft page even if agent call fails
 - Left panel: Title, stats (word count, read time, AI gen rate), editable content, citation markers, log section
 - Right panel: Coaching rail with paragraph logic, suggestions, active collaboration, chat interface
 - Citation markers: Clickable markers showing research material info (summary, URL, etc.)
@@ -22,7 +23,12 @@
   - [x] Sub-task 4.3: Create sample guidance
 - [x] Step 5: Database schema (already enhanced)
 - [x] Step 6: Update routes and navigation
-- [x] Step 7: Pass lint checks
+- [x] Step 7: Integrate draft-agent call in workflow
+  - [x] Sub-task 7.1: Import callDraftAgent in OutlineStage
+  - [x] Sub-task 7.2: Update handleConfirm to call draft-agent asynchronously
+  - [x] Sub-task 7.3: Fix workflow mapping (drafting → DraftStage)
+  - [x] Sub-task 7.4: Ensure page shows even if agent fails
+- [x] Step 8: Pass lint checks
 
 ## Notes
 - Redesigned page to match the provided design image
@@ -33,3 +39,12 @@
 - All components styled to match the design
 - Added sample content for demonstration purposes
 - Page is accessible at `/project/:projectId/draft`
+- **Workflow Integration**: 
+  - OutlineStage now calls draft-agent when confirming structure
+  - Call is asynchronous and non-blocking
+  - Page shows even if agent call fails
+  - Fixed workflow mapping: drafting status now correctly shows DraftStage
+- **Access Methods**:
+  1. From outline stage: Click "确认结构" → Auto call draft-agent → Enter draft stage → Click "增强生成模式"
+  2. From draft stage: Click "增强生成模式" button
+  3. Direct URL: `/project/:projectId/draft`

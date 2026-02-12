@@ -7,6 +7,7 @@ import {
   getReferenceArticles,
   getMaterials,
   callStructureAgent,
+  callDraftAgent,
 } from '@/db/api';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -298,11 +299,24 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
 
     setConfirming(true);
     try {
+      // 更新项目状态为草稿生成阶段
       await updateProject(projectId, { status: 'drafting' });
+      
       toast({
         title: '确认成功',
-        description: '进入草稿生成阶段',
+        description: '正在启动草稿生成...',
       });
+
+      // 异步调用 draft-agent，不阻塞页面跳转
+      callDraftAgent(projectId)
+        .then(() => {
+          console.log('Draft agent completed successfully');
+        })
+        .catch((error) => {
+          console.error('Draft agent failed:', error);
+          // 即使失败也不影响用户体验，用户可以在草稿页面手动生成
+        });
+
       onComplete();
     } catch (error) {
       toast({

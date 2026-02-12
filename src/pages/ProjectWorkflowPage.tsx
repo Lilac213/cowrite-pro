@@ -136,7 +136,7 @@ export default function ProjectWorkflowPage() {
       case 'outline_confirmed':
         return <OutlineStage projectId={projectId} onComplete={loadProject} />;
       case 'drafting':
-        return <MaterialsStage projectId={projectId} onComplete={loadProject} />;
+        return <DraftStage projectId={projectId} onComplete={loadProject} />;
       case 'review_pass_1':
         return <ReviewStage projectId={projectId} onComplete={loadProject} />;
       case 'layout_export':
