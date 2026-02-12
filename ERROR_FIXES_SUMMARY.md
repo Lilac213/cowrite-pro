@@ -73,20 +73,33 @@ JSON解析失败: 信封JSON解析失败: 信封格式无效: 缺少 meta 或 pa
 - LLM 有时直接返回 payload 内容，而不包装在信封中
 - 系统期望标准信封格式：`{ meta: {...}, payload: "..." }`
 - 实际返回：`{ topic: "...", requirement_meta: {...} }`
+- **代码 Bug**: 重复解析 JSON 并返回错误的数据结构
 
 **解决方案**:
-1. 添加回退机制：检测到非标准信封格式时，自动将整个 JSON 作为 payload 处理
-2. 自动包装为标准信封格式
-3. 提供详细的日志记录
+1. 修复回退逻辑：当检测到非标准信封格式时，直接返回已解析的对象
+2. 移除重复的 JSON 解析（`envelope` 已经是解析后的对象）
+3. 返回 payload 内容本身，而不是包装的信封结构
+4. 简化代码逻辑，提高性能和可维护性
 
 **修改文件**:
 - `supabase/functions/_shared/llm/runtime/parseEnvelope.ts`
+
+**关键改进**:
+```typescript
+// 之前（错误）
+const directPayload = JSON.parse(normalized); // 重复解析
+return { meta: {...}, payload: directPayload }; // 返回错误结构
+
+// 现在（正确）
+return envelope; // 直接返回 payload 内容
+```
 
 **效果**:
 - 兼容标准信封格式和直接 payload 格式
 - 自动适配不同 LLM 的返回格式
 - 提高双重 LLM 回退的成功率
 - 减少因格式问题导致的失败
+- 避免重复解析，提升性能
 
 **详细文档**: 参见 `ENVELOPE_FORMAT_FIX.md`
 
