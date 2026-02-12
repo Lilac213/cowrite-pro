@@ -6,10 +6,10 @@ import type { Project, Draft, Citation, ParagraphGuidance } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Save, Sparkles, Loader2, Settings, Send, Clock, FileText, Zap, Lightbulb } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ArrowLeft, Save, Sparkles, Loader2, Settings, Send, Clock, FileText, Zap, Lightbulb, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
-import CitationMarker from '@/components/draft/CitationMarker';
 import WorkflowProgress from '@/components/workflow/WorkflowProgress';
 
 export default function DraftGenerationPage() {
@@ -27,20 +27,62 @@ export default function DraftGenerationPage() {
   const [selectedParagraphId, setSelectedParagraphId] = useState<string | null>(null);
   const [chatMessage, setChatMessage] = useState('');
   const [logMessages, setLogMessages] = useState<string[]>([]);
+  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
+  const [citationPopoverOpen, setCitationPopoverOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   // Calculate stats
-  const wordCount = content.replace(/\s/g, '').length;
+  const wordCount = content.replace(/<[^>]*>/g, '').replace(/\s/g, '').length;
   const readTime = Math.ceil(wordCount / 400); // 假设每分钟阅读400字
   const aiGenRate = 85; // TODO: Calculate from actual data
+  
+  // Get current paragraph guidance
+  const currentGuidance = selectedParagraphId 
+    ? guidance.find(g => g.paragraph_id === selectedParagraphId)
+    : null;
 
   useEffect(() => {
     loadProject();
     loadDraft();
   }, [projectId]);
+  
+  // Handle citation marker clicks
+  useEffect(() => {
+    if (!contentRef.current) return;
+    
+    const handleCitationMarkerClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const marker = target.closest('.citation-marker') as HTMLElement;
+      
+      if (marker) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const citationId = marker.getAttribute('data-citation-id');
+        if (citationId) {
+          const citation = citations.find(c => c.id === citationId);
+          if (citation) {
+            setSelectedCitation(citation);
+            setCitationPopoverOpen(true);
+          }
+        }
+      }
+    };
+    
+    contentRef.current.addEventListener('click', handleCitationMarkerClick);
+    
+    return () => {
+      contentRef.current?.removeEventListener('click', handleCitationMarkerClick);
+    };
+  }, [citations]);
+  
+  const showCitationPopover = (citation: Citation, element: HTMLElement) => {
+    setSelectedCitation(citation);
+    setCitationPopoverOpen(true);
+  };
 
   const loadProject = async () => {
     if (!projectId) return;
@@ -89,11 +131,11 @@ export default function DraftGenerationPage() {
 
   // 示例内容
   const getSampleContent = () => {
-    return `<p>随着全球金融监管环境的日益复杂，传统的手工合规审查已无法满足现代高频交易的需求。数字化转型已不再是企业的可选项，而是生存的必然需求。特别是在跨境支付与反洗钱（AML）领域，实时数据分析技术的应用正成为衡量金融机构核心竞争力的关键指标<sup>[1]</sup>。</p>
+    return `<p id="p1" class="paragraph-block cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors">随着全球金融监管环境的日益复杂，传统的手工合规审查已无法满足现代高频交易的需求。数字化转型已不再是企业的可选项，而是生存的必然需求。特别是在跨境支付与反洗钱（AML）领域，实时数据分析技术的应用正成为衡量金融机构核心竞争力的关键指标<sup class="citation-marker text-primary cursor-pointer font-medium" data-citation-id="1">[1]</sup>。</p>
 
-<p>在这一背景下，我们观察到大型银行在合规预算的分配上出现了显著倾斜。根据近期的数据显示，超过65%的金融机构已将初步风险评估框架迁移至云端处理周期。这种转变不仅缩短了从预警到响应的处理周期<sup>[2]</sup>，相比于传统的本地部署方案，云端系统能够更理解更加复杂的文本语境，从而提高了对异常交易的识别准确率，正在提取合规风险指标...</p>
+<p id="p2" class="paragraph-block cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors">在这一背景下，我们观察到大型银行在合规预算的分配上出现了显著倾斜。根据近期的数据显示，超过65%的金融机构已将初步风险评估框架迁移至云端处理周期。这种转变不仅缩短了从预警到响应的处理周期<sup class="citation-marker text-primary cursor-pointer font-medium" data-citation-id="2">[2]</sup>，相比于传统的本地部署方案，云端系统能够更理解更加复杂的文本语境，从而提高了对异常交易的识别准确率，正在提取合规风险指标...</p>
 
-<p><span style="color: #999; font-style: italic;">《等待输入...》点击此处答。</span></p>`;
+<p class="paragraph-block cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"><span style="color: #999; font-style: italic;">《等待输入...》点击此处答。</span></p>`;
   };
 
   const getSampleCitations = (): Citation[] => {
@@ -132,7 +174,38 @@ export default function DraftGenerationPage() {
         experience_suggestions: ['如果您有相关的行业经验，可以分享具体的合规挑战案例。'],
         collaboration_prompt: '系统检测到您在 Step 2 卷中标注过"某大型商业银行的反洗钱系统"。',
       },
+      {
+        paragraph_id: 'p2',
+        generation_rationale: '该段落通过数据支撑前文观点，采用"现象-数据-效果"的论证结构，增强说服力。',
+        personal_content_suggestions: ['可以补充具体的云端迁移案例，使论述更加生动。'],
+        experience_suggestions: ['如果您了解相关的技术实施细节，可以添加技术架构说明。'],
+        collaboration_prompt: '检测到您收藏过关于云计算的资料，是否需要引用？',
+      },
     ];
+  };
+  
+  // Handle paragraph click
+  const handleParagraphClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const paragraph = target.closest('.paragraph-block') as HTMLElement;
+    if (paragraph && paragraph.id) {
+      setSelectedParagraphId(paragraph.id);
+    }
+  };
+  
+  // Handle citation click
+  const handleCitationClick = (citationId: string) => {
+    const citation = citations.find(c => c.id === citationId);
+    if (citation) {
+      // Citation marker component will handle the popover
+      console.log('Citation clicked:', citation);
+    }
+  };
+  
+  // Handle content change
+  const handleContentChange = (e: React.FormEvent<HTMLDivElement>) => {
+    const newContent = e.currentTarget.innerHTML;
+    setContent(newContent);
   };
 
   const handleGenerate = async () => {
@@ -270,10 +343,10 @@ export default function DraftGenerationPage() {
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content - Left wider than right */}
       <div className="flex-1 overflow-hidden flex">
-        {/* Left Panel - Editor */}
-        <div className="flex-1 overflow-auto p-6">
+        {/* Left Panel - Editor (wider: flex-[2]) */}
+        <div className="flex-[2] overflow-auto p-6">
           <Card className="max-w-4xl mx-auto">
             <CardContent className="p-8">
               {/* Title */}
@@ -297,51 +370,23 @@ export default function DraftGenerationPage() {
                 </div>
               </div>
 
-              {/* Content */}
+              {/* Editable Content */}
               <div
                 ref={contentRef}
                 className="prose prose-sm max-w-none"
+                contentEditable={true}
+                suppressContentEditableWarning={true}
+                onInput={handleContentChange}
+                onClick={handleParagraphClick}
                 style={{ minHeight: '400px' }}
-              >
-                {content ? (
-                  <div dangerouslySetInnerHTML={{ __html: content }} />
-                ) : (
-                  <div className="text-center text-muted-foreground py-12">
-                    <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>点击"生成草稿"开始创作</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Log Section */}
-          <Card className="max-w-4xl mx-auto mt-4">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="flex gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-foreground"></div>
-                    <div className="w-1.5 h-1.5 rounded-full bg-foreground"></div>
-                    <div className="w-1.5 h-1.5 rounded-full bg-foreground"></div>
-                  </div>
-                  <span className="font-medium">
-                    {generating ? 'GENERATE-DRAFT AGENT: 正在编撰章节 2.3' : '就绪'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>模型：GPT-4_RESEARCH_V2</span>
-                  <Button variant="ghost" size="sm" className="h-6 px-2">
-                    停止生成
-                  </Button>
-                </div>
-              </div>
+                dangerouslySetInnerHTML={{ __html: content }}
+              />
             </CardContent>
           </Card>
         </div>
 
-        {/* Right Panel - Coaching Rail */}
-        <div className="w-96 border-l bg-muted/30 flex flex-col">
+        {/* Right Panel - Coaching Rail (narrower: flex-1, max-w-md) */}
+        <div className="flex-1 max-w-md border-l bg-muted/30 flex flex-col">
           <div className="flex-1 overflow-auto p-4 space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between mb-2">
@@ -354,51 +399,68 @@ export default function DraftGenerationPage() {
               </Button>
             </div>
 
-            {/* Logic Section */}
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium">段落逻辑 (LOGIC)</h3>
-                  <span className="text-xs text-muted-foreground">#01</span>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  该段落采用"现状-挑战-必然性"结构，通过引入全球监管压力，为后续讨论"AI 替代人工"的技术必要性做铺垫。
-                </p>
-              </CardContent>
-            </Card>
+            {/* Show guidance only when paragraph is selected */}
+            {selectedParagraphId && currentGuidance ? (
+              <>
+                {/* Logic Section */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-medium">段落逻辑 (LOGIC)</h3>
+                      <span className="text-xs text-muted-foreground">#{selectedParagraphId.replace('p', '')}</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {currentGuidance.generation_rationale}
+                    </p>
+                  </CardContent>
+                </Card>
 
-            {/* Suggestions Section */}
-            <Card className="border-l-4 border-l-yellow-500">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Lightbulb className="h-4 w-4 text-yellow-600" />
-                  <h3 className="text-sm font-medium">操作建议 (SUGGESTIONS)</h3>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed italic">
-                  "建议在此处增加一个关于金融风险的案例，以增强开篇的紧迫感。"
-                </p>
-              </CardContent>
-            </Card>
+                {/* Suggestions Section */}
+                {currentGuidance.personal_content_suggestions && currentGuidance.personal_content_suggestions.length > 0 && (
+                  <Card className="border-l-4 border-l-yellow-500">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Lightbulb className="h-4 w-4 text-yellow-600" />
+                        <h3 className="text-sm font-medium">操作建议 (SUGGESTIONS)</h3>
+                      </div>
+                      {currentGuidance.personal_content_suggestions.map((suggestion, idx) => (
+                        <p key={idx} className="text-sm text-muted-foreground leading-relaxed italic mb-2">
+                          "{suggestion}"
+                        </p>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
 
-            {/* Active Collaboration Section */}
-            <Card className="bg-black text-white border-0">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Zap className="h-4 w-4 text-yellow-400" />
-                  <h3 className="text-sm font-medium">实时协作 (ACTIVE)</h3>
-                </div>
-                <div className="mb-3">
-                  <p className="text-sm font-medium mb-2">盘点协作：插入个人观点</p>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    系统检测到您在 Step 2 卷中标注过"某大型商业银行的反洗钱系统"。
-                  </p>
-                </div>
-                <Button variant="secondary" size="sm" className="w-full">
-                  <span className="mr-2">➕</span>
-                  插入我的创业案例历
-                </Button>
-              </CardContent>
-            </Card>
+                {/* Active Collaboration Section */}
+                {currentGuidance.collaboration_prompt && (
+                  <Card className="bg-black text-white border-0">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Zap className="h-4 w-4 text-yellow-400" />
+                        <h3 className="text-sm font-medium">实时协作 (ACTIVE)</h3>
+                      </div>
+                      <div className="mb-3">
+                        <p className="text-sm font-medium mb-2">盘点协作：插入个人观点</p>
+                        <p className="text-xs text-gray-400 leading-relaxed">
+                          {currentGuidance.collaboration_prompt}
+                        </p>
+                      </div>
+                      <Button variant="secondary" size="sm" className="w-full">
+                        <span className="mr-2">➕</span>
+                        插入我的创业案例历
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  <p className="text-sm">点击左侧段落查看编辑建议</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Chat Interface */}
@@ -426,6 +488,79 @@ export default function DraftGenerationPage() {
           </div>
         </div>
       </div>
+
+      {/* Log Section - At the very bottom */}
+      <div className="border-t bg-card">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <div className="flex gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-foreground"></div>
+                <div className="w-1.5 h-1.5 rounded-full bg-foreground"></div>
+                <div className="w-1.5 h-1.5 rounded-full bg-foreground"></div>
+              </div>
+              <span className="font-medium">
+                {generating ? 'GENERATE-DRAFT AGENT: 正在编撰章节 2.3' : 'GENERATE-DRAFT AGENT: 就绪'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>模型：GPT-4_RESEARCH_V2</span>
+              {generating && (
+                <Button variant="ghost" size="sm" className="h-6 px-2">
+                  停止生成
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Citation Dialog */}
+      <Dialog open={citationPopoverOpen} onOpenChange={setCitationPopoverOpen}>
+        <DialogContent className="sm:max-w-md">
+          {selectedCitation && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-base">{selectedCitation.material_title}</span>
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                {selectedCitation.material_source && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">来源</p>
+                    <p className="text-sm">{selectedCitation.material_source}</p>
+                  </div>
+                )}
+                
+                {selectedCitation.material_summary && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">摘要</p>
+                    <p className="text-sm leading-relaxed">{selectedCitation.material_summary}</p>
+                  </div>
+                )}
+                
+                {selectedCitation.quote && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">引用内容</p>
+                    <p className="text-sm italic border-l-2 border-primary pl-3 py-1">"{selectedCitation.quote}"</p>
+                  </div>
+                )}
+                
+                {selectedCitation.material_url && (
+                  <Button variant="outline" size="sm" className="w-full" asChild>
+                    <a href={selectedCitation.material_url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      查看原文
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
