@@ -49,6 +49,8 @@ async function callGemini(config: LLMCallConfig): Promise<string> {
     const errorText = await response.text();
     console.error('[callGemini] API调用失败:', response.status, response.statusText);
     console.error('[callGemini] 错误详情:', errorText);
+    console.error('[callGemini] 请求URL:', url);
+    console.error('[callGemini] API Key前缀:', apiKey.substring(0, 10) + '...');
     throw new Error(`Gemini API调用失败: ${response.status} ${response.statusText}`);
   }
 
@@ -75,7 +77,7 @@ async function callQwen(config: LLMCallConfig): Promise<string> {
     maxTokens = 8192,
   } = config;
 
-  const apiKey = Deno.env.get('INTEGRATIONS_API_KEY');
+  const apiKey = Deno.env.get('QWEN_API_KEY') || Deno.env.get('INTEGRATIONS_API_KEY');
   if (!apiKey) {
     throw new Error('Qwen API密钥未配置');
   }
@@ -130,29 +132,39 @@ async function callQwen(config: LLMCallConfig): Promise<string> {
 export async function callLLMWithFallback(config: LLMCallConfig): Promise<string> {
   console.log('[callLLMWithFallback] 开始双重LLM调用');
   
+  let geminiError: Error | null = null;
+  let qwenError: Error | null = null;
+  
   // 第一次尝试：Gemini
   try {
     console.log('[callLLMWithFallback] 尝试 Gemini...');
     const result = await callGemini(config);
     console.log('[callLLMWithFallback] ✅ Gemini 调用成功');
     return result;
-  } catch (geminiError) {
-    console.warn('[callLLMWithFallback] ⚠️ Gemini 调用失败:', geminiError);
+  } catch (error) {
+    geminiError = error instanceof Error ? error : new Error(String(error));
+    console.warn('[callLLMWithFallback] ⚠️ Gemini 调用失败:', geminiError.message);
     console.log('[callLLMWithFallback] 回退到 Qwen...');
-    
-    // 第二次尝试：Qwen
-    try {
-      const result = await callQwen(config);
-      console.log('[callLLMWithFallback] ✅ Qwen 调用成功（回退）');
-      return result;
-    } catch (qwenError) {
-      console.error('[callLLMWithFallback] ❌ Qwen 调用也失败:', qwenError);
-      
-      // 两个都失败，抛出综合错误
-      throw new Error(
-        `双重LLM调用失败 - Gemini: ${geminiError instanceof Error ? geminiError.message : String(geminiError)}, ` +
-        `Qwen: ${qwenError instanceof Error ? qwenError.message : String(qwenError)}`
-      );
-    }
   }
+  
+  // 第二次尝试：Qwen
+  try {
+    const result = await callQwen(config);
+    console.log('[callLLMWithFallback] ✅ Qwen 调用成功（回退）');
+    return result;
+  } catch (error) {
+    qwenError = error instanceof Error ? error : new Error(String(error));
+    console.error('[callLLMWithFallback] ❌ Qwen 调用也失败:', qwenError.message);
+  }
+  
+  // 两个都失败，抛出综合错误
+  const errorMessage = `双重LLM调用失败 - Gemini: ${geminiError?.message || '未知错误'}, Qwen: ${qwenError?.message || '未知错误'}`;
+  console.error('[callLLMWithFallback] ❌ 最终错误:', errorMessage);
+  
+  // 如果 Qwen 是因为 API 密钥未配置而失败，提供更友好的错误信息
+  if (qwenError?.message.includes('API密钥未配置') || qwenError?.message.includes('401')) {
+    console.warn('[callLLMWithFallback] 💡 提示: Qwen API 密钥未配置或无效，请配置 QWEN_API_KEY 环境变量以启用回退功能');
+  }
+  
+  throw new Error(errorMessage);
 }

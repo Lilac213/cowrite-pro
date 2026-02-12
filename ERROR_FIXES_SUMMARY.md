@@ -158,6 +158,65 @@ if (missingFields.length > 0) {
 
 **状态**: ✅ 已实现并部署
 
+### 6. ✅ 修复 API 密钥配置问题
+
+**错误信息**:
+```
+JSON解析失败: 信封JSON解析失败: 未找到JSON对象且修复失败: JSON 修复失败: 双重LLM调用失败 - Gemini: Gemini API调用失败: 400 Bad Request, Qwen: Qwen API调用失败: 401 Unauthorized
+```
+
+**根本原因**:
+- Gemini API 返回 400 错误：API 密钥可能无效或过期
+- Qwen API 返回 401 错误：之前的代码只使用 `INTEGRATIONS_API_KEY`，该密钥可能未配置或不是有效的 Qwen API 密钥
+- 缺少详细的错误日志，难以诊断具体问题
+
+**解决方案**:
+1. 改进 Qwen API 密钥配置：支持专门的 `QWEN_API_KEY` 环境变量
+2. 增强 Gemini 错误日志：记录请求 URL 和 API Key 前缀
+3. 改进回退错误处理：提供友好的配置提示
+4. 注册 `QWEN_API_KEY` 密钥供用户配置
+
+**修改文件**:
+- `supabase/functions/_shared/llm/runtime/callLLMWithFallback.ts`
+
+**关键改进**:
+```typescript
+// 之前（只支持一个密钥）
+const apiKey = Deno.env.get('INTEGRATIONS_API_KEY');
+
+// 现在（支持专门的 Qwen 密钥）
+const apiKey = Deno.env.get('QWEN_API_KEY') || Deno.env.get('INTEGRATIONS_API_KEY');
+
+// 增强错误日志
+console.error('[callGemini] 请求URL:', url);
+console.error('[callGemini] API Key前缀:', apiKey.substring(0, 10) + '...');
+
+// 友好的配置提示
+if (qwenError?.message.includes('API密钥未配置') || qwenError?.message.includes('401')) {
+  console.warn('[callLLMWithFallback] 💡 提示: Qwen API 密钥未配置或无效，请配置 QWEN_API_KEY 环境变量以启用回退功能');
+}
+```
+
+**效果**:
+- 支持专门的 Qwen API 密钥配置
+- 保持向后兼容，仍然支持 `INTEGRATIONS_API_KEY`
+- 提供更详细的错误日志，便于诊断
+- 给出友好的配置提示
+- 提高系统的容错能力
+
+**配置指南**:
+```bash
+# Gemini API 密钥（必需）
+INTEGRATIONS_API_KEY=your_gemini_api_key
+
+# Qwen API 密钥（可选，用于回退）
+QWEN_API_KEY=your_qwen_api_key
+```
+
+**详细文档**: 参见 `API_KEY_CONFIGURATION_FIX.md`
+
+**状态**: ✅ 已修复并部署
+
 ## 系统改进
 
 ### 容错能力提升
@@ -259,6 +318,7 @@ Level 5: 系统稳定性
 
 ## 相关文档
 
+- `API_KEY_CONFIGURATION_FIX.md` - API 密钥配置修复文档
 - `DETAILED_LOGGING_IMPROVEMENT.md` - 详细日志改进文档
 - `ENVELOPE_FORMAT_FIX.md` - 信封格式无效错误修复文档
 - `DUAL_LLM_FALLBACK.md` - 双重 LLM 回退机制详细文档
@@ -285,6 +345,8 @@ Level 5: 系统稳定性
 ✅ JSON 修复成功率从 ~95% 提升至 ~99.5%
 ✅ 兼容多种 LLM 返回格式（标准信封 + 直接 payload）
 ✅ 详细日志记录，明确显示缺失字段和实际字段
+✅ 改进 API 密钥配置，支持专门的 Qwen API 密钥
+✅ 增强错误日志，提供友好的配置提示
 ✅ 所有 Edge Functions 已部署最新版本
 
-系统现在更加稳定、可靠、易于调试和维护！
+系统现在更加稳定、可靠、易于配置、易于调试和维护！
