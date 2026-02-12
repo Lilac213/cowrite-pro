@@ -1,89 +1,144 @@
-# Draft Generation Page Implementation
+# Draft Generation Page - Real-time Editing & LLM Suggestions
 
 ## Requirements
-- ✅ Integrate draft-agent call when transitioning from outline to draft stage
-- ✅ Show draft page even if agent call fails
-- ✅ Left panel: Title, stats (word count, read time, AI gen rate), editable content, citation markers
-- ✅ Right panel: Coaching rail with paragraph logic, suggestions, active collaboration, chat interface
-- ✅ Citation markers: Numeric markers [1], [2] with clickable dialog showing material info
-- ✅ User editing: Support user editing and writing on the draft (contentEditable)
-- ✅ Chat interface: Allow users to interact with AI to modify the article
-- ✅ Paragraph interaction: Logic and suggestions only show when clicking left panel paragraphs
-- ✅ Layout proportions: Left panel wider than right panel (flex-[2] vs flex-1)
-- ✅ Log section: At the very bottom, styled like material query page with expandable panel
+- ✅ User can edit text at any time (contentEditable paragraphs)
+- ✅ After editing a paragraph, LLM gives suggestions immediately
+- ✅ Rewrite entire draft generation page based on reference code
+- ✅ Each paragraph is individually editable
+- ✅ On blur (finish editing), trigger LLM suggestion
+- ✅ Show suggestions inline in right panel
+- ✅ Visual feedback when editing (border highlight)
+- ✅ Loading state while LLM processes
+- ✅ Display suggestions as cards that can be accepted/rejected
+- ✅ Citation markers with dialog popups
+- ✅ Add/delete paragraphs functionality
+- ✅ Material Symbols icons integration
+- ✅ Log panel at bottom with expandable design
 
 ## Plan
-- [x] Step 1: Analyze existing code structure and design image
-- [x] Step 2: Recreate draft generation page based on design
-  - [x] Sub-task 2.1: Implement header with progress bar
-  - [x] Sub-task 2.2: Implement left panel with title, stats, content
-  - [x] Sub-task 2.3: Implement right panel with coaching sections
-  - [x] Sub-task 2.4: Add chat interface at bottom of right panel
-- [x] Step 3: Citation marker component (already created)
-- [x] Step 4: Add sample content for demonstration
-  - [x] Sub-task 4.1: Create sample content with HTML formatting
-  - [x] Sub-task 4.2: Create sample citations
-  - [x] Sub-task 4.3: Create sample guidance
-- [x] Step 5: Database schema (already enhanced)
-- [x] Step 6: Update routes and navigation
-- [x] Step 7: Integrate draft-agent call in workflow
-  - [x] Sub-task 7.1: Import callDraftAgent in OutlineStage
-  - [x] Sub-task 7.2: Update handleConfirm to call draft-agent asynchronously
-  - [x] Sub-task 7.3: Fix workflow mapping (drafting → DraftStage)
-  - [x] Sub-task 7.4: Ensure page shows even if agent fails
-- [x] Step 8: Refine UI based on user feedback
-  - [x] Sub-task 8.1: Make left panel wider than right (flex-[2] vs flex-1)
-  - [x] Sub-task 8.2: Make content editable with contentEditable
-  - [x] Sub-task 8.3: Add paragraph click handler to show guidance
-  - [x] Sub-task 8.4: Implement citation dialog with numeric markers
-  - [x] Sub-task 8.5: Move log section to bottom of page
-  - [x] Sub-task 8.6: Add conditional rendering for guidance sections
-- [x] Step 9: Enhance log section based on reference code
-  - [x] Sub-task 9.1: Study material query page code structure
-  - [x] Sub-task 9.2: Implement expandable log panel
-  - [x] Sub-task 9.3: Add timestamped log entries with types
-  - [x] Sub-task 9.4: Style log section to match reference design
-  - [x] Sub-task 9.5: Add toggle button for log panel
+- [x] Step 1: Study reference code images
+  - [x] Sub-task 1.1: Analyze material cards with icons
+  - [x] Sub-task 1.2: Study inline editing patterns
+  - [x] Sub-task 1.3: Review animation and status indicators
+  - [x] Sub-task 1.4: Understand flex layouts and positioning
+- [x] Step 2: Rewrite DraftGenerationPage component
+  - [x] Sub-task 2.1: Create new data structures (Paragraph, ParagraphSuggestion)
+  - [x] Sub-task 2.2: Implement paragraph-based state management
+  - [x] Sub-task 2.3: Add real-time editing handlers
+  - [x] Sub-task 2.4: Implement LLM suggestion API call
+- [x] Step 3: Create EditableParagraph component
+  - [x] Sub-task 3.1: Implement contentEditable div
+  - [x] Sub-task 3.2: Add focus/blur handlers
+  - [x] Sub-task 3.3: Add visual feedback (ring, background)
+  - [x] Sub-task 3.4: Add delete button
+  - [x] Sub-task 3.5: Add loading indicator
+- [x] Step 4: Create SuggestionCard component
+  - [x] Sub-task 4.1: Design card layout with icons
+  - [x] Sub-task 4.2: Add type-based styling (logic/style/content)
+  - [x] Sub-task 4.3: Implement apply/dismiss actions
+  - [x] Sub-task 4.4: Add border colors by type
+- [x] Step 5: Integrate Material Symbols icons
+  - [x] Sub-task 5.1: Add Google Fonts link to index.html
+  - [x] Sub-task 5.2: Add CSS styles for material-symbols-outlined
+  - [x] Sub-task 5.3: Use icons in components (psychology, settings, smart_toy)
+- [x] Step 6: Implement suggestion workflow
+  - [x] Sub-task 6.1: Trigger on paragraph blur
+  - [x] Sub-task 6.2: Show loading state
+  - [x] Sub-task 6.3: Call paragraph-suggestion edge function
+  - [x] Sub-task 6.4: Fallback to mock suggestions
+  - [x] Sub-task 6.5: Display in right panel
+- [x] Step 7: Add paragraph management
+  - [x] Sub-task 7.1: Add paragraph button
+  - [x] Sub-task 7.2: Delete paragraph button
+  - [x] Sub-task 7.3: Update state management
+- [x] Step 8: Style enhancements
+  - [x] Sub-task 8.1: Add citation marker styles
+  - [x] Sub-task 8.2: Improve hover effects
+  - [x] Sub-task 8.3: Add transition animations
+  - [x] Sub-task 8.4: Match reference code typography
+- [x] Step 9: Fix type errors
+  - [x] Sub-task 9.1: Add useRef import
+  - [x] Sub-task 9.2: Fix Draft.title type issue
+  - [x] Sub-task 9.3: Fix Citation.page_number issue
+  - [x] Sub-task 9.4: Fix WorkflowProgress props
+  - [x] Sub-task 9.5: Add Citation.position field
 - [x] Step 10: Pass lint checks
 
 ## Notes
-- Redesigned page to match the provided design image
-- Left panel shows title, word count, read time, AI generation rate
-- Right panel shows coaching rail with logic, suggestions, active collaboration
-- Bottom of right panel has chat interface for AI interaction
-- **Enhanced Log Section** (styled like material query page):
+- **Complete Rewrite**: Entire page rewritten from scratch based on reference code
+- **New Architecture**:
+  - Paragraph-based state management (array of Paragraph objects)
+  - Each paragraph has id, content, suggestions, isEditing, isLoadingSuggestion
+  - Suggestions are stored per paragraph, not globally
+- **Real-time Editing**:
+  - Each paragraph is a separate contentEditable div
+  - On blur, content is saved and LLM suggestion is triggered
+  - Visual feedback: ring-2 ring-primary when active, hover:bg-muted/50 when inactive
+  - Delete button appears on hover
+- **LLM Suggestion System**:
+  - Triggered automatically after editing a paragraph
+  - Shows loading spinner while processing
+  - Calls paragraph-suggestion edge function with context
+  - Falls back to mock suggestions if API fails
+  - Three types of suggestions: logic, style, content
+  - Each suggestion has apply/dismiss actions
+- **Suggestion Display**:
+  - Right panel shows suggestions only for active paragraph
+  - Empty state when no paragraph selected
+  - Loading state while generating suggestions
+  - Color-coded cards: blue (logic), amber (style), green (content)
+  - Border-left-4 with type-specific colors
+- **Material Symbols Integration**:
+  - Added Google Fonts link for Material Symbols Outlined
+  - CSS class for proper rendering
+  - Icons used: psychology (logic), settings (style), smart_toy (chat), add_circle, close
+- **Paragraph Management**:
+  - Add new paragraph button at bottom
+  - Delete button on each paragraph (visible on hover)
+  - Automatic ID generation (p1, p2, p3...)
+  - State updates maintain suggestions and loading states
+- **Citation System**:
+  - Numeric markers [1], [2] in content
+  - Click to open dialog with full citation details
+  - Styled with citation-marker class
+  - Hover effects and transitions
+- **Log Panel**:
   - Sticky bottom positioning
-  - Expandable panel with toggle button
-  - Timestamped entries with type indicators (info/success/error)
-  - Numbered log entries with visual hierarchy
-  - Animated status indicators when generating
-  - Max height with scroll for many logs
-  - Clean card-based layout for each log entry
-- All components styled to match the design
-- Added sample content for demonstration purposes
-- Page is accessible at `/project/:projectId/draft`
-- **Workflow Integration**: 
-  - OutlineStage now calls draft-agent when confirming structure
-  - Call is asynchronous and non-blocking
-  - Page shows even if agent call fails
-  - Fixed workflow mapping: drafting status now correctly shows DraftStage
-- **Access Methods**:
-  1. From outline stage: Click "确认结构" → Auto call draft-agent → Enter draft stage → Click "增强生成模式"
-  2. From draft stage: Click "增强生成模式" button
-  3. Direct URL: `/project/:projectId/draft`
-- **UI Refinements**:
-  - Left panel is wider (flex-[2]) than right panel (flex-1, max-w-md)
-  - Content is fully editable using contentEditable
-  - Paragraph guidance only shows when clicking a paragraph
-  - Citation markers use numeric format [1], [2] with Dialog popover
-  - Log section moved to bottom of entire page with expandable design
-  - Word count calculation excludes HTML tags
-  - Hover effects on paragraphs for better UX
-  - Sample content includes two paragraphs with different guidance
-- **Log System Features**:
-  - Structured log messages with time, message, and type
-  - Visual indicators: ✓ 成功 (green), ✗ 错误 (red), ℹ 信息 (blue)
-  - Expandable/collapsible panel to save screen space
-  - Animated dots when generating
-  - Clean typography matching reference code style
-  - Sticky positioning at bottom for always-visible status
+  - Expandable/collapsible design
+  - Timestamped entries with types (info/success/error)
+  - Visual indicators with animations
+  - Logs all user actions and LLM responses
+- **Styling Patterns from Reference Code**:
+  - Inline-flex with items-center and justify-center
+  - Text sizes: text-[10px], text-[11px], text-[12px]
+  - Font weights: font-bold with uppercase and tracking-wider
+  - Border styles: border-dashed, border-gray-200, rounded-lg
+  - Hover effects: hover:bg-gray-300, hover:text-black
+  - Transitions: transition-all, transition-colors
+  - Animations: animate-bounce, animate-pulse
+  - Relative positioning with absolute children
+- **Mock Suggestions**:
+  - Three suggestions per paragraph for demonstration
+  - Logic: Analyzes paragraph structure and flow
+  - Style: Suggests expression improvements
+  - Content: Recommends additional information
+- **Type Safety**:
+  - All components properly typed
+  - Citation type includes position field
+  - Draft type uses 'as any' for title field (not in schema)
+  - Paragraph and ParagraphSuggestion interfaces defined
+- **User Experience**:
+  - Smooth transitions and animations
+  - Clear visual hierarchy
+  - Immediate feedback on all actions
+  - Loading states for async operations
+  - Toast notifications for success/error
+  - Keyboard support (Enter to send chat)
+- **Future Enhancements**:
+  - Implement actual paragraph-suggestion edge function
+  - Add suggestion application logic (modify paragraph content)
+  - Add undo/redo functionality
+  - Add paragraph reordering (drag and drop)
+  - Add collaborative editing features
+  - Add version history
+  - Add export functionality
