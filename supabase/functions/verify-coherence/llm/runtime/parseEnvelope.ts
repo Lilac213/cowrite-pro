@@ -71,7 +71,22 @@ export async function parseEnvelope(rawText: string): Promise<any> {
     }
     
     // Step 4: 验证信封结构
+    // 处理三种可能的格式：
+    // 1. 标准信封: { meta: {...}, payload: "..." }
+    // 2. 简化信封: { type: "...", payload: {...} }
+    // 3. 直接返回: { core_thesis: "...", argument_blocks: [...] }
+    
+    if (envelope.payload && typeof envelope.payload === 'object' && !Array.isArray(envelope.payload)) {
+      // 格式2: { type: "...", payload: {...} } - payload 是对象
+      console.log('[parseEnvelope] 检测到简化信封格式（payload 为对象），直接返回 payload');
+      console.log('[parseEnvelope] ✅ 输出数据类型:', typeof envelope.payload);
+      console.log('[parseEnvelope] 输出数据字段:', Object.keys(envelope.payload).join(', '));
+      console.log('[parseEnvelope] 输出数据内容（前500字符）:', JSON.stringify(envelope.payload).substring(0, 500));
+      return envelope.payload;
+    }
+    
     if (!envelope.meta || typeof envelope.payload !== 'string') {
+      // 格式3: 直接返回完整对象
       console.warn('[parseEnvelope] 信封格式不完整，尝试将整个 JSON 作为 payload 处理');
       
       // 如果没有标准信封结构，说明 LLM 可能直接返回了 payload 内容

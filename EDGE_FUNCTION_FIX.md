@@ -74,19 +74,60 @@ if (!envelope.meta || typeof envelope.payload !== 'string') {
 
 ## 已更新的文件
 
-### 核心文件（已部署）
+### 所有 Edge Functions（已部署）
 - ✅ `supabase/functions/generate-article-structure/llm/runtime/parseEnvelope.ts` (已部署)
 - ✅ `supabase/functions/structure-agent/llm/runtime/parseEnvelope.ts` (已部署)
 - ✅ `supabase/functions/adjust-article-structure/llm/runtime/parseEnvelope.ts` (已部署)
+- ✅ `supabase/functions/brief-agent/llm/runtime/parseEnvelope.ts` (已部署)
+- ✅ `supabase/functions/draft-agent/llm/runtime/parseEnvelope.ts` (已部署)
+- ✅ `supabase/functions/review-agent/llm/runtime/parseEnvelope.ts` (已部署)
+- ✅ `supabase/functions/research-retrieval/llm/runtime/parseEnvelope.ts` (已部署)
+- ✅ `supabase/functions/research-synthesis/llm/runtime/parseEnvelope.ts` (已部署)
+- ✅ `supabase/functions/verify-coherence/llm/runtime/parseEnvelope.ts` (已部署)
 - ✅ `supabase/functions/_shared/llm/runtime/parseEnvelope.ts` (已更新)
 
-### 待更新文件（非紧急）
-- ⏳ `supabase/functions/brief-agent/llm/runtime/parseEnvelope.ts`
-- ⏳ `supabase/functions/draft-agent/llm/runtime/parseEnvelope.ts`
-- ⏳ `supabase/functions/research-retrieval/llm/runtime/parseEnvelope.ts`
-- ⏳ `supabase/functions/review-agent/llm/runtime/parseEnvelope.ts`
-- ⏳ `supabase/functions/verify-coherence/llm/runtime/parseEnvelope.ts`
-- ⏳ `supabase/functions/research-synthesis/llm/runtime/parseEnvelope.ts`
+## AI 写作工作流说明
+
+### 工作流阶段
+
+系统实现了完整的 AI 写作工作流，包含以下 8 个阶段：
+
+| 阶段 | 状态码 | 描述 | 调用的 Agent | 进度 |
+|------|--------|------|--------------|------|
+| 1. 开始 | `init` | 初始化项目 | - | 0% |
+| 2. 需求明确 | `confirm_brief` | 明确写作需求和目标 | `brief-agent` | 12% |
+| 3. 资料搜索 | `knowledge_selected` | 搜索相关资料 | `research-retrieval` | 25% |
+| 4. 资料整理 | `material_review` | 整理和审阅资料 | `research-synthesis` | 38% |
+| 5. 文章结构 | `outline_confirmed` | 生成文章大纲 | `structure-agent` | 50% |
+| 6. 生成草稿 | `drafting` | 生成文章草稿 | `draft-agent` | 65% |
+| 7. 内容审校 | `review_pass_1` | 审校和优化内容 | `review-agent` | 80% |
+| 8. 排版导出 | `layout_export` | 导出最终文档 | - | 92% |
+| 9. 完成 | `completed` | 项目完成 | - | 100% |
+
+### 工作流组件映射
+
+| 阶段 | 前端组件 | 位置 |
+|------|----------|------|
+| 需求明确 | `BriefStage` | `src/components/workflow/BriefStage.tsx` |
+| 资料搜索 | `KnowledgeStage` | `src/components/workflow/KnowledgeStage.tsx` |
+| 资料整理 | `MaterialReviewStage` | `src/components/workflow/MaterialReviewStage.tsx` |
+| 文章结构 | `OutlineStage` | `src/components/workflow/OutlineStage.tsx` |
+| 生成草稿 | `DraftStage` | `src/components/workflow/DraftStage.tsx` |
+| 内容审校 | `ReviewStage` | `src/components/workflow/ReviewStage.tsx` |
+
+### Edge Functions 列表
+
+| Function Name | 用途 | 状态 |
+|---------------|------|------|
+| `brief-agent` | 需求明确阶段 - 分析用户需求 | ✅ 已修复 |
+| `research-retrieval` | 资料搜索阶段 - 检索相关资料 | ✅ 已修复 |
+| `research-synthesis` | 资料整理阶段 - 合成整理资料 | ✅ 已修复 |
+| `structure-agent` | 文章结构阶段 - 生成文章结构 | ✅ 已修复 |
+| `generate-article-structure` | 文章结构阶段 - 生成文章结构（新版） | ✅ 已修复 |
+| `adjust-article-structure` | 文章结构阶段 - 调整文章结构 | ✅ 已修复 |
+| `draft-agent` | 生成草稿阶段 - 生成文章草稿 | ✅ 已修复 |
+| `review-agent` | 内容审校阶段 - 审校文章内容 | ✅ 已修复 |
+| `verify-coherence` | 内容审校阶段 - 验证连贯性 | ✅ 已修复 |
 
 ## 测试验证
 
@@ -123,12 +164,15 @@ FunctionsHttpError: Edge Function returned a non-2xx status code
 ## 影响范围
 
 ### 直接影响
-- **generate-article-structure**: 生成文章结构功能（已修复）
-- **structure-agent**: 结构代理功能（已修复）
-- **adjust-article-structure**: 调整文章结构功能（已修复）
+所有使用 `parseEnvelope` 的 Edge Functions 现在都支持三种响应格式，提高了系统的健壮性和容错能力。
 
-### 潜在影响
-其他使用 `parseEnvelope` 的 Edge Functions 如果遇到相同的 LLM 响应格式，也会受益于此修复。
+### 工作流完整性
+- ✅ **需求明确** (brief-agent): 已修复，支持所有响应格式
+- ✅ **资料搜索** (research-retrieval): 已修复，支持所有响应格式
+- ✅ **资料整理** (research-synthesis): 已修复，支持所有响应格式
+- ✅ **文章结构** (structure-agent, generate-article-structure): 已修复，支持所有响应格式
+- ✅ **生成草稿** (draft-agent): 已修复，支持所有响应格式
+- ✅ **内容审校** (review-agent, verify-coherence): 已修复，支持所有响应格式
 
 ## 后续建议
 
@@ -136,6 +180,7 @@ FunctionsHttpError: Edge Function returned a non-2xx status code
 2. **完善文档**: 在 `llm/README.md` 中记录所有支持的响应格式
 3. **添加单元测试**: 为 `parseEnvelope` 函数添加测试用例，覆盖所有三种格式
 4. **监控日志**: 观察生产环境中 LLM 实际返回的格式分布，优化解析策略
+5. **工作流监控**: 监控每个阶段的成功率和错误率，及时发现问题
 
 ## 技术细节
 
@@ -167,3 +212,5 @@ typeof envelope.payload === 'object' && !Array.isArray(envelope.payload)
 ## 总结
 
 此修复通过增强 `parseEnvelope` 函数的格式兼容性，解决了 LLM 返回简化信封格式时的解析失败问题。修复后，系统可以正确处理三种不同的响应格式，提高了系统的健壮性和容错能力。
+
+**所有 9 个 Edge Functions 的 parseEnvelope.ts 文件已全部更新并部署**，确保整个 AI 写作工作流的稳定性和可靠性。

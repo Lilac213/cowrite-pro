@@ -20,7 +20,7 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
 ## 2. 用户旅程与阶段流程
 
 ### 2.1 整体流程图
-注册/登录 → 项目列表 → 需求明确 → 资料搜索 → 资料整理 → 文章结构 → 生成草稿 → 内容审校 → 排版导出
+注册/登录 → 项目列表 → 需求明确（调用 brief-agent）→ 资料搜索（调用 research-agent 中的 research-retrieval-agent）→ 资料整理（调用 research-agent 中的 research-synthesis-agent）→ 文章结构（调用 structure-agent）→ 生成草稿（调用 draft-agent）→ 内容审校（调用 review-agent）→ 排版导出
 
 ### 2.2 详细阶段说明
 
@@ -48,7 +48,7 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
 - 进度条右侧增加需求文档图标按钮，点击后在弹窗中显示需求文档内容，所有阶段均可点击查看
 - **创建项目时消耗 9 点**
 
-#### 阶段 2：需求明确
+#### 阶段 2：需求明确（调用 brief-agent）
 - 用户输入文章选题/写作目标
 - 选择文章类型：支持下拉已有模板选项，或新增模板
 - 调用 **brief-agent** 将输入结构化为需求文档（**writing_brief**），生成时参考所选格式模板中的相关内容
@@ -85,7 +85,7 @@ CoWrite 是一款写作辅助工具，旨在帮助用户通过结构化流程完
 }
 ```
 
-#### 阶段 3：资料搜索
+#### 阶段 3：资料搜索（调用 research-agent 中的 research-retrieval-agent）
 
 **点数消耗规则**
 - 创建项目时已消耗 9 点，资料搜索与资料整理阶段不再额外消耗点数
@@ -119,14 +119,14 @@ ResearchRetrievalPage
 
 功能说明：
 - 从需求明确页跳转至资料搜索页时，自动将需求文档内容传递至本页
-- 调用 **research-agent** 的 **research_retrieval** 函数基于需求文档生成搜索计划
-- research_retrieval 按照各类关键词在对应数据源搜索相关内容
+- 调用 **research-agent 中的 research-retrieval-agent** 基于需求文档生成搜索计划
+- research-retrieval-agent 按照各类关键词在对应数据源搜索相关内容
 - 获取资料标题、URL，并从 URL 中提取原文
 - 将检索结果展现在页面上
 - 用户可点击需要的资料进行选择
 - 页面底部显示日志框，展示运行步骤
-- 日志框包含日志详情按钮，点击后弹窗显示 research_retrieval 接收到的输入、输出以及 LLM 输出的 THOUGHT 部分内容
-- **容错机制**：research-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，向用户提示错误信息并允许手动重新搜索
+- 日志框包含日志详情按钮，点击后弹窗显示 research-retrieval-agent 接收到的输入、输出以及 LLM 输出的 THOUGHT 部分内容
+- **容错机制**：research-retrieval-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，向用户提示错误信息并允许手动重新搜索
 
 **个人资料库整合**
 - 资料搜索阶段同时检索外部资料与个人资料库
@@ -165,7 +165,7 @@ ResearchRetrievalPage
 }
 ```
 
-#### 阶段 4：资料整理
+#### 阶段 4：资料整理（调用 research-agent 中的 research-synthesis-agent）
 
 **点数消耗规则**
 - 创建项目时已消耗 9 点，资料整理阶段不再额外消耗点数
@@ -206,11 +206,11 @@ ResearchSynthesisPage
     └─ 确认并进入下一步按钮
 ```
 
-**research-agent 的 research_synthesis 函数输入输出规范**
+**research-agent 中的 research-synthesis-agent 输入输出规范**
 
 **输入格式**
 
-在调用 research_synthesis 前，将需求文档、用户选择的初始资料整理成以下 JSON 形式：
+在调用 research-synthesis-agent 前，将需求文档、用户选择的初始资料整理成以下 JSON 形式：
 
 ```json
 {
@@ -233,11 +233,11 @@ ResearchSynthesisPage
 
 **输出格式**
 
-research_synthesis 必须严格输出纯 JSON 格式，不得包含任何 Markdown 代码块标记（如 ```json 或 ```）。输出内容必须直接以 { 开头，以 } 结尾，确保可被标准 JSON 解析器直接解析。
+research-synthesis-agent 必须严格输出纯 JSON 格式，不得包含任何 Markdown 代码块标记（如 ```json 或 ```）。输出内容必须直接以 { 开头，以 } 结尾，确保可被标准 JSON 解析器直接解析。
 
 **日志详情展示**
 
-日志详情中将 research_retrieval 和 research_synthesis 的日志合并展示，包含以下内容：
+日志详情中将 research-retrieval-agent 和 research-synthesis-agent 的日志合并展示，包含以下内容：
 
 1. **THOUGHT 部分**
 
@@ -310,7 +310,7 @@ research_synthesis 必须严格输出纯 JSON 格式，不得包含任何 Markdo
 **用户交互流程**
 
 1. 从资料搜索页点击确认并进入下一步后，跳转至资料整理页
-2. 资料整理页调用 research-agent 的 research_synthesis 函数，输出观点洞察（synthesized_insights）以及矛盾空白（contradictions_or_gaps）
+2. 资料整理页调用 research-agent 中的 research-synthesis-agent，输出观点洞察（synthesized_insights）以及矛盾空白（contradictions_or_gaps）
 3. 页面采用左右结构布局：
    - 左侧面板：显示资料类型统计和审阅指南
    - 右侧面板：显示具体洞察内容和操作区
@@ -323,12 +323,12 @@ research_synthesis 必须严格输出纯 JSON 格式，不得包含任何 Markdo
 7. 系统实时统计未决策数量，显示还有xxx项未决策
 8. 点击未决策提示可直接跳转到第一条未决策资料
 9. 用户完成所有决策后，系统更新 user_decision 字段
-10. research_synthesis 输出的结果保存在 Supabase 数据库中，形成 **research_pack**
+10. research-synthesis-agent 输出的结果保存在 Supabase 数据库中，形成 **research_pack**
 11. 页面底部显示日志框，展示运行步骤
-12. 日志框包含日志详情按钮，点击后弹窗显示 research_synthesis 接收到的输入、输出以及 LLM 输出的 THOUGHT 部分内容
+12. 日志框包含日志详情按钮，点击后弹窗显示 research-synthesis-agent 接收到的输入、输出以及 LLM 输出的 THOUGHT 部分内容
 13. 用户点击确认并进入下一步后，进入文章结构生成阶段
 14. **所有阶段的进度条必须显示当前状态，不得显示为 -**
-15. **容错机制**：research-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，向用户提示错误信息并允许手动重新整理
+15. **容错机制**：research-synthesis-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，向用户提示错误信息并允许手动重新整理
 
 **用户操作**
 
@@ -365,7 +365,7 @@ research_synthesis 必须严格输出纯 JSON 格式，不得包含任何 Markdo
 }
 ```
 
-#### 阶段 5：文章结构生成
+#### 阶段 5：文章结构生成（调用 structure-agent）
 
 **后端内容筛选**
 
@@ -544,7 +544,7 @@ session.current_stage = WritingStage.STRUCTURE;
 
 **容错机制**：structure-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，向用户提示错误信息并允许手动重新生成
 
-#### 阶段 6：生成草稿
+#### 阶段 6：生成草稿（调用 draft-agent）
 
 **draft-agent 强制输入**
 
@@ -732,7 +732,7 @@ DraftGenerationPage
 
 **容错机制**：draft-agent 调用失败时，自动重试最多 3 次，每次重试间隔 2 秒；若 3 次均失败，**先展示生成草稿页面**，向用户提示错误信息并允许手动重新生成
 
-#### 阶段 7：内容审校
+#### 阶段 7：内容审校（调用 review-agent）
 
 **review-agent 综合功能**
 
@@ -891,27 +891,27 @@ GuidanceContext {
 新的 Agent 调度逻辑采用状态机式流程控制：
 
 ```
-Requirement（需求明确）
+Requirement（需求明确 - 调用 brief-agent）
   ↓
 等待用户确认需求文档
   ↓
-Retrieval（资料搜索）
+Retrieval（资料搜索 - 调用 research-agent 中的 research-retrieval-agent）
   ↓
 等待用户 RetrievalDecision 或 跳过
   ↓
-Synthesis（资料整理）
+Synthesis（资料整理 - 调用 research-agent 中的 research-synthesis-agent）
   ↓
 等待用户 SynthesisDecision
   ↓
-Structure（文章结构）
+Structure（文章结构 - 调用 structure-agent）
   ↓
 等待用户 StructureDecision
   ↓
-Draft（生成草稿）
+Draft（生成草稿 - 调用 draft-agent）
   ↓
 等待用户 DraftDecision
   ↓
-Review（内容审校）
+Review（内容审校 - 调用 review-agent）
   ↓
 等待 ReviewDecision
   ↓
@@ -931,7 +931,8 @@ Export（排版导出）
 | Agent | 强制依赖 |
 |-------|----------|
 | brief-agent | 用户输入 |
-| research-agent | writing_brief |
+| research-agent（research-retrieval-agent） | writing_brief |
+| research-agent（research-synthesis-agent） | writing_brief + 用户选择的资料 |
 | structure-agent | writing_brief + research_pack |
 | draft-agent | writing_brief + argument_outline + research_pack |
 | review-agent | draft |
@@ -1003,6 +1004,8 @@ if (stage === 'review' && !userDecision.review) {
   ├── agents/
   │     ├── briefAgent.ts
   │     ├── researchAgent.ts
+  │     │   ├── researchRetrievalAgent.ts
+  │     │   └── researchSynthesisAgent.ts
   │     ├── structureAgent.ts
   │     ├── draftAgent.ts
   │     ├── reviewAgent.ts
@@ -1129,4 +1132,4 @@ export async function callLLM({
 ```typescript
 export function normalizeLLMOutput(raw: string) {
   return raw
-    .replace(/["
+    .replace(/[
