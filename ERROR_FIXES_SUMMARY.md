@@ -105,6 +105,59 @@ return envelope; // 直接返回 payload 内容
 
 **状态**: ✅ 已修复并部署
 
+### 5. ✅ 增强详细日志记录
+
+**问题**:
+- 错误消息不明确："返回的结构缺少必要字段"
+- 无法快速定位具体缺失的字段
+- 缺少输入输出的完整记录
+- 调试困难，需要多次尝试才能找到问题
+
+**解决方案**:
+1. 在所有 Edge Functions 中添加详细的字段验证日志
+2. 明确显示缺失的具体字段名称
+3. 记录实际返回的字段列表
+4. 在 parseEnvelope 中记录完整的输入输出数据
+
+**修改文件**:
+- `supabase/functions/_shared/llm/runtime/parseEnvelope.ts`
+- `supabase/functions/generate-article-structure/index.ts`
+- `supabase/functions/adjust-article-structure/index.ts`
+- `supabase/functions/verify-coherence/index.ts`
+- `supabase/functions/generate-evidence/index.ts`
+- `supabase/functions/generate-paragraph-structure/index.ts`
+
+**关键改进**:
+```typescript
+// 之前（不明确）
+if (!structure.core_thesis || !structure.argument_blocks) {
+  throw new Error('返回的结构缺少必要字段');
+}
+
+// 现在（详细）
+const missingFields = [];
+if (!structure.core_thesis) missingFields.push('core_thesis');
+if (!structure.argument_blocks) missingFields.push('argument_blocks');
+
+if (missingFields.length > 0) {
+  console.error('[function] ❌ 返回的结构缺少必要字段:', missingFields.join(', '));
+  console.error('[function] 实际字段列表:', Object.keys(structure).join(', '));
+  console.error('[function] 完整结构内容:', JSON.stringify(structure, null, 2));
+  throw new Error(`返回的结构缺少必要字段: ${missingFields.join(', ')}。实际字段: ${Object.keys(structure).join(', ')}`);
+}
+```
+
+**效果**:
+- 错误消息明确显示缺失的字段名称
+- 显示实际返回的字段列表，便于对比
+- 记录完整的数据内容，便于分析
+- 大幅提升调试效率
+- 更好的错误追踪和问题定位
+
+**详细文档**: 参见 `DETAILED_LOGGING_IMPROVEMENT.md`
+
+**状态**: ✅ 已实现并部署
+
 ## 系统改进
 
 ### 容错能力提升
@@ -206,6 +259,7 @@ Level 5: 系统稳定性
 
 ## 相关文档
 
+- `DETAILED_LOGGING_IMPROVEMENT.md` - 详细日志改进文档
 - `ENVELOPE_FORMAT_FIX.md` - 信封格式无效错误修复文档
 - `DUAL_LLM_FALLBACK.md` - 双重 LLM 回退机制详细文档
 - `JSON_REPAIR_400_FIX.md` - 400 错误详细修复文档
@@ -230,6 +284,7 @@ Level 5: 系统稳定性
 ✅ 实现双重 LLM 回退机制
 ✅ JSON 修复成功率从 ~95% 提升至 ~99.5%
 ✅ 兼容多种 LLM 返回格式（标准信封 + 直接 payload）
+✅ 详细日志记录，明确显示缺失字段和实际字段
 ✅ 所有 Edge Functions 已部署最新版本
 
-系统现在更加稳定、可靠和灵活！
+系统现在更加稳定、可靠、易于调试和维护！

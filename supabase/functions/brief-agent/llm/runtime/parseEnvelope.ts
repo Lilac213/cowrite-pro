@@ -77,6 +77,9 @@ export async function parseEnvelope(rawText: string): Promise<any> {
       // 如果没有标准信封结构，说明 LLM 可能直接返回了 payload 内容
       // envelope 变量已经是解析后的对象，直接返回它作为 payload
       console.log('[parseEnvelope] ✅ 将整个 JSON 作为 payload 处理');
+      console.log('[parseEnvelope] 输出数据类型:', typeof envelope);
+      console.log('[parseEnvelope] 输出数据字段:', envelope ? Object.keys(envelope).join(', ') : 'null');
+      console.log('[parseEnvelope] 输出数据内容（前500字符）:', JSON.stringify(envelope).substring(0, 500));
       return envelope;
     }
     
@@ -119,6 +122,12 @@ export async function parseEnvelope(rawText: string): Promise<any> {
         throw new Error(`payload解析失败: ${repairError instanceof Error ? repairError.message : String(repairError)}`);
       }
     }
+    
+    // 记录最终输出
+    console.log('[parseEnvelope] ✅ 解析完成');
+    console.log('[parseEnvelope] 输出数据类型:', typeof content);
+    console.log('[parseEnvelope] 输出数据字段:', content ? Object.keys(content).join(', ') : 'null');
+    console.log('[parseEnvelope] 输出数据内容（前500字符）:', JSON.stringify(content).substring(0, 500));
     
     return content;
   } catch (error) {

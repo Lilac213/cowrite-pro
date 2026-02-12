@@ -140,8 +140,15 @@ sub_claim：
       }
     }
 
+    console.log('[generate-evidence] 验证返回结构');
+    console.log('[generate-evidence] 返回数据类型:', typeof result);
+    console.log('[generate-evidence] 返回数据内容:', JSON.stringify(result, null, 2));
+    
     if (!result.supporting_materials) {
-      throw new Error('返回的结构缺少必要字段');
+      console.error('[generate-evidence] ❌ 返回的结构缺少必要字段: supporting_materials');
+      console.error('[generate-evidence] 实际字段列表:', Object.keys(result).join(', '));
+      console.error('[generate-evidence] 完整结构内容:', JSON.stringify(result, null, 2));
+      throw new Error(`返回的结构缺少必要字段: supporting_materials。实际字段: ${Object.keys(result).join(', ')}`);
     }
 
     return new Response(

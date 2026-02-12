@@ -39,9 +39,19 @@ serve(async (req) => {
     const adjustedData = result.data;
     const latency = Date.now() - startTime;
 
-    if (!adjustedData.core_thesis || !adjustedData.argument_blocks) {
-      console.error('Missing required fields in structure:', adjustedData);
-      throw new Error(`返回的结构缺少必要字段。`);
+    console.log('[adjust-article-structure] 验证返回结构');
+    console.log('[adjust-article-structure] 返回数据类型:', typeof adjustedData);
+    console.log('[adjust-article-structure] 返回数据内容:', JSON.stringify(adjustedData, null, 2));
+    
+    const missingFields = [];
+    if (!adjustedData.core_thesis) missingFields.push('core_thesis');
+    if (!adjustedData.argument_blocks) missingFields.push('argument_blocks');
+    
+    if (missingFields.length > 0) {
+      console.error('[adjust-article-structure] ❌ 返回的结构缺少必要字段:', missingFields.join(', '));
+      console.error('[adjust-article-structure] 实际字段列表:', Object.keys(adjustedData).join(', '));
+      console.error('[adjust-article-structure] 完整结构内容:', JSON.stringify(adjustedData, null, 2));
+      throw new Error(`返回的结构缺少必要字段: ${missingFields.join(', ')}。实际字段: ${Object.keys(adjustedData).join(', ')}`);
     }
 
     // 确保保留原始的block id，并为新增的块生成新ID

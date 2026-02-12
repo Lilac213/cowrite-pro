@@ -172,8 +172,19 @@ output_state：
       }
     }
 
-    if (!structure.core_claim || !structure.sub_claims) {
-      throw new Error('返回的结构缺少必要字段');
+    console.log('[generate-paragraph-structure] 验证返回结构');
+    console.log('[generate-paragraph-structure] 返回数据类型:', typeof structure);
+    console.log('[generate-paragraph-structure] 返回数据内容:', JSON.stringify(structure, null, 2));
+    
+    const missingFields = [];
+    if (!structure.core_claim) missingFields.push('core_claim');
+    if (!structure.sub_claims) missingFields.push('sub_claims');
+    
+    if (missingFields.length > 0) {
+      console.error('[generate-paragraph-structure] ❌ 返回的结构缺少必要字段:', missingFields.join(', '));
+      console.error('[generate-paragraph-structure] 实际字段列表:', Object.keys(structure).join(', '));
+      console.error('[generate-paragraph-structure] 完整结构内容:', JSON.stringify(structure, null, 2));
+      throw new Error(`返回的结构缺少必要字段: ${missingFields.join(', ')}。实际字段: ${Object.keys(structure).join(', ')}`);
     }
 
     return new Response(

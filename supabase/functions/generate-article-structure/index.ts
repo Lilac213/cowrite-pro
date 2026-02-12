@@ -395,11 +395,19 @@ payload字符串内部应包含的结构（注意：derived_from 数组中的值
     }
 
     console.log('[generate-article-structure] JSON解析完成，验证必要字段');
+    console.log('[generate-article-structure] 解析结果类型:', typeof structure);
+    console.log('[generate-article-structure] 解析结果内容:', JSON.stringify(structure, null, 2));
+    
     // 确保返回的结构包含必要字段
-    if (!structure.core_thesis || !structure.argument_blocks) {
-      console.error('[generate-article-structure] 返回的结构缺少必要字段');
-      console.error('[generate-article-structure] 结构内容:', JSON.stringify(structure, null, 2));
-      throw new Error('返回的结构缺少必要字段');
+    const missingFields = [];
+    if (!structure.core_thesis) missingFields.push('core_thesis');
+    if (!structure.argument_blocks) missingFields.push('argument_blocks');
+    
+    if (missingFields.length > 0) {
+      console.error('[generate-article-structure] ❌ 返回的结构缺少必要字段:', missingFields.join(', '));
+      console.error('[generate-article-structure] 实际字段列表:', Object.keys(structure).join(', '));
+      console.error('[generate-article-structure] 完整结构内容:', JSON.stringify(structure, null, 2));
+      throw new Error(`返回的结构缺少必要字段: ${missingFields.join(', ')}。实际字段: ${Object.keys(structure).join(', ')}`);
     }
 
     console.log('[generate-article-structure] 核心论点:', structure.core_thesis);

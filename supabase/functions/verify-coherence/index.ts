@@ -170,8 +170,15 @@ payload字符串内部应包含的结构:
       );
     }
 
+    console.log('[verify-coherence] 验证返回结构');
+    console.log('[verify-coherence] 返回数据类型:', typeof result);
+    console.log('[verify-coherence] 返回数据内容:', JSON.stringify(result, null, 2));
+    
     if (!result.coherence_check) {
-      throw new Error('返回的结构缺少必要字段');
+      console.error('[verify-coherence] ❌ 返回的结构缺少必要字段: coherence_check');
+      console.error('[verify-coherence] 实际字段列表:', Object.keys(result).join(', '));
+      console.error('[verify-coherence] 完整结构内容:', JSON.stringify(result, null, 2));
+      throw new Error(`返回的结构缺少必要字段: coherence_check。实际字段: ${Object.keys(result).join(', ')}`);
     }
 
     return new Response(
