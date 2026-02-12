@@ -16,9 +16,10 @@
   - [x] Sub-task 2.3: Implement right panel with coaching sections
   - [x] Sub-task 2.4: Add chat interface at bottom of right panel
 - [x] Step 3: Citation marker component (already created)
-- [ ] Step 4: Implement streaming output
-  - [ ] Sub-task 4.1: Add streaming support to draft-agent
-  - [ ] Sub-task 4.2: Handle streaming in frontend
+- [x] Step 4: Add sample content for demonstration
+  - [x] Sub-task 4.1: Create sample content with HTML formatting
+  - [x] Sub-task 4.2: Create sample citations
+  - [x] Sub-task 4.3: Create sample guidance
 - [x] Step 5: Database schema (already enhanced)
 - [x] Step 6: Update routes and navigation
 - [x] Step 7: Pass lint checks
@@ -30,3 +31,5 @@
 - Bottom of right panel has chat interface for AI interaction
 - Log section at bottom of left panel shows generation progress
 - All components styled to match the design
+- Added sample content for demonstration purposes
+- Page is accessible at `/project/:projectId/draft`

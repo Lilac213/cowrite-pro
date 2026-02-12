@@ -1093,4 +1093,4 @@ export async function callLLM({
 ```typescript
 export function normalizeLLMOutput(raw: string) {
   return raw
-    .replace(/[
+    .replace(/["

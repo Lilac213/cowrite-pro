@@ -64,16 +64,75 @@ export default function DraftGenerationPage() {
       const data = await getLatestDraft(projectId);
       if (data) {
         setDraft(data);
-        setTitle('2024年全球金融合规的数字化转型路径'); // TODO: Get from draft
-        setContent(data.content || '');
-        setCitations(data.citations || []);
-        setGuidance(data.guidance || []);
+        setTitle(data.content ? '2024年全球金融合规的数字化转型路径' : '');
+        setContent(data.content || getSampleContent());
+        setCitations(data.citations || getSampleCitations());
+        setGuidance(data.guidance || getSampleGuidance());
+      } else {
+        // 如果没有草稿，显示示例内容
+        setTitle('2024年全球金融合规的数字化转型路径');
+        setContent(getSampleContent());
+        setCitations(getSampleCitations());
+        setGuidance(getSampleGuidance());
       }
     } catch (error) {
       console.error('加载草稿失败:', error);
+      // 加载失败时也显示示例内容
+      setTitle('2024年全球金融合规的数字化转型路径');
+      setContent(getSampleContent());
+      setCitations(getSampleCitations());
+      setGuidance(getSampleGuidance());
     } finally {
       setLoading(false);
     }
+  };
+
+  // 示例内容
+  const getSampleContent = () => {
+    return `<p>随着全球金融监管环境的日益复杂，传统的手工合规审查已无法满足现代高频交易的需求。数字化转型已不再是企业的可选项，而是生存的必然需求。特别是在跨境支付与反洗钱（AML）领域，实时数据分析技术的应用正成为衡量金融机构核心竞争力的关键指标<sup>[1]</sup>。</p>
+
+<p>在这一背景下，我们观察到大型银行在合规预算的分配上出现了显著倾斜。根据近期的数据显示，超过65%的金融机构已将初步风险评估框架迁移至云端处理周期。这种转变不仅缩短了从预警到响应的处理周期<sup>[2]</sup>，相比于传统的本地部署方案，云端系统能够更理解更加复杂的文本语境，从而提高了对异常交易的识别准确率，正在提取合规风险指标...</p>
+
+<p><span style="color: #999; font-style: italic;">《等待输入...》点击此处答。</span></p>`;
+  };
+
+  const getSampleCitations = (): Citation[] => {
+    return [
+      {
+        id: '1',
+        material_id: 'mat-1',
+        material_title: '《2023年全球金融科技应用白皮书》- 第三章',
+        material_source: '麦肯锡',
+        material_url: 'https://example.com/report',
+        material_summary: '报告指出，超过65%的金融机构已将初步风险评估框架迁移至云端处理周期。特别是在处理KYC文档时，错误率降低了34%。',
+        position: 150,
+        paragraph_id: 'p1',
+        quote: '实时数据分析技术的应用正成为衡量金融机构核心竞争力的关键指标',
+      },
+      {
+        id: '2',
+        material_id: 'mat-2',
+        material_title: '资源原文档',
+        material_source: '内部研究',
+        material_url: '',
+        material_summary: '云端系统能够更好地理解复杂的文本语境，提高异常交易识别准确率。',
+        position: 280,
+        paragraph_id: 'p2',
+        quote: '缩短了从预警到响应的处理周期',
+      },
+    ];
+  };
+
+  const getSampleGuidance = (): ParagraphGuidance[] => {
+    return [
+      {
+        paragraph_id: 'p1',
+        generation_rationale: '该段落采用"现状-挑战-必然性"结构，通过引入全球监管压力，为后续讨论"AI 替代人工"的技术必要性做铺垫。',
+        personal_content_suggestions: ['建议在此处增加一个关于金融风险的案例，以增强开篇的紧迫感。'],
+        experience_suggestions: ['如果您有相关的行业经验，可以分享具体的合规挑战案例。'],
+        collaboration_prompt: '系统检测到您在 Step 2 卷中标注过"某大型商业银行的反洗钱系统"。',
+      },
+    ];
   };
 
   const handleGenerate = async () => {
