@@ -53,6 +53,9 @@ export default function DraftGenerationPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // 新版本标识 - 实时编辑与LLM建议系统
+  console.log('🎨 DraftGenerationPage v2.0 - Real-time Editing & LLM Suggestions Loaded');
+
   // 计算统计数据
   const totalContent = paragraphs.map(p => p.content).join('');
   const wordCount = totalContent.replace(/<[^>]*>/g, '').replace(/\s/g, '').length;
@@ -440,6 +443,7 @@ export default function DraftGenerationPage() {
                 <span className="font-bold text-sm">RESEARCHOS</span>
                 <span className="text-muted-foreground text-sm">/</span>
                 <span className="text-sm">{project?.title || '项目'}</span>
+                <span className="text-xs text-muted-foreground ml-2 px-2 py-0.5 bg-primary/10 rounded">v2.0</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
