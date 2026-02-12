@@ -72,7 +72,29 @@ export async function parseEnvelope(rawText: string): Promise<any> {
     
     // Step 4: 验证信封结构
     if (!envelope.meta || typeof envelope.payload !== 'string') {
-      throw new Error('信封格式无效: 缺少 meta 或 payload 不是字符串');
+      console.warn('[parseEnvelope] 信封格式不完整，尝试将整个 JSON 作为 payload 处理');
+      
+      // 如果没有标准信封结构，尝试将整个 JSON 作为 payload
+      // 这种情况下，LLM 可能直接返回了 payload 内容而不是信封
+      try {
+        // 检查 normalized 是否是有效的 JSON 对象（而不是信封）
+        const directPayload = JSON.parse(normalized);
+        
+        // 如果解析成功，说明这是一个有效的 JSON 对象
+        // 我们将它作为 payload 返回
+        console.log('[parseEnvelope] ✅ 将整个 JSON 作为 payload 处理');
+        return {
+          meta: {
+            agent: 'unknown',
+            timestamp: new Date().toISOString(),
+            thought: 'LLM 直接返回了 payload，未使用信封格式'
+          },
+          payload: directPayload
+        };
+      } catch (directParseError) {
+        console.error('[parseEnvelope] 无法将 JSON 作为 payload 处理:', directParseError);
+        throw new Error('信封格式无效: 缺少 meta 或 payload 不是字符串');
+      }
     }
     
     // Step 5: 归一化并解析 payload 字符串（带修复）

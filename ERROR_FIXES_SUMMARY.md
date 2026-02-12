@@ -62,6 +62,36 @@ JSON解析失败: 信封JSON解析失败: JSON 修复失败: LLM API调用失败
 
 **状态**: ✅ 已实现并部署
 
+### 4. ✅ 修复信封格式无效错误
+
+**错误信息**:
+```
+JSON解析失败: 信封JSON解析失败: 信封格式无效: 缺少 meta 或 payload 不是字符串
+```
+
+**根本原因**:
+- LLM 有时直接返回 payload 内容，而不包装在信封中
+- 系统期望标准信封格式：`{ meta: {...}, payload: "..." }`
+- 实际返回：`{ topic: "...", requirement_meta: {...} }`
+
+**解决方案**:
+1. 添加回退机制：检测到非标准信封格式时，自动将整个 JSON 作为 payload 处理
+2. 自动包装为标准信封格式
+3. 提供详细的日志记录
+
+**修改文件**:
+- `supabase/functions/_shared/llm/runtime/parseEnvelope.ts`
+
+**效果**:
+- 兼容标准信封格式和直接 payload 格式
+- 自动适配不同 LLM 的返回格式
+- 提高双重 LLM 回退的成功率
+- 减少因格式问题导致的失败
+
+**详细文档**: 参见 `ENVELOPE_FORMAT_FIX.md`
+
+**状态**: ✅ 已修复并部署
+
 ## 系统改进
 
 ### 容错能力提升
@@ -163,6 +193,7 @@ Level 5: 系统稳定性
 
 ## 相关文档
 
+- `ENVELOPE_FORMAT_FIX.md` - 信封格式无效错误修复文档
 - `DUAL_LLM_FALLBACK.md` - 双重 LLM 回退机制详细文档
 - `JSON_REPAIR_400_FIX.md` - 400 错误详细修复文档
 - `JSON_REPAIR_AGENT.md` - JSON 修复 Agent 工作原理
@@ -185,6 +216,7 @@ Level 5: 系统稳定性
 ✅ 错误诊断能力显著改善
 ✅ 实现双重 LLM 回退机制
 ✅ JSON 修复成功率从 ~95% 提升至 ~99.5%
+✅ 兼容多种 LLM 返回格式（标准信封 + 直接 payload）
 ✅ 所有 Edge Functions 已部署最新版本
 
-系统现在更加稳定和可靠！
+系统现在更加稳定、可靠和灵活！

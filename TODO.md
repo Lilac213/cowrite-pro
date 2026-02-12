@@ -197,6 +197,12 @@
   - [x] 同步并部署所有 Edge Functions
   - [x] 创建详细文档（DUAL_LLM_FALLBACK.md）
 
+- [x] 修复信封格式无效错误
+  - [x] 添加直接 payload 格式的回退处理
+  - [x] 自动包装为标准信封格式
+  - [x] 同步并部署所有 Edge Functions
+  - [x] 创建详细文档（ENVELOPE_FORMAT_FIX.md）
+
 - [x] 第一阶段：添加重试机制到前端 API 调用
   - [x] 创建通用的 retry wrapper 函数（src/utils/retry.ts）
   - [x] 实现 exponential backoff 策略
