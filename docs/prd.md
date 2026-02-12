@@ -568,26 +568,50 @@ draft-agent 综合以下功能：
 - 连贯性验证
 - 生成正文
 
-**可视化引用标记**
+**生成草稿页面设计**
 
-当 LLM 使用：
-
-```json
-{
-  \"citation_id\": \"c_3\"
-}
+页面结构：
+```
+DraftGenerationPage
+├─ LeftPanel（左侧面板 - 草稿内容区）
+│  ├─ DraftContent（草稿正文）
+│  │   ├─ 流式输出草稿内容
+│  │   ├─ 引用标记（小标）
+│  │   │   └─ 点击显示资料信息（摘要、URL等）
+│  │   └─ 用户编辑区域（支持直接编辑草稿）
+├─ RightPanel（右侧面板 - 生成说明区）
+│  └─ GenerationGuidance（生成说明）
+│      ├─ 每段生成理由
+│      ├─ 建议补充内容
+│      └─ 个人经历补充提示
+└─ BottomActionBar（底部操作栏）
+    └─ 确认并进入下一步按钮
 ```
 
-草稿里变成：
+**功能说明**
 
-```
-（见资料3）
-```
+1. **左侧草稿内容区**
+   - LLM 流式输出草稿内容，实时显示在屏幕上
+   - 在引用资料搜索内容的地方用小标标志标记
+   - 点击小标后弹窗显示资料信息，包括：
+     - 资料摘要
+     - 资料来源 URL
+     - 其他相关信息
+   - 支持用户对草稿进行直接编辑和修改
 
-UI 点击后展示：
-- 摘要
-- 来源
-- URL
+2. **右侧生成说明区**
+   - 针对每一段内容，说明生成理由
+   - 提示建议补充的内容
+   - 激发用户补充个人亲身经历或独特见解
+   - 增强用户与 AI 的协作动力
+
+3. **引用标记可视化**
+   - 当 LLM 使用资料时，在对应位置插入引用标记（如小标）
+   - 引用标记格式示例：[1]、[2] 等
+   - 点击引用标记后，弹窗展示：
+     - 资料摘要
+     - 资料来源 URL
+     - 引用类型（直接引用 / 转述）
 
 **草稿 Payload 格式**
 
@@ -609,6 +633,9 @@ UI 点击后展示：
           \"citation_id\": \"c_1\"
         }
       ],
+      \"generation_reason\": \"生成该段落的理由说明\",
+      \"suggested_additions\": \"建议用户补充的内容\",
+      \"personal_experience_prompt\": \"建议补充的个人经历或见解\",
       \"requires_user_input\": false,
       \"coherence_score\": 0.89
     }
@@ -1022,4 +1049,4 @@ export async function callLLM({
 ```typescript
 export function normalizeLLMOutput(raw: string) {
   return raw
-    .replace(/[
+    .replace(/["

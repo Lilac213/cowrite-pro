@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getLatestDraft, createDraft, updateDraft, callLLMGenerate, getBrief, getKnowledgeBase, getOutlines, getMaterials, getReferenceArticles } from '@/db/api';
 import type { Draft, ParagraphAnnotation } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { DRAFT_WITH_ANNOTATIONS_PROMPT } from '@/constants/prompts';
 import DraftWithAnnotations from './DraftWithAnnotations';
-import { Loader2, FileText, MessageSquare } from 'lucide-react';
+import { Loader2, FileText, MessageSquare, Sparkles } from 'lucide-react';
 
 interface DraftStageProps {
   projectId: string;
@@ -26,6 +27,7 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
   const [viewMode, setViewMode] = useState<'annotated' | 'plain'>('annotated');
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadDraft();
@@ -235,6 +237,13 @@ ${selectedOutlines.map((o, i) => `${i + 1}. ${o.summary}`).join('\n')}
         <div className="flex gap-2">
           {!readonly && (
             <>
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/project/${projectId}/draft`)}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                增强生成模式
+              </Button>
               <Button variant="outline" onClick={handleGenerate} disabled={generating}>
                 {generating ? (
                   <>

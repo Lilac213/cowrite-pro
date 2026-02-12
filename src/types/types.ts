@@ -233,8 +233,30 @@ export interface Draft {
   content: string;
   version: number;
   annotations?: ParagraphAnnotation[];
+  citations?: Citation[];
+  guidance?: ParagraphGuidance[];
   created_at: string;
   updated_at: string;
+}
+
+export interface Citation {
+  id: string;
+  material_id: string;
+  material_title: string;
+  material_source?: string;
+  material_url?: string;
+  material_summary?: string;
+  position: number; // Character position in the content
+  paragraph_id?: string;
+  quote?: string; // The actual quoted text
+}
+
+export interface ParagraphGuidance {
+  paragraph_id: string;
+  generation_rationale: string; // 为何这样生成
+  personal_content_suggestions: string[]; // 建议补充的个人内容
+  experience_suggestions: string[]; // 建议补充的个人经历
+  collaboration_prompt: string; // 激发协作的提示
 }
 
 export interface ParagraphAnnotation {
