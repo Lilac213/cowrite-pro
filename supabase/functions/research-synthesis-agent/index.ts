@@ -23,46 +23,40 @@ interface LLMResponse {
 }
 
 /**
- * 调用内置 Gemini 模型
+ * 调用 OpenAI 兼容 API（中转站）
  */
-async function callGemini(options: LLMCallOptions): Promise<LLMResponse> {
-  const geminiUrl = "https://app-9bwpferlujnl-api-VaOwP8E7dJqa.gateway.appmedo.com/v1beta/models/gemini-2.5-flash:generateContent";
+async function callOpenAICompatible(options: LLMCallOptions): Promise<LLMResponse> {
+  const baseUrl = Deno.env.get('OPENAI_BASE_URL');
+  const apiKey = Deno.env.get('INTEGRATIONS_API_KEY');
   
-  const systemInstruction = options.messages.find(m => m.role === 'system')?.content || '';
-  const contents = options.messages
-    .filter(m => m.role !== 'system')
-    .map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
-
-  const requestBody: any = {
-    contents,
-    generationConfig: {
-      temperature: options.temperature || 0.7,
-      maxOutputTokens: options.maxTokens || 4096,
-    }
-  };
-
-  if (systemInstruction) {
-    requestBody.systemInstruction = {
-      parts: [{ text: systemInstruction }]
-    };
+  if (!baseUrl || !apiKey) {
+    throw new Error('未配置 OPENAI_BASE_URL 或 INTEGRATIONS_API_KEY');
   }
-
-  const response = await fetch(geminiUrl, {
+  
+  const normalizedBaseUrl = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
+  const url = `${normalizedBaseUrl}/chat/completions`;
+  
+  const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestBody),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gemini-2.5-flash',
+      messages: options.messages,
+      temperature: options.temperature || 0.7,
+      max_tokens: options.maxTokens || 4096,
+    }),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Gemini API 调用失败 (${response.status}): ${errorText}`);
+    throw new Error(`OpenAI 兼容 API 调用失败 (${response.status}): ${errorText}`);
   }
 
   const data = await response.json();
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const content = data.choices?.[0]?.message?.content || '';
   
   return { content, model: 'gemini-2.5-flash' };
 }
@@ -110,26 +104,26 @@ async function getQwenApiKey(): Promise<string | null> {
     .eq("config_key", "llm_api_key")
     .maybeSingle();
   
-  return configData?.config_value || Deno.env.get("DASHSCOPE_API_KEY") || null;
+  return configData?.config_value || Deno.env.get("QIANWEN_API_KEY") || Deno.env.get("DASHSCOPE_API_KEY") || null;
 }
 
 /**
- * 统一的 LLM 调用接口（优先 Gemini，回退 Qwen）
+ * 统一的 LLM 调用接口（优先 OpenAI 兼容 API，回退 Qwen）
  */
 async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
   try {
-    console.log("尝试调用内置 Gemini 模型...");
-    const response = await callGemini(options);
-    console.log("✓ Gemini 调用成功");
+    console.log("尝试调用 OpenAI 兼容 API...");
+    const response = await callOpenAICompatible(options);
+    console.log("✓ OpenAI 兼容 API 调用成功");
     return response;
-  } catch (geminiError) {
-    console.warn("Gemini 调用失败，尝试回退到 Qwen:", geminiError);
+  } catch (openaiError) {
+    console.warn("OpenAI 兼容 API 调用失败，尝试回退到 Qwen:", openaiError);
     
     try {
       const apiKey = await getQwenApiKey();
       if (!apiKey) {
         throw new Error(
-          "Gemini 调用失败，且未配置 Qwen API 密钥。" +
+          "OpenAI 兼容 API 调用失败，且未配置 Qwen API 密钥。" +
           "请在管理面板的「系统配置」→「LLM 配置」中配置阿里云 DashScope API 密钥。"
         );
       }
@@ -140,7 +134,7 @@ async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
       return response;
     } catch (qwenError) {
       console.error("Qwen 调用也失败:", qwenError);
-      throw new Error(`LLM 调用失败：Gemini 和 Qwen 均不可用`);
+      throw new Error(`LLM 调用失败：OpenAI 兼容 API 和 Qwen 均不可用`);
     }
   }
 }

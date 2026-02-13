@@ -127,8 +127,8 @@ export async function runReviewAgent(input: ReviewInput): Promise<ReviewPayload>
     agentName: 'reviewAgent',
     prompt,
     schema: reviewSchema,
-    model: 'gemini-2.0-flash-exp',
-    temperature: 0.2,  // 低温度以确保客观评估
+    model: 'gemini-2.5-flash',
+    temperature: 0.2,
   });
   
   // 统计问题数量

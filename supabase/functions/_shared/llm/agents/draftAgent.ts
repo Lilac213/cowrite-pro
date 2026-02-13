@@ -156,9 +156,9 @@ export async function runDraftAgent(input: DraftInput): Promise<DraftPayload> {
     agentName: 'draftAgent',
     prompt,
     schema: draftSchema,
-    model: 'gemini-2.0-flash-exp',
-    temperature: 0.6,  // 稍高温度以增加创意
-    maxTokens: 16384,  // 草稿可能较长
+    model: 'gemini-2.5-flash',
+    temperature: 0.6,
+    maxTokens: 16384,
   });
   
   // 后置验证：确保所有 block 都有引用

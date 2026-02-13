@@ -216,8 +216,7 @@ Output Format:
 
     addLog('搜索计划:', JSON.stringify(searchPlan, null, 2));
 
-    // ========== STEP 1: Multi-source Retrieval ==========
-    const searchPromises = [];
+    // ========== STEP 1: Multi-source Retrieval (使用统一的 serpapi-search) ==========
     const rawResults = {
       academic_sources: [] as any[],
       news_sources: [] as any[],
@@ -226,27 +225,61 @@ Output Format:
       personal_sources: [] as any[]
     };
 
-    // 1. Google Scholar 搜索（使用 SerpAPI）
+    // 构建统一搜索请求
+    const serpapiQueries: {
+      scholar?: { q: string; num: number; hl: string; as_ylo: number }[];
+      news?: { q: string; hl: string; gl: string }[];
+      search?: { q: string; num: number; hl: string; gl: string }[];
+    } = {};
+
     if (searchPlan.academic_queries && searchPlan.academic_queries.length > 0) {
-      addLog('========== Google Scholar 搜索开始 ==========');
-      for (const query of searchPlan.academic_queries.slice(0, 2)) {
-        addLog(`[Google Scholar] 查询: "${query}"`);
-        
-        searchPromises.push(
-          supabase.functions.invoke('serpapi-google-scholar', {
-            body: { q: query, num: 10, hl: 'zh-CN', as_ylo: 2020 }
-          })
-          .then(({ data, error }) => {
-            if (error) {
-              addLog(`[Google Scholar] 调用失败: ${error.message}`);
-              throw error;
-            }
-            if (data.error) {
-              addLog(`[Google Scholar] API 返回错误: ${data.error}`);
-              return;
-            }
-            if (data.results && data.results.length > 0) {
-              const mapped = data.results.slice(0, 5).map((item: any) => ({
+      addLog('========== 准备 Google Scholar 搜索 ==========');
+      serpapiQueries.scholar = searchPlan.academic_queries.slice(0, 2).map(q => ({
+        q,
+        num: 10,
+        hl: 'zh-CN',
+        as_ylo: 2020
+      }));
+      addLog(`[Scholar] 查询: ${serpapiQueries.scholar.map(q => q.q).join(', ')}`);
+    }
+
+    if (searchPlan.news_queries && searchPlan.news_queries.length > 0) {
+      addLog('========== 准备 Google News 搜索 ==========');
+      serpapiQueries.news = searchPlan.news_queries.slice(0, 2).map(q => ({
+        q,
+        hl: 'zh-CN',
+        gl: 'cn'
+      }));
+      addLog(`[News] 查询: ${serpapiQueries.news.map(q => q.q).join(', ')}`);
+    }
+
+    if (searchPlan.web_queries && searchPlan.web_queries.length > 0) {
+      addLog('========== 准备 Google Search 搜索 ==========');
+      serpapiQueries.search = searchPlan.web_queries.slice(0, 2).map(q => ({
+        q,
+        num: 10,
+        hl: 'zh-CN',
+        gl: 'cn'
+      }));
+      addLog(`[Search] 查询: ${serpapiQueries.search.map(q => q.q).join(', ')}`);
+    }
+
+    // 调用统一的 serpapi-search 函数（内部并行）
+    if (Object.keys(serpapiQueries).length > 0) {
+      addLog('========== 调用 serpapi-search（并行搜索）==========');
+      
+      const { data: serpapiResults, error: serpapiError } = await supabase.functions.invoke('serpapi-search', {
+        body: { queries: serpapiQueries }
+      });
+
+      if (serpapiError) {
+        addLog(`[SerpAPI] 调用失败: ${serpapiError.message}`);
+      } else if (serpapiResults) {
+        // 处理 Scholar 结果
+        if (serpapiResults.scholar) {
+          for (const result of serpapiResults.scholar) {
+            if (result.results && result.results.length > 0) {
+              const mapped = result.results.slice(0, 5).map((item: any) => ({
                 title: item.title || '',
                 authors: item.publication_info?.summary || '',
                 abstract: item.snippet || '',
@@ -255,40 +288,19 @@ Output Format:
                 url: item.link || ''
               }));
               rawResults.academic_sources.push(...mapped);
-              addLog(`[Google Scholar] 找到 ${mapped.length} 条结果`);
-            } else {
-              addLog(`[Google Scholar] 未找到结果`);
             }
-          })
-          .catch(err => {
-            addLog(`[Google Scholar] 搜索异常: ${err.message}`);
-            console.error('[Google Scholar] 搜索失败:', err);
-          })
-        );
-      }
-    }
+            if (result.error) {
+              addLog(`[Scholar] 错误: ${result.error}`);
+            }
+          }
+          addLog(`[Scholar] 找到 ${rawResults.academic_sources.length} 条结果`);
+        }
 
-    // 2. Google News 搜索（使用 SerpAPI）
-    if (searchPlan.news_queries && searchPlan.news_queries.length > 0) {
-      addLog('========== Google News 搜索开始 ==========');
-      for (const query of searchPlan.news_queries.slice(0, 2)) {
-        addLog(`[Google News] 查询: "${query}"`);
-        
-        searchPromises.push(
-          supabase.functions.invoke('serpapi-google-news', {
-            body: { q: query, hl: 'zh-CN', gl: 'cn' }
-          })
-          .then(({ data, error }) => {
-            if (error) {
-              addLog(`[Google News] 调用失败: ${error.message}`);
-              throw error;
-            }
-            if (data.error) {
-              addLog(`[Google News] API 返回错误: ${data.error}`);
-              return;
-            }
-            if (data.results && data.results.length > 0) {
-              const mapped = data.results.map((item: any) => ({
+        // 处理 News 结果
+        if (serpapiResults.news) {
+          for (const result of serpapiResults.news) {
+            if (result.results && result.results.length > 0) {
+              const mapped = result.results.map((item: any) => ({
                 title: item.title || '',
                 summary: item.snippet || '',
                 source: item.source || '',
@@ -296,40 +308,19 @@ Output Format:
                 url: item.link || ''
               }));
               rawResults.news_sources.push(...mapped);
-              addLog(`[Google News] 找到 ${mapped.length} 条结果`);
-            } else {
-              addLog(`[Google News] 未找到结果`);
             }
-          })
-          .catch(err => {
-            addLog(`[Google News] 搜索异常: ${err.message}`);
-            console.error('[Google News] 搜索失败:', err);
-          })
-        );
-      }
-    }
+            if (result.error) {
+              addLog(`[News] 错误: ${result.error}`);
+            }
+          }
+          addLog(`[News] 找到 ${rawResults.news_sources.length} 条结果`);
+        }
 
-    // 3. Google Search 搜索（使用 SerpAPI）
-    if (searchPlan.web_queries && searchPlan.web_queries.length > 0) {
-      addLog('========== Google Search 搜索开始 ==========');
-      for (const query of searchPlan.web_queries.slice(0, 2)) {
-        addLog(`[Google Search] 查询: "${query}"`);
-        
-        searchPromises.push(
-          supabase.functions.invoke('serpapi-google-search', {
-            body: { q: query, num: 10, hl: 'zh-CN', gl: 'cn' }
-          })
-          .then(({ data, error }) => {
-            if (error) {
-              addLog(`[Google Search] 调用失败: ${error.message}`);
-              throw error;
-            }
-            if (data.error) {
-              addLog(`[Google Search] API 返回错误: ${data.error}`);
-              return;
-            }
-            if (data.results && data.results.length > 0) {
-              const mapped = data.results.map((item: any) => ({
+        // 处理 Web Search 结果
+        if (serpapiResults.search) {
+          for (const result of serpapiResults.search) {
+            if (result.results && result.results.length > 0) {
+              const mapped = result.results.map((item: any) => ({
                 title: item.title || '',
                 site_name: item.displayed_link || '',
                 snippet: item.snippet || '',
@@ -337,33 +328,32 @@ Output Format:
                 last_crawled_at: ''
               }));
               rawResults.web_sources.push(...mapped);
-              addLog(`[Google Search] 找到 ${mapped.length} 条结果`);
-            } else {
-              addLog(`[Google Search] 未找到结果`);
             }
-          })
-          .catch(err => {
-            addLog(`[Google Search] 搜索异常: ${err.message}`);
-            console.error('[Google Search] 搜索失败:', err);
-          })
-        );
+            if (result.error) {
+              addLog(`[Search] 错误: ${result.error}`);
+            }
+          }
+          addLog(`[Search] 找到 ${rawResults.web_sources.length} 条结果`);
+        }
       }
     }
 
     // 4. User Library 搜索
+    const userSearchPromises = [];
+    
     if (userId && searchPlan.user_library_queries && searchPlan.user_library_queries.length > 0) {
       addLog('========== User Library 搜索开始 ==========');
       const query = searchPlan.user_library_queries.join(' ');
       addLog(`[User Library] 查询: "${query}"`);
       
-      searchPromises.push(
+      userSearchPromises.push(
         supabase
           .from('reference_articles')
           .select('*')
           .eq('user_id', userId)
           .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
           .limit(10)
-          .then(({ data, error }) => {
+          .then(({ data, error }: { data: any; error: any }) => {
             if (error) {
               console.error('[User Library] 搜索失败:', error);
               return;
@@ -384,14 +374,14 @@ Output Format:
 
       // 5. Personal Materials 搜索
       addLog('========== Personal Materials 搜索开始 ==========');
-      searchPromises.push(
+      userSearchPromises.push(
         supabase
           .from('materials')
           .select('*')
           .eq('user_id', userId)
           .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
           .limit(10)
-          .then(({ data, error }) => {
+          .then(({ data, error }: { data: any; error: any }) => {
             if (error) {
               console.error('[Personal Materials] 搜索失败:', error);
               return;
@@ -410,9 +400,11 @@ Output Format:
       );
     }
 
-    // 等待所有搜索完成
-    addLog('========== 等待所有搜索完成 ==========');
-    await Promise.all(searchPromises);
+    // 等待用户库搜索完成
+    if (userSearchPromises.length > 0) {
+      addLog('========== 等待用户库搜索完成 ==========');
+      await Promise.all(userSearchPromises);
+    }
 
     addLog('========== 搜索完成统计 ==========');
     addLog(`学术来源: ${rawResults.academic_sources.length}`);

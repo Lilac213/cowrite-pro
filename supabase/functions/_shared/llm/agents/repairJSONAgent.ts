@@ -81,11 +81,10 @@ ${inputText}
   const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
 
   try {
-    // 使用双重LLM策略：先尝试 Gemini，失败后回退到 Qwen
     const repairedText = await callLLMWithFallback({
       prompt: fullPrompt,
-      model: 'gemini-2.0-flash-exp', // 首选模型
-      temperature: 0, // 确定性修复，不要随机
+      model: 'gemini-2.5-flash',
+      temperature: 0,
       maxTokens: 8192,
     });
 

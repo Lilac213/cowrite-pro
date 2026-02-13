@@ -75,7 +75,7 @@ export async function runBriefAgent(input: BriefInput): Promise<WritingBrief> {
     agentName: 'briefAgent',
     prompt,
     schema: briefSchema,
-    model: 'gemini-2.0-flash-exp',
+    model: 'gemini-2.5-flash',
     temperature: 0.4,
   });
   

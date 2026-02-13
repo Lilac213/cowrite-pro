@@ -14,16 +14,20 @@
 
 通过 SerpAPI 统一调用以下 Google 搜索服务：
 
+- **统一入口**: `serpapi-search` Edge Function
+  - 支持单引擎和多引擎并行搜索
+  - 内部使用 Promise.all 实现并行调用
+
 - **Google Scholar**: 学术文献搜索
-  - Edge Function: `serpapi-google-scholar`
+  - 引擎标识: `scholar`
   - 用途: 检索学术论文、引用数据
 
 - **Google Search**: 网页搜索
-  - Edge Function: `serpapi-google-search`
+  - 引擎标识: `search`
   - 用途: 检索网页内容、通用信息
 
 - **Google News**: 新闻搜索
-  - Edge Function: `serpapi-google-news`
+  - 引擎标识: `news`
   - 用途: 检索最新新闻资讯
 
 ### 3. 配置架构
@@ -118,39 +122,42 @@ const response = await fetch(
 
 #### 在 Edge Function 中使用 SerpAPI
 
-所有 SerpAPI 相关的 Edge Functions 都遵循相同的模式：
+使用统一的 `serpapi-search` 函数：
 
+**单引擎搜索**:
 ```typescript
-// 1. 优先从环境变量读取
-let apiKey = Deno.env.get('SERPAPI_API_KEY');
-
-// 2. 如果环境变量没有配置，从数据库读取
-if (!apiKey) {
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
-  
-  const { data: config } = await supabase
-    .from('system_config')
-    .select('config_value')
-    .eq('config_key', 'search_api_key')
-    .maybeSingle();
-    
-  if (config?.config_value) {
-    apiKey = config.config_value;
-    console.log('[SerpAPI] 从数据库加载了 API Key');
+const { data, error } = await supabase.functions.invoke('serpapi-search', {
+  body: {
+    single: {
+      engine: 'scholar',  // 'scholar' | 'news' | 'search'
+      query: { q: 'AI Agent 商业化', num: 10 }
+    }
   }
-}
-
-// 3. 如果都没有配置，返回错误
-if (!apiKey) {
-  return new Response(
-    JSON.stringify({ error: 'SerpAPI 未配置' }),
-    { status: 500, headers: corsHeaders }
-  );
-}
-
-// 4. 使用 API Key 调用 SerpAPI
-const serpApiUrl = `https://serpapi.com/search?api_key=${apiKey}&...`;
+});
 ```
+
+**多引擎并行搜索**:
+```typescript
+const { data, error } = await supabase.functions.invoke('serpapi-search', {
+  body: {
+    queries: {
+      scholar: [{ q: 'AI Agent commercialization', num: 10, as_ylo: 2020 }],
+      news: [{ q: 'AI Agent 商业化 新闻', hl: 'zh-CN' }],
+      search: [{ q: 'AI Agent business model', num: 10 }]
+    }
+  }
+});
+
+// 返回结果按引擎类型分组
+// data.scholar - Scholar 搜索结果数组
+// data.news - News 搜索结果数组
+// data.search - Web 搜索结果数组
+```
+
+**优势**:
+- 1 次 HTTP 请求替代 3 次
+- 内部 Promise.all 并行执行
+- 减少冷启动开销
 
 ### 7. 测试验证
 
@@ -214,9 +221,8 @@ WHERE config_key = 'search_api_key';
 
 #### Edge Functions
 - `supabase/functions/sync-config-to-secrets/index.ts` - 配置同步
-- `supabase/functions/serpapi-google-scholar/index.ts` - Google Scholar 搜索
-- `supabase/functions/serpapi-google-search/index.ts` - Google Search 搜索
-- `supabase/functions/serpapi-google-news/index.ts` - Google News 搜索
+- `supabase/functions/serpapi-search/index.ts` - 统一搜索入口（支持 Scholar/News/Search）
+- `supabase/functions/research-retrieval-agent/index.ts` - 资料检索 Agent（调用 serpapi-search）
 
 #### 数据库
 - `system_config` 表 - 存储配置
@@ -262,4 +268,5 @@ WHERE config_key = 'search_api_key';
 ✅ SerpAPI 已成功配置并集成到系统中
 ✅ 管理面板可以正常保存和显示配置
 ✅ 双层配置机制确保高可用性
-✅ 所有搜索功能（Google Scholar、Google Search、Google News）已就绪
+✅ 统一的 `serpapi-search` 函数支持单引擎和多引擎并行搜索
+✅ 减少了 HTTP 请求次数和冷启动开销

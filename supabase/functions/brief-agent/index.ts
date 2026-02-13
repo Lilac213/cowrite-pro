@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { runBriefAgent } from './llm/agents/briefAgent.ts';
+import { runBriefAgent } from '../_shared/llm/agents/briefAgent.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -79,10 +79,20 @@ serve(async (req) => {
   } catch (error) {
     console.error('[brief-agent] 错误:', error);
     
+    let errorDetails: string;
+    if (error instanceof Error) {
+      errorDetails = error.message;
+      console.error('[brief-agent] 错误堆栈:', error.stack);
+    } else if (typeof error === 'object' && error !== null) {
+      errorDetails = JSON.stringify(error);
+    } else {
+      errorDetails = String(error);
+    }
+    
     return new Response(
       JSON.stringify({
         error: 'Brief Agent 运行失败',
-        details: error instanceof Error ? error.message : String(error)
+        details: errorDetails
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

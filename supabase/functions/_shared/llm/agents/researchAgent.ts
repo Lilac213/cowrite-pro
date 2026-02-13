@@ -138,7 +138,7 @@ export async function runResearchRetrieval(input: RetrievalInput): Promise<any> 
       required: ['search_queries', 'search_directions'],
       optional: ['personal_material_ids']
     },
-    model: 'gemini-2.0-flash-exp',
+    model: 'gemini-2.5-flash',
     temperature: 0.3,
   });
   
@@ -230,7 +230,7 @@ export async function runResearchSynthesis(input: SynthesisInput): Promise<Synth
         return true;
       }
     },
-    model: 'gemini-2.0-flash-exp',
+    model: 'gemini-2.5-flash',
     temperature: 0.3,
   });
   

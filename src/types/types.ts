@@ -8,8 +8,6 @@ export type ProjectStatus =
   | 'outline_confirmed'
   | 'drafting'
   | 'review_pass_1'
-  | 'review_pass_2'
-  | 'review_pass_3'
   | 'layout_export'
   | 'completed';
 
