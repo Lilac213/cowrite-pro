@@ -76,18 +76,7 @@ serve(async (req) => {
     const siteUrl = Deno.env.get('SITE_URL') || 'https://www.cowrite.top';
     const registerUrl = `${siteUrl}/login`;
 
-    const { error: emailError } = await supabaseClient.auth.admin.inviteUserByEmail(email, {
-      data: {
-        invite_code: inviteCode,
-        invite_credits: credits,
-      },
-      redirectTo: registerUrl,
-    });
-
-    if (emailError) {
-      console.error('发送邀请邮件失败:', emailError);
-      
-      const emailContent = `
+    const emailContent = `
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -182,37 +171,39 @@ serve(async (req) => {
   </table>
 </body>
 </html>
-      `;
+    `;
 
-      const resendKey = Deno.env.get('RESEND_API_KEY');
-      
-      if (resendKey) {
-        const resendResponse = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${resendKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: 'CoWrite <noreply@cowrite.top>',
-            to: email,
-            subject: '您收到一封来自 CoWrite 的邀请',
-            html: emailContent,
-          }),
-        });
-
-        if (!resendResponse.ok) {
-          const resendError = await resendResponse.text();
-          console.error('Resend 发送失败:', resendError);
-          throw new Error('邮件发送失败，请稍后重试');
-        }
-      } else {
-        throw new Error('邮件服务未配置，请联系管理员');
-      }
+    const resendKey = Deno.env.get('RESEND_API_KEY');
+    
+    if (!resendKey) {
+      throw new Error('邮件服务未配置，请联系管理员');
     }
 
+    const resendResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'CoWrite <noreply@cowrite.top>',
+        to: email,
+        subject: '您收到一封来自 CoWrite 的邀请',
+        html: emailContent,
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const resendError = await resendResponse.text();
+      console.error('Resend 发送失败:', resendError);
+      throw new Error(`邮件发送失败: ${resendError}`);
+    }
+
+    const resendResult = await resendResponse.json();
+    console.log('邮件发送成功:', resendResult);
+
     return new Response(
-      JSON.stringify({ success: true, message: '邀请邮件已发送' }),
+      JSON.stringify({ success: true, message: '邀请邮件已发送', emailId: resendResult.id }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
