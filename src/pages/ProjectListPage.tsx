@@ -13,6 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Plus, Trash2, FileText, AlertCircle, ShoppingCart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { formatDateTime } from '@/utils/date';
 
 const statusLabels: Record<string, string> = {
   init: '初始化',
@@ -278,7 +279,7 @@ export default function ProjectListPage() {
                   </AlertDialog>
                 </div>
                 <CardDescription>
-                  创建于 {new Date(project.created_at).toLocaleDateString('zh-CN')}
+                  创建于 {formatDateTime(project.created_at)}
                 </CardDescription>
               </CardHeader>
               <CardContent onClick={() => navigate(`/project/${project.id}`)}>

@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
 import { Copy, Plus, Ban, Edit, Send } from 'lucide-react';
+import { formatDateTime } from '@/utils/date';
 
 // 同步配置到 Edge Function Secrets
 async function syncConfigToSecrets() {
@@ -461,7 +462,7 @@ export default function AdminPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {new Date(profile.created_at).toLocaleDateString('zh-CN')}
+                        {formatDateTime(profile.created_at)}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
@@ -599,7 +600,7 @@ export default function AdminPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {new Date(code.created_at).toLocaleDateString('zh-CN')}
+                        {formatDateTime(code.created_at)}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
