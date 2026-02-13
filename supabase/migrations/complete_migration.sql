@@ -295,28 +295,34 @@ SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
   user_count int;
-  extracted_username text;
+  meta_username text;
 BEGIN
   SELECT COUNT(*) INTO user_count FROM profiles;
   
-  extracted_username := split_part(NEW.email, '@', 1);
+  meta_username := NEW.raw_user_meta_data->>'username';
+  
+  IF meta_username IS NULL THEN
+    meta_username := split_part(NEW.email, '@', 1);
+  END IF;
   
   INSERT INTO public.profiles (id, username, role)
   VALUES (
     NEW.id,
-    extracted_username,
+    meta_username,
     CASE WHEN user_count = 0 THEN 'admin'::public.user_role ELSE 'user'::public.user_role END
-  );
+  )
+  ON CONFLICT (id) DO NOTHING;
+  
   RETURN NEW;
 END;
 $$;
 
--- 创建触发器
+-- 创建触发器：用户注册时立即创建 profile
 DROP TRIGGER IF EXISTS on_auth_user_confirmed ON auth.users;
-CREATE TRIGGER on_auth_user_confirmed
-  AFTER UPDATE ON auth.users
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
   FOR EACH ROW
-  WHEN (OLD.confirmed_at IS NULL AND NEW.confirmed_at IS NOT NULL)
   EXECUTE FUNCTION handle_new_user();
 
 -- ============================================

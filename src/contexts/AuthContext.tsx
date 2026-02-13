@@ -21,7 +21,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signInWithUsername: (username: string, password: string) => Promise<{ error: Error | null }>;
-  signUpWithUsername: (username: string, password: string) => Promise<{ error: Error | null; userId?: string }>;
+  signUpWithEmail: (username: string, email: string, password: string) => Promise<{ error: Error | null; userId?: string }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -66,7 +66,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithUsername = async (username: string, password: string) => {
     try {
-      const email = `${username}@miaoda.com`;
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', username)
+        .maybeSingle();
+
+      const profile = profileData as { id: string } | null;
+      
+      if (!profile?.id) {
+        throw new Error('用户名不存在');
+      }
+
+      const { data: authUser, error: userError } = await supabase.auth.admin.getUserById(profile.id);
+      
+      if (userError || !authUser.user?.email) {
+        throw new Error('用户信息获取失败');
+      }
+
+      const email = authUser.user.email;
+      
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -79,9 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signUpWithUsername = async (username: string, password: string) => {
+  const signUpWithEmail = async (username: string, email: string, password: string) => {
     try {
-      const email = `${username}@miaoda.com`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -106,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signInWithUsername, signUpWithUsername, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signInWithUsername, signUpWithEmail, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

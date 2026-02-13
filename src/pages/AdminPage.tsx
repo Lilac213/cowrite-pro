@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
-import { Copy, Plus, Ban, Edit } from 'lucide-react';
+import { Copy, Plus, Ban, Edit, Send } from 'lucide-react';
 
 // 同步配置到 Edge Function Secrets
 async function syncConfigToSecrets() {
@@ -43,10 +43,14 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creditDialogOpen, setCreditDialogOpen] = useState(false);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [sending, setSending] = useState(false);
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
+  const [selectedCode, setSelectedCode] = useState<InvitationCode | null>(null);
   const [newCredits, setNewCredits] = useState(0);
   const [newCodeCredits, setNewCodeCredits] = useState(100);
+  const [inviteEmail, setInviteEmail] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -205,6 +209,60 @@ export default function AdminPage() {
         title: '停用失败',
         variant: 'destructive',
       });
+    }
+  };
+
+  const openInviteDialog = (code: InvitationCode) => {
+    setSelectedCode(code);
+    setInviteEmail('');
+    setInviteDialogOpen(true);
+  };
+
+  const handleSendInvite = async () => {
+    if (!selectedCode || !inviteEmail) return;
+    
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail)) {
+      toast({
+        title: '邮箱格式错误',
+        description: '请输入有效的邮箱地址',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSending(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('未登录');
+      }
+
+      const { error } = await supabase.functions.invoke('send-invite-email', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: {
+          email: inviteEmail,
+          inviteCode: selectedCode.code,
+          credits: selectedCode.credits,
+        },
+      });
+
+      if (error) throw error;
+
+      setInviteDialogOpen(false);
+      toast({
+        title: '发送成功',
+        description: `邀请邮件已发送到 ${inviteEmail}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: '发送失败',
+        description: error.message || '请稍后重试',
+        variant: 'destructive',
+      });
+    } finally {
+      setSending(false);
     }
   };
 
@@ -549,17 +607,29 @@ export default function AdminPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleCopyCode(code.code)}
+                            title="复制邀请码"
                           >
                             <Copy className="h-3 w-3" />
                           </Button>
                           {code.is_active && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeactivateCode(code.id)}
-                            >
-                              <Ban className="h-3 w-3" />
-                            </Button>
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openInviteDialog(code)}
+                                title="发送邀请邮件"
+                              >
+                                <Send className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeactivateCode(code.id)}
+                                title="停用邀请码"
+                              >
+                                <Ban className="h-3 w-3" />
+                              </Button>
+                            </>
                           )}
                         </div>
                       </TableCell>
@@ -571,6 +641,48 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* 发送邀请邮件对话框 */}
+      <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>发送邀请邮件</DialogTitle>
+            <DialogDescription>
+              向用户发送包含邀请码的邮件
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="p-3 bg-muted rounded-lg space-y-1">
+              <div className="text-sm">
+                <span className="text-muted-foreground">邀请码：</span>
+                <span className="font-mono font-bold ml-2">{selectedCode?.code}</span>
+              </div>
+              <div className="text-sm">
+                <span className="text-muted-foreground">赠送点数：</span>
+                <span className="font-bold ml-2">{selectedCode?.credits} 点</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-email">用户邮箱</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="请输入用户邮箱地址"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleSendInvite} disabled={sending || !inviteEmail}>
+              {sending ? '发送中...' : '发送邀请'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

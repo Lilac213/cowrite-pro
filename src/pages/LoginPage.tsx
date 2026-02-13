@@ -12,10 +12,11 @@ import { useInvitationCode } from '@/db/api';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [invitationCode, setInvitationCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signInWithUsername, signUpWithUsername } = useAuth();
+  const { signInWithUsername, signUpWithEmail } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -47,7 +48,6 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // 验证用户名格式
       if (!/^[a-zA-Z0-9_]+$/.test(username)) {
         toast({
           title: '注册失败',
@@ -58,7 +58,16 @@ export default function LoginPage() {
         return;
       }
 
-      // 检查用户名是否已存在
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        toast({
+          title: '注册失败',
+          description: '请输入有效的邮箱地址',
+          variant: 'destructive',
+        });
+        setLoading(false);
+        return;
+      }
+
       const { data: existingUser } = await supabase
         .from('profiles')
         .select('username')
@@ -75,7 +84,7 @@ export default function LoginPage() {
         return;
       }
 
-      const { error, userId } = await signUpWithUsername(username, password);
+      const { error, userId } = await signUpWithEmail(username, email, password);
       if (error) {
         toast({
           title: '注册失败',
@@ -86,31 +95,31 @@ export default function LoginPage() {
         return;
       }
 
-      // 如果填写了邀请码，使用邀请码
       if (invitationCode && userId) {
         try {
           await useInvitationCode(invitationCode, userId);
           toast({
             title: '注册成功',
-            description: '邀请码已生效，正在自动登录...',
+            description: '邀请码已生效，请查收验证邮件',
           });
         } catch (inviteError: any) {
-          // 邀请码失败不影响注册
           toast({
             title: '注册成功',
-            description: `邀请码无效：${inviteError.message}`,
+            description: `邀请码无效：${inviteError.message}，请查收验证邮件`,
           });
         }
       } else {
         toast({
           title: '注册成功',
-          description: '正在自动登录...',
+          description: '验证邮件已发送到您的邮箱，请点击链接完成验证后登录',
         });
       }
 
-      // 自动登录
       setTimeout(() => {
-        navigate(from, { replace: true });
+        setUsername('');
+        setEmail('');
+        setPassword('');
+        setInvitationCode('');
       }, 1000);
     } finally {
       setLoading(false);
@@ -175,11 +184,22 @@ export default function LoginPage() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="register-email">邮箱</Label>
+                  <Input
+                    id="register-email"
+                    type="email"
+                    placeholder="请输入邮箱地址"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="register-password">密码</Label>
                   <Input
                     id="register-password"
                     type="password"
-                    placeholder="请输入密码"
+                    placeholder="请输入密码（至少6位）"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
