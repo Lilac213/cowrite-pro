@@ -68,26 +68,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, email')
         .eq('username', username)
         .maybeSingle();
 
-      const profile = profileData as { id: string } | null;
+      const profile = profileData as { id: string; email: string } | null;
       
       if (!profile?.id) {
         throw new Error('用户名不存在');
       }
 
-      const { data: authUser, error: userError } = await supabase.auth.admin.getUserById(profile.id);
-      
-      if (userError || !authUser.user?.email) {
-        throw new Error('用户信息获取失败');
+      if (!profile?.email) {
+        throw new Error('用户邮箱信息缺失，请联系管理员');
       }
 
-      const email = authUser.user.email;
-      
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: profile.email,
         password,
       });
 
