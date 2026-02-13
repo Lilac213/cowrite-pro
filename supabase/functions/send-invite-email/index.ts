@@ -73,7 +73,7 @@ serve(async (req) => {
       );
     }
 
-    const siteUrl = Deno.env.get('SITE_URL') || 'https://cowrite.pro';
+    const siteUrl = Deno.env.get('SITE_URL') || 'https://www.cowrite.top';
     const registerUrl = `${siteUrl}/login`;
 
     const { error: emailError } = await supabaseClient.auth.admin.inviteUserByEmail(email, {
