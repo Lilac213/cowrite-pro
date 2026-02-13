@@ -194,7 +194,7 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'CoWrite <noreply@cowrite.pro>',
+            from: 'CoWrite <noreply@cowrite.top>',
             to: email,
             subject: '您收到一封来自 CoWrite 的邀请',
             html: emailContent,
