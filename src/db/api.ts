@@ -1054,6 +1054,10 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
     localReferences,
   };
 
+  console.log('[agentDrivenResearchWorkflow] retrievalResults:', retrievalResults);
+  console.log('[agentDrivenResearchWorkflow] retrievalResults keys:', retrievalResults ? Object.keys(retrievalResults) : 'null');
+  console.log('[agentDrivenResearchWorkflow] combinedResults:', combinedResults);
+
   return {
     retrievalResults: combinedResults,
     synthesisResults: null,

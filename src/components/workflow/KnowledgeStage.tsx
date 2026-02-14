@@ -655,6 +655,11 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       console.log('[KnowledgeStage] agentDrivenResearchWorkflow 返回结果:');
       console.log('  - retrievalResults:', retrievalResults);
       console.log('  - synthesisResults:', synthesisResults);
+      console.log('  - retrievalResults keys:', retrievalResults ? Object.keys(retrievalResults) : 'null');
+      console.log('  - academic_queries:', retrievalResults?.academic_queries);
+      console.log('  - news_queries:', retrievalResults?.news_queries);
+      console.log('  - web_queries:', retrievalResults?.web_queries);
+      console.log('  - search_summary:', retrievalResults?.search_summary);
 
       // 提取并显示日志
       if (retrievalResults.logs && Array.isArray(retrievalResults.logs)) {
