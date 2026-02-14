@@ -1310,32 +1310,14 @@ export async function checkProjectLimit(userId: string): Promise<boolean> {
   return profile.available_credits > 0;
 }
 
-// 增加项目创建次数并扣除点数
+// 增加项目创建次数
 export async function incrementProjectCount(userId: string): Promise<void> {
   const profile = await getProfile(userId);
   if (!profile) throw new Error('用户不存在');
-  
-  // 管理员无限点数，只增加使用次数
-  if (profile.unlimited_credits) {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ projects_created: profile.projects_created + 1 })
-      .eq('id', userId);
-    if (error) throw error;
-    return;
-  }
-
-  // 普通用户检查点数
-  if (profile.available_credits <= 0) {
-    throw new Error('点数不足，请购买点数');
-  }
 
   const { error } = await supabase
     .from('profiles')
-    .update({ 
-      projects_created: profile.projects_created + 1,
-      available_credits: profile.available_credits - 1,
-    })
+    .update({ projects_created: profile.projects_created + 1 })
     .eq('id', userId);
 
   if (error) throw error;
