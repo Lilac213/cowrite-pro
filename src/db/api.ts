@@ -2170,11 +2170,17 @@ export async function callReviewAgent(projectId: string) {
 export async function deductUserPoints(userId: string, points: number, reason: string) {
   const { data: profile, error: fetchError } = await supabase
     .from('profiles')
-    .select('available_credits')
+    .select('available_credits, unlimited_credits')
     .eq('id', userId)
     .single();
 
   if (fetchError) throw fetchError;
+
+  // 如果用户有无限点数，不扣点
+  if (profile.unlimited_credits) {
+    console.log(`[deductUserPoints] 用户 ${userId} 有无限点数，跳过扣点，原因：${reason}`);
+    return -1; // 返回 -1 表示无限点数
+  }
 
   const newBalance = (profile.available_credits || 0) - points;
   if (newBalance < 0) {
