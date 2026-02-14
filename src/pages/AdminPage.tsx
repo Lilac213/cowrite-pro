@@ -167,12 +167,18 @@ export default function AdminPage() {
     try {
       await setUserCredits(selectedUser.id, newCredits);
       setProfiles(profiles.map(p => 
-        p.id === selectedUser.id ? { ...p, available_credits: newCredits } : p
+        p.id === selectedUser.id ? { 
+          ...p, 
+          available_credits: newCredits === -1 ? 0 : newCredits,
+          unlimited_credits: newCredits === -1
+        } : p
       ));
       setCreditDialogOpen(false);
       toast({
         title: '设置成功',
-        description: `已为 ${selectedUser.username} 设置 ${newCredits} 点数`,
+        description: newCredits === -1 
+          ? `已为 ${selectedUser.username} 设置无限点数`
+          : `已为 ${selectedUser.username} 设置 ${newCredits} 点数`,
       });
     } catch (error) {
       toast({
@@ -184,7 +190,8 @@ export default function AdminPage() {
 
   const openCreditDialog = (user: Profile) => {
     setSelectedUser(user);
-    setNewCredits(user.available_credits);
+    // 如果用户有无限点数，显示 -1
+    setNewCredits(user.unlimited_credits ? -1 : user.available_credits);
     setCreditDialogOpen(true);
   };
 
@@ -504,10 +511,11 @@ export default function AdminPage() {
                   <Input
                     id="credits"
                     type="number"
-                    min="0"
+                    min="-1"
                     value={newCredits}
                     onChange={(e) => setNewCredits(parseInt(e.target.value) || 0)}
                   />
+                  <p className="text-xs text-muted-foreground">输入 -1 设置为无限点数</p>
                 </div>
               </div>
               <DialogFooter>

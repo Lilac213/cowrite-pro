@@ -960,6 +960,75 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
   // 第二步：调用外部 Research Retrieval Agent 检索资料
   const retrievalResults = await researchRetrievalAgent(requirementsDoc, projectId, userId, sessionId);
 
+  // 第三步：将搜索结果保存到数据库（如果有 sessionId）
+  if (sessionId && retrievalResults) {
+    console.log('[agentDrivenResearchWorkflow] 开始保存搜索结果到数据库，sessionId:', sessionId);
+    
+    const materialsToSave: Array<Omit<RetrievedMaterial, 'id' | 'created_at'>> = [];
+    
+    // 保存学术来源
+    if (retrievalResults.academic_sources?.length > 0) {
+      for (const source of retrievalResults.academic_sources) {
+        materialsToSave.push({
+          session_id: sessionId,
+          source_type: 'academic',
+          title: source.title || '',
+          url: source.url || '',
+          abstract: source.full_text || source.extracted_content?.join('\n') || '',
+          full_text: source.full_text || '',
+          authors: source.authors || '',
+          year: source.year || '',
+          citation_count: source.citation_count || 0,
+          is_selected: false,
+          metadata: { original_source: 'GoogleScholar' },
+        });
+      }
+    }
+    
+    // 保存新闻来源
+    if (retrievalResults.news_sources?.length > 0) {
+      for (const source of retrievalResults.news_sources) {
+        materialsToSave.push({
+          session_id: sessionId,
+          source_type: 'news',
+          title: source.title || '',
+          url: source.url || '',
+          abstract: source.full_text || source.extracted_content?.join('\n') || '',
+          full_text: source.full_text || '',
+          published_at: source.published_at || '',
+          is_selected: false,
+          metadata: { original_source: 'GoogleNews', source: source.source },
+        });
+      }
+    }
+    
+    // 保存网络来源
+    if (retrievalResults.web_sources?.length > 0) {
+      for (const source of retrievalResults.web_sources) {
+        materialsToSave.push({
+          session_id: sessionId,
+          source_type: 'web',
+          title: source.title || '',
+          url: source.url || '',
+          abstract: source.full_text || source.extracted_content?.join('\n') || '',
+          full_text: source.full_text || '',
+          is_selected: false,
+          metadata: { original_source: 'WebSearch', site_name: source.site_name },
+        });
+      }
+    }
+    
+    // 批量保存到数据库
+    if (materialsToSave.length > 0) {
+      try {
+        await batchSaveRetrievedMaterials(materialsToSave);
+        console.log('[agentDrivenResearchWorkflow] 成功保存', materialsToSave.length, '条资料到数据库');
+      } catch (error) {
+        console.error('[agentDrivenResearchWorkflow] 保存资料失败:', error);
+      }
+    }
+  }
+
   // 合并本地和外部结果
   const combinedResults = {
     ...retrievalResults,
@@ -1264,7 +1333,7 @@ export async function getAllInvitationCodes(): Promise<InvitationCode[]> {
   return (Array.isArray(data) ? data : []) as InvitationCode[];
 }
 
-// 验证并使用邀请码
+// 验证并使用邀请码（支持多次使用，点数叠加）
 export async function useInvitationCode(code: string, userId: string): Promise<void> {
   // 查询邀请码
   const { data: inviteCode, error: fetchError } = await supabase
@@ -1277,7 +1346,7 @@ export async function useInvitationCode(code: string, userId: string): Promise<v
   if (fetchError) throw fetchError;
   if (!inviteCode) throw new Error('邀请码不存在或已失效');
 
-  // 更新用户点数
+  // 更新用户点数（叠加）
   const profile = await getProfile(userId);
   if (!profile) throw new Error('用户不存在');
 
@@ -1285,7 +1354,6 @@ export async function useInvitationCode(code: string, userId: string): Promise<v
     .from('profiles')
     .update({
       available_credits: profile.available_credits + inviteCode.credits,
-      invitation_code: code,
     })
     .eq('id', userId);
 
@@ -1376,9 +1444,14 @@ export async function incrementProjectCount(userId: string): Promise<void> {
 
 // 管理员为用户配置点数
 export async function setUserCredits(userId: string, credits: number): Promise<void> {
+  // -1 表示无限点数
+  const updateData = credits === -1 
+    ? { available_credits: 0, unlimited_credits: true }
+    : { available_credits: credits, unlimited_credits: false };
+  
   const { error } = await supabase
     .from('profiles')
-    .update({ available_credits: credits })
+    .update(updateData)
     .eq('id', userId);
 
   if (error) throw error;

@@ -159,42 +159,28 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* 邀请码输入 */}
-            {!profile?.invitation_code && (
-              <div className="p-4 border rounded-lg bg-muted/50">
-                <div className="flex items-center gap-2 mb-2">
-                  <Gift className="h-4 w-4 text-primary" />
-                  <p className="text-sm font-medium">使用邀请码</p>
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="输入邀请码获取点数"
-                    value={invitationCode}
-                    onChange={(e) => setInvitationCode(e.target.value.toUpperCase())}
-                    disabled={applyingCode}
-                  />
-                  <Button 
-                    onClick={handleApplyInvitationCode}
-                    disabled={!invitationCode || applyingCode}
-                  >
-                    {applyingCode ? '验证中...' : '使用'}
-                  </Button>
-                </div>
+            {/* 邀请码输入 - 支持多次使用 */}
+            <div className="p-4 border rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2 mb-2">
+                <Gift className="h-4 w-4 text-primary" />
+                <p className="text-sm font-medium">使用邀请码</p>
               </div>
-            )}
-
-            {/* 已使用邀请码显示 */}
-            {profile?.invitation_code && (
-              <div className="p-4 border rounded-lg bg-muted/50">
-                <div className="flex items-center gap-2">
-                  <Gift className="h-4 w-4 text-primary" />
-                  <p className="text-sm">
-                    <span className="text-muted-foreground">已使用邀请码：</span>
-                    <span className="font-mono font-bold ml-2">{profile.invitation_code}</span>
-                  </p>
-                </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="输入邀请码获取点数"
+                  value={invitationCode}
+                  onChange={(e) => setInvitationCode(e.target.value.toUpperCase())}
+                  disabled={applyingCode}
+                />
+                <Button 
+                  onClick={handleApplyInvitationCode}
+                  disabled={!invitationCode || applyingCode}
+                >
+                  {applyingCode ? '验证中...' : '使用'}
+                </Button>
               </div>
-            )}
+              <p className="text-xs text-muted-foreground mt-2">可多次使用邀请码，点数将叠加</p>
+            </div>
           </CardContent>
         </Card>
 
