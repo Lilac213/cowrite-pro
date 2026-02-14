@@ -147,13 +147,23 @@ Rules:
     if (Object.keys(serpapiQueries).length > 0) {
       addLog('========== 调用 serpapi-search（并行搜索）==========');
       
-      const { data: serpapiResults, error: serpapiError } = await supabase.functions.invoke('serpapi-search', {
-        body: { queries: serpapiQueries }
+      // 使用 fetch 直接调用 serpapi-search Edge Function
+      const serpapiUrl = `${supabaseUrl}/functions/v1/serpapi-search`;
+      const serpapiResponse = await fetch(serpapiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({ queries: serpapiQueries }),
       });
 
-      if (serpapiError) {
-        addLog(`[SerpAPI] 调用失败: ${serpapiError.message}`);
-      } else if (serpapiResults) {
+      if (!serpapiResponse.ok) {
+        const errorText = await serpapiResponse.text();
+        addLog(`[SerpAPI] 调用失败: ${serpapiResponse.status} ${errorText}`);
+      } else {
+        const serpapiResults = await serpapiResponse.json();
+        
         if (serpapiResults.scholar) {
           for (const result of serpapiResults.scholar) {
             if (result.results?.length > 0) {
