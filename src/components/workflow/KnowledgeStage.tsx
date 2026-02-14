@@ -886,17 +886,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         variant: 'destructive',
       });
       
-      // 如果是点数不足错误，提供额外提示
-      if (errorMessage.includes('点数不足') || errorMessage.includes('需要3点')) {
-        setTimeout(() => {
-          toast({
-            title: '💡 提示',
-            description: '资料查询和整理需要 3 点。若不是学术性论文，可跳过此步骤直接生成文章结构',
-            duration: 8000,
-          });
-        }, 1000);
-      }
-      
       // 如果是 API 密钥相关错误，提供额外提示
       if (errorMessage.includes('API密钥') || errorMessage.includes('API key') || errorMessage.includes('INTEGRATIONS_API_KEY')) {
         setTimeout(() => {

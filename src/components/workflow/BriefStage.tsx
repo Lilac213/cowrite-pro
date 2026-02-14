@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/db/supabase';
-import { getBrief, createBrief, updateBrief, updateProject, callBriefAgent, checkResearchLimit } from '@/db/api';
+import { getBrief, createBrief, updateBrief, updateProject, callBriefAgent } from '@/db/api';
 import type { Brief } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,7 +32,6 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
   const [confirming, setConfirming] = useState(false);
   const [generatedRequirements, setGeneratedRequirements] = useState('');
   const [showResearchDialog, setShowResearchDialog] = useState(false);
-  const [hasEnoughCredits, setHasEnoughCredits] = useState(false);
   const [isProjectCompleted, setIsProjectCompleted] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -162,15 +161,6 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
 
   const handleConfirm = async () => {
     if (!brief || !user) return;
-
-    // 检查用户是否有足够的点数进行资料查询
-    try {
-      const hasCredits = await checkResearchLimit(user.id);
-      setHasEnoughCredits(hasCredits);
-    } catch (error) {
-      console.error('检查点数失败:', error);
-      setHasEnoughCredits(false);
-    }
 
     // 显示资料查询选择对话框
     setShowResearchDialog(true);
@@ -307,9 +297,6 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
                   <strong className="text-foreground">适合学术论文、研究报告、需要引用文献的写作</strong>
                 </p>
                 <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 space-y-2">
-                  <p className="text-sm font-medium text-primary">
-                    将消耗 3 点
-                  </p>
                   <p className="text-sm text-muted-foreground">
                     可获得：可靠资料 + 可引用来源
                   </p>
@@ -324,12 +311,12 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
           <DialogFooter className="flex-col sm:flex-col gap-2 pt-4">
             <Button
               onClick={handleDoResearch}
-              disabled={!hasEnoughCredits || confirming}
+              disabled={confirming}
               className="w-full"
               size="lg"
             >
               <Search className="h-4 w-4 mr-2" />
-              {hasEnoughCredits ? '进行资料查询（-3 点）' : '点数不足（需要 3 点）'}
+              进行资料查询
             </Button>
             <Button
               onClick={handleSkipResearch}

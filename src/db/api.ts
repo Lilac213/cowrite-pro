@@ -923,18 +923,9 @@ export async function researchSynthesisAgent(retrievalResults: any, requirements
  * 完整的 Agent 驱动的研究工作流
  * 1. 先搜索本地素材库和参考文章库（快速返回）
  * 2. 调用 Research Retrieval Agent 检索外部资料
+ * 注：点数在项目创建时已扣除，此处不再扣点
  */
 export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectId?: string, userId?: string, sessionId?: string) {
-  // 检查并扣除点数（资料查询+整理需要3点）
-  if (userId) {
-    const hasCredits = await checkResearchLimit(userId);
-    if (!hasCredits) {
-      throw new Error('点数不足，资料查询和整理需要3点');
-    }
-    // 扣除点数
-    await deductResearchCredits(userId);
-  }
-
   // 提取搜索关键词
   const searchKeywords = extractKeywords(requirementsDoc);
 
