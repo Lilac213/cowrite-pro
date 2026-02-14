@@ -704,7 +704,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
       toast({
         title: '✅ 资料检索完成',
-        description: `已检索到 ${totalMaterials} 条资料，请选择需要的资料后进入下一阶段',
+        description: `已检索到 ${totalMaterials} 条资料，请选择需要的资料后进入下一阶段`,
       });
 
       setWorkflowResult({
