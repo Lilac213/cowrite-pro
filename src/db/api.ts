@@ -2062,25 +2062,24 @@ export async function callReviewAgent(projectId: string) {
 export async function deductUserPoints(userId: string, points: number, reason: string) {
   const { data: profile, error: fetchError } = await supabase
     .from('profiles')
-    .select('points_balance')
+    .select('available_credits')
     .eq('id', userId)
     .single();
 
   if (fetchError) throw fetchError;
 
-  const newBalance = (profile.points_balance || 0) - points;
+  const newBalance = (profile.available_credits || 0) - points;
   if (newBalance < 0) {
     throw new Error('点数不足');
   }
 
   const { error: updateError } = await supabase
     .from('profiles')
-    .update({ points_balance: newBalance })
+    .update({ available_credits: newBalance })
     .eq('id', userId);
 
   if (updateError) throw updateError;
 
-  // 记录点数变动日志（如果有 points_log 表）
   console.log(`[deductUserPoints] 用户 ${userId} 扣除 ${points} 点，原因：${reason}`);
   
   return newBalance;
