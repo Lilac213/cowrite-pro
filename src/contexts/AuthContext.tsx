@@ -20,7 +20,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signInWithUsername: (username: string, password: string) => Promise<{ error: Error | null }>;
+  signInWithUsernameOrEmail: (usernameOrEmail: string, password: string) => Promise<{ error: Error | null }>;
   signUpWithEmail: (username: string, email: string, password: string) => Promise<{ error: Error | null; userId?: string }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -64,26 +64,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signInWithUsername = async (username: string, password: string) => {
+  const signInWithUsernameOrEmail = async (usernameOrEmail: string, password: string) => {
     try {
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .eq('username', username)
-        .maybeSingle();
-
-      const profile = profileData as { id: string; email: string } | null;
+      const isEmail = usernameOrEmail.includes('@');
       
-      if (!profile?.id) {
-        throw new Error('用户名不存在');
-      }
+      let email = usernameOrEmail;
+      
+      if (!isEmail) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .eq('username', usernameOrEmail)
+          .maybeSingle();
 
-      if (!profile?.email) {
-        throw new Error('用户邮箱信息缺失，请联系管理员');
+        const profile = profileData as { id: string; email: string } | null;
+        
+        if (!profile?.id) {
+          throw new Error('用户名不存在');
+        }
+
+        if (!profile?.email) {
+          throw new Error('用户邮箱信息缺失，请联系管理员');
+        }
+        
+        email = profile.email;
       }
 
       const { error } = await supabase.auth.signInWithPassword({
-        email: profile.email,
+        email,
         password,
       });
 
@@ -120,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signInWithUsername, signUpWithEmail, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signInWithUsernameOrEmail, signUpWithEmail, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

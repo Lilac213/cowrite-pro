@@ -11,12 +11,13 @@ import { supabase } from '@/db/supabase';
 import { useInvitationCode } from '@/db/api';
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('');
+  const [usernameOrEmail, setUsernameOrEmail] = useState('');
+  const [registerUsername, setRegisterUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [invitationCode, setInvitationCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signInWithUsername, signUpWithEmail } = useAuth();
+  const { signInWithUsernameOrEmail, signUpWithEmail } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -28,7 +29,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { error } = await signInWithUsername(username, password);
+      const { error } = await signInWithUsernameOrEmail(usernameOrEmail, password);
       if (error) {
         toast({
           title: '登录失败',
@@ -48,7 +49,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      if (!/^[a-zA-Z0-9_]+$/.test(registerUsername)) {
         toast({
           title: '注册失败',
           description: '用户名只能包含字母、数字和下划线',
@@ -71,7 +72,7 @@ export default function LoginPage() {
       const { data: existingUser } = await supabase
         .from('profiles')
         .select('username')
-        .eq('username', username)
+        .eq('username', registerUsername)
         .maybeSingle();
 
       if (existingUser) {
@@ -84,7 +85,7 @@ export default function LoginPage() {
         return;
       }
 
-      const { error, userId } = await signUpWithEmail(username, email, password);
+      const { error, userId } = await signUpWithEmail(registerUsername, email, password);
       if (error) {
         toast({
           title: '注册失败',
@@ -116,7 +117,7 @@ export default function LoginPage() {
       }
 
       setTimeout(() => {
-        setUsername('');
+        setRegisterUsername('');
         setEmail('');
         setPassword('');
         setInvitationCode('');
@@ -143,13 +144,13 @@ export default function LoginPage() {
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="login-username">用户名</Label>
+                  <Label htmlFor="login-username">用户名或邮箱</Label>
                   <Input
                     id="login-username"
                     type="text"
-                    placeholder="请输入用户名"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="请输入用户名或邮箱"
+                    value={usernameOrEmail}
+                    onChange={(e) => setUsernameOrEmail(e.target.value)}
                     required
                   />
                 </div>
@@ -178,8 +179,8 @@ export default function LoginPage() {
                     id="register-username"
                     type="text"
                     placeholder="只能包含字母、数字和下划线"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    value={registerUsername}
+                    onChange={(e) => setRegisterUsername(e.target.value)}
                     required
                   />
                 </div>
