@@ -39,8 +39,13 @@ export async function getSystemConfig() {
 export async function updateSystemConfig(configKey: string, configValue: string) {
   const { data, error } = await supabase
     .from('system_config')
-    .update({ config_value: configValue })
-    .eq('config_key', configKey)
+    .upsert({ 
+      config_key: configKey, 
+      config_value: configValue,
+      updated_at: new Date().toISOString()
+    }, { 
+      onConflict: 'config_key' 
+    })
     .select()
     .single();
 
