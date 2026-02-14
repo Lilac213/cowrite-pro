@@ -670,19 +670,19 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         setSearchPlan(retrievalResults.search_summary);
         setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 搜索计划已生成']);
         
-        // 显示搜索计划
+        // 显示搜索计划（查询字段在顶层，不在 search_summary 里）
         const planDetails: string[] = [];
         if (retrievalResults.search_summary.interpreted_topic) {
           planDetails.push(`主题理解：${retrievalResults.search_summary.interpreted_topic}`);
         }
-        if (retrievalResults.search_summary.academic_queries?.length > 0) {
-          planDetails.push(`学术搜索：${retrievalResults.search_summary.academic_queries.join(', ')}`);
+        if (retrievalResults.academic_queries?.length > 0) {
+          planDetails.push(`学术搜索：${retrievalResults.academic_queries.join(', ')}`);
         }
-        if (retrievalResults.search_summary.news_queries?.length > 0) {
-          planDetails.push(`新闻搜索：${retrievalResults.search_summary.news_queries.join(', ')}`);
+        if (retrievalResults.news_queries?.length > 0) {
+          planDetails.push(`新闻搜索：${retrievalResults.news_queries.join(', ')}`);
         }
-        if (retrievalResults.search_summary.web_queries?.length > 0) {
-          planDetails.push(`网络搜索：${retrievalResults.search_summary.web_queries.join(', ')}`);
+        if (retrievalResults.web_queries?.length > 0) {
+          planDetails.push(`网络搜索：${retrievalResults.web_queries.join(', ')}`);
         }
         
         if (planDetails.length > 0) {

@@ -293,7 +293,12 @@ Rules:
       })),
       user_library_sources: rawResults.user_library_sources,
       personal_sources: rawResults.personal_sources,
-      search_summary: searchPlan.search_summary
+      search_summary: searchPlan.search_summary,
+      // 添加查询字段到顶层，方便前端显示
+      academic_queries: searchPlan.academic_queries || [],
+      news_queries: searchPlan.news_queries || [],
+      web_queries: searchPlan.web_queries || [],
+      user_library_queries: searchPlan.user_library_queries || []
     };
 
     addLog('========== 返回结果 ==========');
