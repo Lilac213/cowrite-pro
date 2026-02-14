@@ -1548,16 +1548,19 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   };
 
   // 解析搜索计划
-  const searchSummary = retrievalResults?.search_summary ? {
-    interpreted_topic: retrievalResults.search_summary.interpreted_topic,
-    key_dimensions: retrievalResults.search_summary.key_dimensions,
-    academic_queries: retrievalResults.search_summary.academic_queries,
-    news_queries: retrievalResults.search_summary.news_queries,
-    web_queries: retrievalResults.search_summary.web_queries,
-    user_library_queries: retrievalResults.search_summary.user_library_queries,
+  const searchSummary = retrievalResults ? {
+    interpreted_topic: retrievalResults.search_summary?.interpreted_topic,
+    key_dimensions: retrievalResults.search_summary?.key_dimensions,
+    // 查询字段在顶层，不在 search_summary 里
+    academic_queries: retrievalResults.academic_queries,
+    news_queries: retrievalResults.news_queries,
+    web_queries: retrievalResults.web_queries,
+    user_library_queries: retrievalResults.user_library_queries,
   } : undefined;
 
   // Debug logging
+  console.log('[KnowledgeStage] retrievalResults:', retrievalResults);
+  console.log('[KnowledgeStage] retrievalResults keys:', retrievalResults ? Object.keys(retrievalResults) : 'null');
   console.log('[KnowledgeStage] searchSummary:', searchSummary);
   console.log('[KnowledgeStage] academic_queries:', searchSummary?.academic_queries);
   console.log('[KnowledgeStage] news_queries:', searchSummary?.news_queries);
