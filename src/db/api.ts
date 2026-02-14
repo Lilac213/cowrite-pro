@@ -975,6 +975,12 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
           authorsArray = source.authors.split(/[,;、，]/).map((a: string) => a.trim()).filter((a: string) => a);
         }
         
+        // 确保 citation_count 是有效整数
+        let citationCount = 0;
+        if (source.citation_count !== undefined && source.citation_count !== null && source.citation_count !== '') {
+          citationCount = parseInt(String(source.citation_count), 10) || 0;
+        }
+        
         materialsToSave.push({
           session_id: sessionId,
           source_type: 'academic',
@@ -984,7 +990,7 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
           full_text: source.full_text || '',
           authors: authorsArray,
           year: source.year || '',
-          citation_count: source.citation_count || 0,
+          citation_count: citationCount,
           is_selected: false,
           metadata: { original_source: 'GoogleScholar' },
         });
