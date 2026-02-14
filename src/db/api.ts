@@ -969,6 +969,12 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
     // 保存学术来源
     if (retrievalResults.academic_sources?.length > 0) {
       for (const source of retrievalResults.academic_sources) {
+        // 将 authors 字符串转为数组
+        let authorsArray: string[] = [];
+        if (source.authors) {
+          authorsArray = source.authors.split(/[,;、，]/).map((a: string) => a.trim()).filter((a: string) => a);
+        }
+        
         materialsToSave.push({
           session_id: sessionId,
           source_type: 'academic',
@@ -976,7 +982,7 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
           url: source.url || '',
           abstract: source.full_text || source.extracted_content?.join('\n') || '',
           full_text: source.full_text || '',
-          authors: source.authors || '',
+          authors: authorsArray,
           year: source.year || '',
           citation_count: source.citation_count || 0,
           is_selected: false,

@@ -345,7 +345,7 @@ export interface RetrievedMaterial {
   url?: string;
   abstract?: string;
   full_text?: string;
-  authors?: string;
+  authors?: string[];
   year?: string;
   citation_count?: number;
   published_at?: string;
