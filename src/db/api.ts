@@ -916,8 +916,8 @@ export async function researchSynthesisAgent(retrievalResults: any, requirements
 
 /**
  * 完整的 Agent 驱动的研究工作流
- * 1. 调用 Research Retrieval Agent 检索资料
- * 2. 调用 Research Synthesis Agent 整理资料
+ * 1. 先搜索本地素材库和参考文章库（快速返回）
+ * 2. 调用 Research Retrieval Agent 检索外部资料
  */
 export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectId?: string, userId?: string, sessionId?: string) {
   // 检查并扣除点数（资料查询+整理需要3点）
@@ -930,14 +930,60 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
     await deductResearchCredits(userId);
   }
 
-  // 第一步：资料检索
+  // 提取搜索关键词
+  const searchKeywords = extractKeywords(requirementsDoc);
+
+  // 第一步：并行搜索本地素材库和参考文章库（快速返回）
+  let localMaterials: any[] = [];
+  let localReferences: any[] = [];
+  
+  if (userId && searchKeywords.length > 0) {
+    try {
+      const [materials, references] = await Promise.all([
+        searchMaterialsByTags(userId, searchKeywords.slice(0, 5)),
+        searchReferencesByTags(userId, searchKeywords.slice(0, 5)),
+      ]);
+      localMaterials = materials || [];
+      localReferences = references || [];
+      console.log('[agentDrivenResearchWorkflow] 本地素材搜索结果:', localMaterials.length, '条');
+      console.log('[agentDrivenResearchWorkflow] 参考文章搜索结果:', localReferences.length, '条');
+    } catch (error) {
+      console.error('[agentDrivenResearchWorkflow] 本地搜索失败:', error);
+    }
+  }
+
+  // 第二步：调用外部 Research Retrieval Agent 检索资料
   const retrievalResults = await researchRetrievalAgent(requirementsDoc, projectId, userId, sessionId);
 
-  // 不再自动调用综合分析，等待用户选择资料后再调用
-  return {
-    retrievalResults,
-    synthesisResults: null, // 暂时不返回综合结果
+  // 合并本地和外部结果
+  const combinedResults = {
+    ...retrievalResults,
+    localMaterials,
+    localReferences,
   };
+
+  return {
+    retrievalResults: combinedResults,
+    synthesisResults: null,
+  };
+}
+
+// 从需求文档中提取搜索关键词
+function extractKeywords(requirementsDoc: any): string[] {
+  const keywords: string[] = [];
+  
+  if (requirementsDoc.主题) {
+    keywords.push(requirementsDoc.主题);
+  }
+  if (requirementsDoc.关键要点) {
+    keywords.push(...requirementsDoc.关键要点);
+  }
+  if (requirementsDoc.核心观点) {
+    keywords.push(...requirementsDoc.核心观点);
+  }
+  
+  // 去重并返回
+  return [...new Set(keywords)].filter(k => k && k.length > 0);
 }
 
 // ============ 旧的混合搜索工作流已移除 ============

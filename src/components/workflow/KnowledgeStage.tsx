@@ -12,6 +12,8 @@ import {
   getReferenceArticles,
   searchMaterials,
   searchReferenceArticles,
+  searchMaterialsByTags,
+  searchReferencesByTags,
   callLLMGenerate,
   clearProjectKnowledge,
   getOrCreateWritingSession,
@@ -50,6 +52,22 @@ import ResearchSynthesisReview from './ResearchSynthesisReview';
 interface KnowledgeStageProps {
   projectId: string;
   onComplete: () => void;
+}
+
+function extractKeywords(requirementsDoc: any): string[] {
+  const keywords: string[] = [];
+  
+  if (requirementsDoc.主题) {
+    keywords.push(requirementsDoc.主题);
+  }
+  if (requirementsDoc.关键要点) {
+    keywords.push(...requirementsDoc.关键要点);
+  }
+  if (requirementsDoc.核心观点) {
+    keywords.push(...requirementsDoc.核心观点);
+  }
+  
+  return [...new Set(keywords)].filter(k => k && typeof k === 'string' && k.length > 0);
 }
 
 export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStageProps) {
@@ -522,6 +540,81 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       };
 
       console.log('[KnowledgeStage] 完整需求文档:', requirementsDoc);
+
+      // 提取搜索关键词
+      const searchKeywords = extractKeywords(requirementsDoc);
+      console.log('[KnowledgeStage] 提取的搜索关键词:', searchKeywords);
+
+      // 第一步：并行搜索本地素材库和参考文章库（快速返回）
+      if (searchKeywords.length > 0) {
+        setSearchProgress({ stage: '本地搜索', message: '正在搜索个人素材库和参考文章库...' });
+        setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在搜索本地素材库...']);
+
+        try {
+          const [localMaterials, localReferences] = await Promise.all([
+            searchMaterialsByTags(user.id, searchKeywords.slice(0, 5)),
+            searchReferencesByTags(user.id, searchKeywords.slice(0, 5)),
+          ]);
+
+          console.log('[KnowledgeStage] 本地素材搜索结果:', localMaterials?.length || 0, '条');
+          console.log('[KnowledgeStage] 参考文章搜索结果:', localReferences?.length || 0, '条');
+
+          // 如果有本地素材，先显示
+          if (localMaterials && localMaterials.length > 0) {
+            setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + `] 找到 ${localMaterials.length} 条个人素材`]);
+            
+            // 转换为 knowledge 格式并添加到知识库
+            const materialItems: KnowledgeBase[] = localMaterials.map((material: any) => ({
+              id: material.id,
+              project_id: projectId,
+              title: material.title,
+              content: material.content || material.abstract || '',
+              source: 'local_material',
+              source_url: material.source_url,
+              published_at: material.published_at,
+              collected_at: material.created_at,
+              selected: false,
+              content_status: 'full_text' as const,
+              extracted_content: material.content ? [material.content] : [],
+              full_text: material.content,
+              created_at: material.created_at,
+            }));
+            setKnowledge(prev => [...prev, ...materialItems]);
+          }
+
+          // 如果有参考文章，先显示
+          if (localReferences && localReferences.length > 0) {
+            setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + `] 找到 ${localReferences.length} 篇参考文章`]);
+            
+            // 转换为 knowledge 格式并添加到知识库
+            const refItems: KnowledgeBase[] = localReferences.map((ref: any) => ({
+              id: ref.id,
+              project_id: projectId,
+              title: ref.title,
+              content: ref.content || ref.abstract || '',
+              source: 'reference_article',
+              source_url: ref.source_url,
+              published_at: ref.published_at,
+              collected_at: ref.created_at,
+              selected: false,
+              content_status: 'full_text' as const,
+              extracted_content: ref.content ? [ref.content] : [],
+              full_text: ref.content,
+              created_at: ref.created_at,
+            }));
+            setKnowledge(prev => [...prev, ...refItems]);
+          }
+
+          if ((localMaterials?.length || 0) > 0 || (localReferences?.length || 0) > 0) {
+            toast({
+              title: '📚 已加载本地资料',
+              description: `个人素材: ${localMaterials?.length || 0} 条，参考文章: ${localReferences?.length || 0} 篇`,
+            });
+          }
+        } catch (error) {
+          console.error('[KnowledgeStage] 本地搜索失败:', error);
+        }
+      }
 
       setSearchProgress({ 
         stage: '生成搜索计划', 
