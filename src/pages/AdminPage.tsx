@@ -233,15 +233,7 @@ export default function AdminPage() {
 
     setSending(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('未登录');
-      }
-
       const { error } = await supabase.functions.invoke('send-invite-email', {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
         body: {
           email: inviteEmail,
           inviteCode: selectedCode.code,
