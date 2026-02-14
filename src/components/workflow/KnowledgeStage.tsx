@@ -663,7 +663,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
       // 提取并显示日志
       if (retrievalResults.logs && Array.isArray(retrievalResults.logs)) {
-        const formattedLogs = retrievalResults.logs.map(log => 
+        const formattedLogs = retrievalResults.logs.map((log: string) => 
           '[' + new Date().toLocaleTimeString('zh-CN') + '] ' + log
         );
         setSearchLogs(prev => [...prev, ...formattedLogs]);
@@ -702,74 +702,118 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       setRetrievalResults(retrievalResults);
       setSynthesisResults(synthesisResults);
 
-      // 加载检索到的资料
-      let loadedMaterials: RetrievedMaterial[] = [];
-      if (writingSession) {
-        console.log('[KnowledgeStage] 开始加载检索资料，sessionId:', writingSession.id);
-        setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在加载检索到的资料...']);
-        try {
-          loadedMaterials = await getRetrievedMaterials(writingSession.id);
-          console.log('[KnowledgeStage] 成功加载资料数量:', loadedMaterials.length);
-          console.log('[KnowledgeStage] 资料详情:', loadedMaterials);
-          setRetrievedMaterials(loadedMaterials);
-          
-          // 转换 RetrievedMaterial 为 KnowledgeBase 格式并更新 knowledge 状态
-          const knowledgeItems: KnowledgeBase[] = loadedMaterials.map(material => {
-            // 处理 published_at：如果只有 year，转换为该年的1月1日
-            let publishedAt = material.published_at;
-            if (!publishedAt && material.year) {
-              // 将年份转换为 ISO 时间戳（该年的1月1日）
-              publishedAt = `${material.year}-01-01T00:00:00Z`;
-            }
-            
-            return {
-              id: material.id,
-              project_id: projectId,
-              title: material.title,
-              content: material.abstract || material.full_text || '',
-              source: material.source_type,
-              source_url: material.url,
-              published_at: publishedAt,
-              collected_at: material.created_at,
-              selected: material.is_selected,
-              content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
-              extracted_content: material.full_text ? [material.full_text] : [],
-              full_text: material.full_text,
-              created_at: material.created_at,
-            };
-          });
-          setKnowledge(knowledgeItems);
-          
-          setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 成功加载 ' + loadedMaterials.length + ' 条资料']);
-        } catch (error: any) {
-          console.error('[KnowledgeStage] 加载资料失败:', error);
-          setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 加载资料失败: ' + error.message]);
-          toast({
-            title: '加载资料失败',
-            description: error.message || '请稍后重试',
-            variant: 'destructive',
-          });
+      // 直接从 retrievalResults 中提取资料，不再调用 getRetrievedMaterials
+      // 资料来源：academic_sources, news_sources, web_sources, user_library_sources, personal_sources
+      const allSources = [
+        ...(retrievalResults.academic_sources || []).map((s: any) => ({
+          id: s.url || Math.random().toString(),
+          session_id: writingSession?.id || '',
+          project_id: projectId,
+          user_id: user.id,
+          source_type: 'academic',
+          title: s.title || '',
+          url: s.url || '',
+          abstract: s.full_text || s.extracted_content?.join('\n') || '',
+          full_text: s.full_text || '',
+          authors: s.authors ? (Array.isArray(s.authors) ? s.authors : s.authors.split(/[,;、，]/)) : [],
+          year: s.year || '',
+          citation_count: s.citation_count || 0,
+          is_selected: false,
+          created_at: new Date().toISOString(),
+        })),
+        ...(retrievalResults.news_sources || []).map((s: any) => ({
+          id: s.url || Math.random().toString(),
+          session_id: writingSession?.id || '',
+          project_id: projectId,
+          user_id: user.id,
+          source_type: 'news',
+          title: s.title || '',
+          url: s.url || '',
+          abstract: s.full_text || s.extracted_content?.join('\n') || '',
+          full_text: s.full_text || '',
+          published_at: s.published_at || '',
+          is_selected: false,
+          created_at: new Date().toISOString(),
+        })),
+        ...(retrievalResults.web_sources || []).map((s: any) => ({
+          id: s.url || Math.random().toString(),
+          session_id: writingSession?.id || '',
+          project_id: projectId,
+          user_id: user.id,
+          source_type: 'web',
+          title: s.title || '',
+          url: s.url || '',
+          abstract: s.full_text || s.extracted_content?.join('\n') || '',
+          full_text: s.full_text || '',
+          is_selected: false,
+          created_at: new Date().toISOString(),
+        })),
+        ...(retrievalResults.user_library_sources || []).map((s: any) => ({
+          id: s.id || Math.random().toString(),
+          session_id: writingSession?.id || '',
+          project_id: projectId,
+          user_id: user.id,
+          source_type: 'user_library',
+          title: s.title || '',
+          abstract: s.content || '',
+          full_text: s.content || '',
+          is_selected: false,
+          created_at: s.created_at || new Date().toISOString(),
+        })),
+        ...(retrievalResults.personal_sources || []).map((s: any) => ({
+          id: s.id || Math.random().toString(),
+          session_id: writingSession?.id || '',
+          project_id: projectId,
+          user_id: user.id,
+          source_type: 'personal',
+          title: s.title || '',
+          abstract: s.content || '',
+          full_text: s.content || '',
+          is_selected: false,
+          created_at: s.created_at || new Date().toISOString(),
+        })),
+      ];
+
+      console.log('[KnowledgeStage] 从 retrievalResults 提取的资料数量:', allSources.length);
+      setRetrievedMaterials(allSources);
+
+      // 转换为 KnowledgeBase 格式
+      const knowledgeItems: KnowledgeBase[] = allSources.map((material: any) => {
+        let publishedAt = material.published_at;
+        if (!publishedAt && material.year) {
+          publishedAt = `${material.year}-01-01T00:00:00Z`;
         }
-      } else {
-        console.warn('[KnowledgeStage] writingSession 为空，无法加载资料');
-        setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 错误：写作会话未初始化']);
-      }
+        
+        return {
+          id: material.id,
+          project_id: projectId,
+          title: material.title,
+          content: material.abstract || material.full_text || '',
+          source: material.source_type,
+          source_url: material.url,
+          published_at: publishedAt,
+          collected_at: material.created_at,
+          selected: material.is_selected,
+          content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
+          extracted_content: material.full_text ? [material.full_text] : [],
+          full_text: material.full_text,
+          created_at: material.created_at,
+        };
+      });
+      setKnowledge(knowledgeItems);
 
       setSearchProgress({ 
         stage: '完成', 
-        message: `已检索到 ${loadedMaterials.length} 条资料，可以开始资料整理`,
+        message: `已检索到 ${allSources.length} 条资料，可以开始资料整理`,
       });
-      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成']);
+      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成，共 ' + allSources.length + ' 条资料']);
 
       toast({
         title: '✅ 资料检索完成',
-        description: `已检索到 ${loadedMaterials.length} 条资料，可以开始资料整理`,
+        description: `已检索到 ${allSources.length} 条资料，可以开始资料整理`,
       });
 
-      // 注意：资料将在用户点击"资料整理"时自动保存到知识库
-      // 旧的自动保存代码已被注释
-
-      // 保存综合结果到项目（暂时为空）
+      // 保存综合结果到项目
       setWorkflowResult({
         retrievalResults,
         synthesisResults: null,
@@ -782,7 +826,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       // 保存搜索结果到 localStorage 缓存
       saveSearchCache(projectId, {
         searchPlan: retrievalResults?.search_summary || null,
-        retrievedMaterials: loadedMaterials,
+        retrievedMaterials: allSources,
         searchLogs: [...searchLogs, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成'],
         lastSearchTime: searchTime,
         query: queryToUse,
@@ -909,7 +953,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     console.log('[handleNextStep] writingSession:', writingSession);
     console.log('[handleNextStep] retrievedMaterials.length:', retrievedMaterials.length);
     console.log('[handleNextStep] knowledge.length:', knowledge.length);
-    console.log('[handleNextStep] researchStageComplete:', researchStageComplete);
 
     if (!writingSession) {
       toast({
@@ -920,7 +963,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       return;
     }
 
-    // 如果 retrievedMaterials 为空但 knowledge 有数据，使用 knowledge
+    // 使用当前的 retrievedMaterials
     const materialsToUse = retrievedMaterials.length > 0 ? retrievedMaterials : knowledge;
     
     if (materialsToUse.length === 0) {
@@ -935,108 +978,79 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     try {
       setConfirming(true);
       
-      // 如果还没有完成研究综合，先执行综合
-      if (!researchStageComplete) {
-        console.log('[handleNextStep] 需要先执行研究综合');
+      toast({
+        title: '正在整理资料',
+        description: '正在分析检索到的资料并生成研究洞察...',
+      });
+      
+      setSynthesisLogs(['[' + new Date().toLocaleTimeString('zh-CN') + '] 开始资料整理...']);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 共 ' + materialsToUse.length + ' 条资料待整理']);
+
+      // 1. 将所有资料保存到 knowledge_base 表
+      console.log('[handleNextStep] 开始保存资料到 knowledge_base，数量:', materialsToUse.length);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在保存资料到知识库...']);
+      
+      const existingKnowledge = await getKnowledgeBase(projectId);
+      const existingUrls = new Set(existingKnowledge.map(k => k.source_url).filter(Boolean));
+      
+      let savedCount = 0;
+      for (const material of materialsToUse) {
+        const materialUrl = 'url' in material ? material.url : (material as any).source_url;
+        const materialSourceType = 'source_type' in material ? material.source_type : (material as any).source;
+        const materialAbstract = 'abstract' in material ? material.abstract : '';
+        const materialYear = 'year' in material ? material.year : null;
+        const materialContent = 'content' in material ? (material as any).content : '';
         
-        toast({
-          title: '正在整理资料',
-          description: '正在分析检索到的资料并生成研究洞察...',
-        });
+        if (materialUrl && existingUrls.has(materialUrl)) {
+          console.log('[handleNextStep] 资料已存在，跳过:', material.title);
+          continue;
+        }
         
-        setSynthesisLogs(['[' + new Date().toLocaleTimeString('zh-CN') + '] 开始资料整理...']);
-        
-        // 1. 获取所有检索到的资料
-        console.log('[handleNextStep] 调用 getRetrievedMaterials，sessionId:', writingSession.id);
-        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在获取检索到的资料...']);
-        const allMaterials = await getRetrievedMaterials(writingSession.id);
-        console.log('[handleNextStep] getRetrievedMaterials 返回结果:', allMaterials);
-        console.log('[handleNextStep] 资料总数:', allMaterials.length);
-        
-        // 如果数据库中没有资料，使用当前的 knowledge 或 retrievedMaterials
-        const finalMaterials = allMaterials.length > 0 ? allMaterials : materialsToUse;
-        
-        if (finalMaterials.length === 0) {
-          console.error('[handleNextStep] 没有可用的资料');
-          toast({
-            title: '暂无资料',
-            description: '请先进行资料搜索',
-            variant: 'destructive',
+        try {
+          let publishedAt = material.published_at;
+          if (!publishedAt && materialYear) {
+            publishedAt = `${materialYear}-01-01T00:00:00Z`;
+          }
+          
+          await createKnowledgeBase({
+            project_id: projectId,
+            title: material.title,
+            content: materialAbstract || material.full_text || materialContent || '',
+            source: materialSourceType,
+            source_url: materialUrl,
+            published_at: publishedAt,
+            collected_at: material.created_at,
+            selected: true,
+            content_status: material.full_text ? 'full_text' : materialAbstract ? 'abstract_only' : 'insufficient_content',
+            extracted_content: material.full_text ? [material.full_text] : [],
+            full_text: material.full_text,
           });
-          setConfirming(false);
-          return;
+          savedCount++;
+        } catch (error: any) {
+          console.error('[handleNextStep] 保存资料失败:', material.title, error);
+          setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 保存资料失败: ' + material.title]);
         }
-
-        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 共 ' + finalMaterials.length + ' 条资料待整理']);
-
-        // 2. 将所有资料保存到 knowledge_base 表
-        console.log('[handleNextStep] 开始保存资料到 knowledge_base，数量:', finalMaterials.length);
-        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在保存资料到知识库...']);
-        
-        const existingKnowledge = await getKnowledgeBase(projectId);
-        const existingUrls = new Set(existingKnowledge.map(k => k.source_url).filter(Boolean));
-        
-        let savedCount = 0;
-        for (const material of finalMaterials) {
-          // 处理 RetrievedMaterial 和 KnowledgeBase 类型
-          const isRetrievedMaterial = 'url' in material;
-          const materialUrl = isRetrievedMaterial ? material.url : (material as any).source_url;
-          const materialSourceType = isRetrievedMaterial ? material.source_type : (material as any).source;
-          const materialAbstract = isRetrievedMaterial ? material.abstract : '';
-          const materialYear = isRetrievedMaterial ? material.year : null;
-          const materialContent = isRetrievedMaterial ? '' : (material as any).content;
-          
-          if (materialUrl && existingUrls.has(materialUrl)) {
-            console.log('[handleNextStep] 资料已存在，跳过:', material.title);
-            continue;
-          }
-          
-          try {
-            let publishedAt = material.published_at;
-            if (!publishedAt && materialYear) {
-              publishedAt = `${materialYear}-01-01T00:00:00Z`;
-            }
-            
-            await createKnowledgeBase({
-              project_id: projectId,
-              title: material.title,
-              content: materialAbstract || material.full_text || materialContent || '',
-              source: materialSourceType,
-              source_url: materialUrl,
-              published_at: publishedAt,
-              collected_at: material.created_at,
-              selected: true,
-              content_status: material.full_text ? 'full_text' : materialAbstract ? 'abstract_only' : 'insufficient_content',
-              extracted_content: material.full_text ? [material.full_text] : [],
-              full_text: material.full_text,
-            });
-            savedCount++;
-          } catch (error: any) {
-            console.error('[handleNextStep] 保存资料失败:', material.title, error);
-            setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 保存资料失败: ' + material.title]);
-          }
-        }
-        
-        console.log('[handleNextStep] 资料保存完成，新增:', savedCount, '条，开始调用研究综合 Agent');
-        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 资料保存完成，新增 ' + savedCount + ' 条']);
-
-        // 3. 调用研究综合 Agent
-        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 🤖 启动 Research Synthesis Agent...']);
-        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在分析资料并生成研究洞察...']);
-        
-        const result: SynthesisResult = await callResearchSynthesisAgent(projectId, writingSession.id);
-        
-        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ Research Synthesis Agent 完成']);
-        
-        // 4. 获取保存的洞察和空白
-        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在加载研究洞察和空白...']);
-        const insights = await getResearchInsights(writingSession.id);
-        const gaps = await getResearchGaps(writingSession.id);
-        
-        setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 已生成 ' + insights.length + ' 条研究洞察，' + gaps.length + ' 条研究空白']);
-        
-        console.log('[handleNextStep] 研究综合完成，insights:', insights.length, 'gaps:', gaps.length);
       }
+      
+      console.log('[handleNextStep] 资料保存完成，新增:', savedCount, '条，开始调用研究综合 Agent');
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 资料保存完成，新增 ' + savedCount + ' 条']);
+
+      // 2. 调用研究综合 Agent
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 🤖 启动 Research Synthesis Agent...']);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在分析资料并生成研究洞察...']);
+      
+      const result: SynthesisResult = await callResearchSynthesisAgent(projectId, writingSession.id);
+      
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ Research Synthesis Agent 完成']);
+      
+      // 3. 获取保存的洞察和空白
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在加载研究洞察和空白...']);
+      const insights = await getResearchInsights(writingSession.id);
+      const gaps = await getResearchGaps(writingSession.id);
+      
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 已生成 ' + insights.length + ' 条研究洞察，' + gaps.length + ' 条研究空白']);
+      
+      console.log('[handleNextStep] 研究综合完成，insights:', insights.length, 'gaps:', gaps.length);
       
       // 更新项目状态到资料整理阶段
       console.log('[handleNextStep] 更新项目状态到 material_review');
