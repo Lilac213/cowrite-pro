@@ -27,9 +27,19 @@ export function validateSchema<T>(
     required?: string[];
     optional?: string[];
     validate?: (data: any) => boolean;
+    defaults?: Record<string, any>;
   }
 ): ValidationResult<T> {
   try {
+    // 应用默认值
+    if (schema.defaults) {
+      for (const [key, value] of Object.entries(schema.defaults)) {
+        if (data[key] === undefined || data[key] === null) {
+          data[key] = value;
+        }
+      }
+    }
+    
     // 检查必需字段
     if (schema.required) {
       for (const field of schema.required) {
@@ -75,8 +85,18 @@ export function validateOrThrow<T>(
     required?: string[];
     optional?: string[];
     validate?: (data: any) => boolean;
+    defaults?: Record<string, any>;
   }
 ): T {
+  // 应用默认值
+  if (schema.defaults) {
+    for (const [key, value] of Object.entries(schema.defaults)) {
+      if (data[key] === undefined || data[key] === null) {
+        data[key] = value;
+      }
+    }
+  }
+  
   const result = validateSchema<T>(data, schema);
   if (!result.success) {
     throw new Error(result.error || 'Schema验证失败');

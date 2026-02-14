@@ -99,8 +99,15 @@ Rules:
       agentName: 'researchRetrievalAgent',
       prompt: `${systemPrompt}\n\n${userPrompt}`,
       schema: {
-        required: ['search_summary', 'academic_queries', 'news_queries', 'web_queries'],
-        optional: ['user_library_queries']
+        required: ['search_summary'],
+        optional: ['academic_queries', 'news_queries', 'web_queries', 'user_library_queries'],
+        defaults: {
+          search_summary: { interpreted_topic: '', key_dimensions: [] },
+          academic_queries: [],
+          news_queries: [],
+          web_queries: [],
+          user_library_queries: []
+        }
       },
       model: 'gemini-2.5-flash',
       temperature: 0.7,
