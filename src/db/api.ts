@@ -1478,6 +1478,9 @@ export async function setUserCredits(userId: string, credits: number): Promise<v
 // 检查用户是否可以进行资料查询和整理（需要3点）
 export async function checkResearchLimit(userId: string): Promise<boolean> {
   const profile = await getProfile(userId);
+  console.log('[checkResearchLimit] profile:', profile);
+  console.log('[checkResearchLimit] unlimited_credits:', profile?.unlimited_credits);
+  console.log('[checkResearchLimit] available_credits:', profile?.available_credits);
   if (!profile) return false;
   // 管理员无限点数
   if (profile.unlimited_credits) return true;
