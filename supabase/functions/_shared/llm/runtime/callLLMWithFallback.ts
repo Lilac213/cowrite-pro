@@ -16,7 +16,7 @@ export interface LLMCallConfig {
 async function callGemini(config: LLMCallConfig): Promise<string> {
   const {
     prompt,
-    model = 'gemini-2.5-flash',
+    model = '[C渠道][1额度/次]gemini-2.5-flash',
     temperature = 0.3,
     maxTokens = 8192,
   } = config;
