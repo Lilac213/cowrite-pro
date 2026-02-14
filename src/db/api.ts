@@ -983,6 +983,7 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
         
         materialsToSave.push({
           session_id: sessionId,
+          project_id: projectId,
           source_type: 'academic',
           title: source.title || '',
           url: source.url || '',
@@ -1002,6 +1003,7 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
       for (const source of retrievalResults.news_sources) {
         materialsToSave.push({
           session_id: sessionId,
+          project_id: projectId,
           source_type: 'news',
           title: source.title || '',
           url: source.url || '',
@@ -1019,6 +1021,7 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
       for (const source of retrievalResults.web_sources) {
         materialsToSave.push({
           session_id: sessionId,
+          project_id: projectId,
           source_type: 'web',
           title: source.title || '',
           url: source.url || '',

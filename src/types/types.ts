@@ -340,6 +340,7 @@ export type SourceType = 'academic' | 'news' | 'web' | 'user_library' | 'persona
 export interface RetrievedMaterial {
   id: string;
   session_id: string;
+  project_id?: string;
   source_type: SourceType;
   title: string;
   url?: string;
