@@ -1,6 +1,6 @@
 /**
  * 双重LLM调用模块
- * 先尝试 Gemini，失败后回退到 Qwen
+ * 先尝试 Gemini（通过中转站），失败后回退到 Qwen
  */
 
 export interface LLMCallConfig {
@@ -11,42 +11,45 @@ export interface LLMCallConfig {
 }
 
 /**
- * 调用 Gemini API
+ * 调用 Gemini（通过中转站 OpenAI 兼容 API）
  */
 async function callGemini(config: LLMCallConfig): Promise<string> {
   const {
     prompt,
-    model = 'gemini-2.0-flash-exp',
+    model = 'gemini-2.5-flash',
     temperature = 0.3,
     maxTokens = 8192,
   } = config;
 
-  const apiKey = Deno.env.get('INTEGRATIONS_API_KEY') || Deno.env.get('GEMINI_API_KEY');
-  if (!apiKey) {
-    throw new Error('Gemini API密钥未配置');
+  const baseUrl = Deno.env.get('OPENAI_BASE_URL');
+  const apiKey = Deno.env.get('INTEGRATIONS_API_KEY');
+  
+  if (!baseUrl || !apiKey) {
+    throw new Error('Gemini 中转站未配置 (OPENAI_BASE_URL 或 INTEGRATIONS_API_KEY)');
   }
 
+  console.log('[callGemini] 使用中转站:', baseUrl);
   console.log('[callGemini] 调用模型:', model);
   console.log('[callGemini] Temperature:', temperature);
   console.log('[callGemini] Prompt长度:', prompt.length);
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const normalizedBaseUrl = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
+  const url = `${normalizedBaseUrl}/chat/completions`;
 
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      contents: [{
-        parts: [{
-          text: prompt
-        }]
+      model,
+      messages: [{
+        role: 'user',
+        content: prompt
       }],
-      generationConfig: {
-        temperature,
-        maxOutputTokens: maxTokens,
-      },
+      temperature,
+      max_tokens: maxTokens,
     }),
   });
 
@@ -54,25 +57,23 @@ async function callGemini(config: LLMCallConfig): Promise<string> {
     const errorText = await response.text();
     console.error('[callGemini] API调用失败:', response.status, response.statusText);
     console.error('[callGemini] 错误详情:', errorText);
-    console.error('[callGemini] 请求URL:', url);
-    console.error('[callGemini] API Key前缀:', apiKey.substring(0, 10) + '...');
     throw new Error(`Gemini API调用失败: ${response.status} ${response.statusText}`);
   }
 
   const data = await response.json();
   
-  if (!data.candidates || data.candidates.length === 0) {
+  if (!data.choices || data.choices.length === 0) {
     throw new Error('Gemini未返回有效响应');
   }
 
-  const text = data.candidates[0].content.parts[0].text;
+  const text = data.choices[0].message.content;
   console.log('[callGemini] 响应长度:', text.length);
 
   return text;
 }
 
 /**
- * 调用 Qwen API
+ * 调用 Qwen API（阿里云 DashScope）
  */
 async function callQwen(config: LLMCallConfig): Promise<string> {
   const {
@@ -82,9 +83,9 @@ async function callQwen(config: LLMCallConfig): Promise<string> {
     maxTokens = 8192,
   } = config;
 
-  const apiKey = Deno.env.get('QWEN_API_KEY') || Deno.env.get('QIANWEN_API_KEY') || Deno.env.get('INTEGRATIONS_API_KEY');
+  const apiKey = Deno.env.get('QIANWEN_API_KEY') || Deno.env.get('QWEN_API_KEY');
   if (!apiKey) {
-    throw new Error('Qwen API密钥未配置');
+    throw new Error('Qwen API密钥未配置 (QIANWEN_API_KEY)');
   }
 
   console.log('[callQwen] 调用模型:', model);
@@ -130,9 +131,7 @@ async function callQwen(config: LLMCallConfig): Promise<string> {
 }
 
 /**
- * 双重LLM调用：先尝试 Gemini，失败后回退到 Qwen
- * @param config - 调用配置
- * @returns LLM响应文本
+ * 双重LLM调用：先尝试 Gemini（中转站），失败后回退到 Qwen
  */
 export async function callLLMWithFallback(config: LLMCallConfig): Promise<string> {
   console.log('[callLLMWithFallback] 开始双重LLM调用');
@@ -140,9 +139,9 @@ export async function callLLMWithFallback(config: LLMCallConfig): Promise<string
   let geminiError: Error | null = null;
   let qwenError: Error | null = null;
   
-  // 第一次尝试：Gemini
+  // 第一次尝试：Gemini（中转站）
   try {
-    console.log('[callLLMWithFallback] 尝试 Gemini...');
+    console.log('[callLLMWithFallback] 尝试 Gemini（中转站）...');
     const result = await callGemini(config);
     console.log('[callLLMWithFallback] ✅ Gemini 调用成功');
     return result;
@@ -165,11 +164,6 @@ export async function callLLMWithFallback(config: LLMCallConfig): Promise<string
   // 两个都失败，抛出综合错误
   const errorMessage = `双重LLM调用失败 - Gemini: ${geminiError?.message || '未知错误'}, Qwen: ${qwenError?.message || '未知错误'}`;
   console.error('[callLLMWithFallback] ❌ 最终错误:', errorMessage);
-  
-  // 如果 Qwen 是因为 API 密钥未配置而失败，提供更友好的错误信息
-  if (qwenError?.message.includes('API密钥未配置') || qwenError?.message.includes('401')) {
-    console.warn('[callLLMWithFallback] 💡 提示: Qwen API 密钥未配置或无效，请配置 QWEN_API_KEY 环境变量以启用回退功能');
-  }
   
   throw new Error(errorMessage);
 }
