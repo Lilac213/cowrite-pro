@@ -61,23 +61,26 @@ Deno.serve(async (req) => {
 
       let knowledge: any[] = [];
       
+      // 先尝试从 retrieved_materials 获取
       if (sessionId) {
         const { data: retrievedMaterials, error: retrievedError } = await supabase.from("retrieved_materials").select("*").eq("session_id", sessionId).eq("is_selected", true).order("created_at", { ascending: false });
-        if (retrievedError) {
-          return new Response(JSON.stringify({ error: "获取检索资料失败" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        if (!retrievedError && retrievedMaterials && retrievedMaterials.length > 0) {
+          knowledge = (retrievedMaterials || []).map((item: any) => {
+            const content = (item.full_text || item.abstract || '').replace(/[\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+            return { title: (item.title || '无标题').trim(), source: item.source_type || 'unknown', source_url: item.url || '', content: content.substring(0, 2000), collected_at: item.created_at };
+          });
         }
-        knowledge = (retrievedMaterials || []).map((item: any) => {
-          const content = (item.full_text || item.abstract || '').replace(/[\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
-          return { title: (item.title || '无标题').trim(), source: item.source_type || 'unknown', source_url: item.url || '', content: content.substring(0, 2000), collected_at: item.created_at };
-        });
-      } else {
+      }
+      
+      // 如果 retrieved_materials 为空，从 knowledge_base 获取
+      if (knowledge.length === 0) {
         const { data: knowledgeData, error: knowledgeError } = await supabase.from("knowledge_base").select("*").eq("project_id", projectId).order("collected_at", { ascending: false });
         if (knowledgeError) {
           return new Response(JSON.stringify({ error: "获取知识库失败" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
         knowledge = (knowledgeData || []).map((item: any) => {
-          const content = (item.content || '').replace(/[\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
-          return { ...item, title: (item.title || '无标题').trim(), content: content.substring(0, 2000) };
+          const content = (item.content || item.full_text || '').replace(/[\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+          return { ...item, title: (item.title || '无标题').trim(), source: item.source || 'unknown', source_url: item.source_url || '', content: content.substring(0, 2000) };
         });
       }
 
