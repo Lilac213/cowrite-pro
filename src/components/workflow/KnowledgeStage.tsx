@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { 
-  getKnowledgeBase, 
-  createKnowledgeBase, 
-  updateKnowledgeBase, 
-  updateProject, 
+import {
+  getKnowledgeBase,
+  createKnowledgeBase,
+  updateKnowledgeBase,
+  updateProject,
   agentDrivenResearchWorkflow,
   researchSynthesisAgent,
   saveToReferenceLibrary,
@@ -29,7 +29,6 @@ import {
   updateInsightDecision,
   updateGapDecision,
   callArticleStructureAgent,
-  callResearchRetrieval,
   deductUserPoints,
   incrementResearchRefreshCount,
 } from '@/db/api';

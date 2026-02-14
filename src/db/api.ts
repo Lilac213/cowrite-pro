@@ -2031,30 +2031,6 @@ export async function callBriefAgent(projectId: string, topic: string, userInput
 }
 
 /**
- * 调用 research-retrieval 进行资料搜索
- */
-export async function callResearchRetrieval(projectId: string, searchDepth: 'shallow' | 'medium' | 'deep' = 'medium') {
-  const { data, error } = await supabase.functions.invoke('research-retrieval', {
-    body: { project_id: projectId, search_depth: searchDepth }
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-/**
- * 调用 research-synthesis 进行资料整理
- */
-export async function callResearchSynthesis(projectId: string) {
-  const { data, error } = await supabase.functions.invoke('research-synthesis', {
-    body: { project_id: projectId }
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-/**
  * 调用 structure-agent 生成文章结构
  */
 export async function callStructureAgent(projectId: string) {
