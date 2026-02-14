@@ -1441,7 +1441,7 @@ export async function getOrder(orderId: string): Promise<Order | null> {
 // ==================== 写作会话管理 ====================
 
 // 获取或创建写作会话
-export async function getOrCreateWritingSession(projectId: string): Promise<WritingSession> {
+export async function getOrCreateWritingSession(projectId: string, userId?: string): Promise<WritingSession> {
   // 先尝试获取现有会话（获取最新的一个）
   const { data: existing, error: fetchError } = await supabase
     .from('writing_sessions')
@@ -1462,6 +1462,7 @@ export async function getOrCreateWritingSession(projectId: string): Promise<Writ
     .from('writing_sessions')
     .insert({
       project_id: projectId,
+      user_id: userId,
       current_stage: 'research',
       locked_core_thesis: false,
       locked_structure: false,

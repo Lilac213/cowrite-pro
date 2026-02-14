@@ -168,7 +168,10 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   useEffect(() => {
     const initSession = async () => {
       try {
-        const session = await getOrCreateWritingSession(projectId);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        const session = await getOrCreateWritingSession(projectId, user.id);
         setWritingSession(session);
         
         // 检查研究阶段是否已完成
