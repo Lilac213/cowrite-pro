@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { runLLMAgent } from '../_shared/llm/runtime/LLMRuntime.ts';
+import { cleanMaterials, rerankMaterialsWithEmbedding, type CleanedMaterial } from '../_shared/utils/materialCleaner.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -260,41 +261,115 @@ Rules:
     rawResults.news_sources = Array.from(new Map(rawResults.news_sources.map(item => [item.url, item])).values()).slice(0, 10);
     rawResults.web_sources = Array.from(new Map(rawResults.web_sources.map(item => [item.url, item])).values()).slice(0, 10);
 
+    // ========== 资料清洗和重排序 ==========
+    addLog('========== 开始资料清洗和重排序 ==========');
+    
+    const query = searchPlan.search_summary?.interpreted_topic || '';
+    const keywords = searchPlan.search_summary?.key_dimensions || [];
+    
+    // 清洗学术资料
+    const cleanedAcademic = cleanMaterials(
+      rawResults.academic_sources.map(s => ({
+        title: s.title,
+        url: s.url,
+        content: s.abstract || '',
+        source_type: 'academic',
+        authors: s.authors ? [s.authors] : [],
+        year: s.year,
+        citation_count: s.citation_count,
+      })),
+      { minContentLength: 50, minQualityScore: 0.2 }
+    );
+    addLog(`[清洗] 学术资料: ${rawResults.academic_sources.length} -> ${cleanedAcademic.length} 条`);
+    
+    // 清洗新闻资料
+    const cleanedNews = cleanMaterials(
+      rawResults.news_sources.map(s => ({
+        title: s.title,
+        url: s.url,
+        content: s.summary || '',
+        source_type: 'news',
+        published_at: s.published_at,
+      })),
+      { minContentLength: 30, minQualityScore: 0.15 }
+    );
+    addLog(`[清洗] 新闻资料: ${rawResults.news_sources.length} -> ${cleanedNews.length} 条`);
+    
+    // 清洗网页资料
+    const cleanedWeb = cleanMaterials(
+      rawResults.web_sources.map(s => ({
+        title: s.title,
+        url: s.url,
+        content: s.snippet || '',
+        source_type: 'web',
+      })),
+      { minContentLength: 30, minQualityScore: 0.15 }
+    );
+    addLog(`[清洗] 网页资料: ${rawResults.web_sources.length} -> ${cleanedWeb.length} 条`);
+
+    const allCleanedMaterials = [
+      ...cleanedAcademic,
+      ...cleanedNews,
+      ...cleanedWeb
+    ];
+
+    const rankedMaterials = await rerankMaterialsWithEmbedding(
+      allCleanedMaterials,
+      query,
+      keywords,
+      { topN: 5 }
+    );
+
+    const rankedAcademic = rankedMaterials.filter(m => m.source_type === 'academic');
+    const rankedNews = rankedMaterials.filter(m => m.source_type === 'news');
+    const rankedWeb = rankedMaterials.filter(m => m.source_type === 'web');
+
     const finalResults = {
-      academic_sources: rawResults.academic_sources.map(s => ({
+      academic_sources: rankedAcademic.slice(0, 10).map((s: CleanedMaterial) => ({
         source_type: 'GoogleScholar',
         title: s.title,
-        authors: s.authors,
-        year: s.year,
+        authors: s.authors?.join(', ') || '',
+        year: s.year || '',
         url: s.url,
         content_status: 'abstract_only',
-        extracted_content: [s.abstract || ''],
-        full_text: s.abstract || '',
-        citation_count: s.citation_count
+        extracted_content: [s.content || ''],
+        full_text: s.content || '',
+        citation_count: s.citation_count || 0,
+        quality_score: s.quality_score,
+        similarity_score: s.similarity_score,
+        embedding_similarity: s.embedding_similarity,
+        is_selected: s.is_selected,
       })),
-      news_sources: rawResults.news_sources.map(s => ({
+      news_sources: rankedNews.slice(0, 10).map((s: CleanedMaterial) => ({
         source_type: 'GoogleNews',
         title: s.title,
-        source: s.source,
-        published_at: s.published_at,
+        source: s.source_type,
+        published_at: s.published_at || '',
         url: s.url,
         content_status: 'abstract_only',
-        extracted_content: [s.summary || ''],
-        full_text: s.summary || ''
+        extracted_content: [s.content || ''],
+        full_text: s.content || '',
+        quality_score: s.quality_score,
+        similarity_score: s.similarity_score,
+        embedding_similarity: s.embedding_similarity,
+        is_selected: s.is_selected,
       })),
-      web_sources: rawResults.web_sources.map(s => ({
+      web_sources: rankedWeb.slice(0, 10).map((s: CleanedMaterial) => ({
         source_type: 'WebSearch',
         title: s.title,
-        site_name: s.site_name,
+        site_name: '',
         url: s.url,
         content_status: 'abstract_only',
-        extracted_content: [s.snippet || ''],
-        full_text: s.snippet || ''
+        extracted_content: [s.content || ''],
+        full_text: s.content || '',
+        quality_score: s.quality_score,
+        similarity_score: s.similarity_score,
+        embedding_similarity: s.embedding_similarity,
+        is_selected: s.is_selected,
       })),
       user_library_sources: rawResults.user_library_sources,
       personal_sources: rawResults.personal_sources,
       search_summary: searchPlan.search_summary,
-      // 添加查询字段到顶层，方便前端显示
       academic_queries: searchPlan.academic_queries || [],
       news_queries: searchPlan.news_queries || [],
       web_queries: searchPlan.web_queries || [],

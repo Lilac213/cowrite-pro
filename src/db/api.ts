@@ -984,8 +984,13 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
           authors: authorsArray,
           year: source.year || '',
           citation_count: citationCount,
-          is_selected: false,
-          metadata: { original_source: 'GoogleScholar' },
+          is_selected: source.is_selected ?? false,
+          metadata: { 
+            original_source: 'GoogleScholar',
+            similarity_score: source.similarity_score,
+            embedding_similarity: source.embedding_similarity,
+            quality_score: source.quality_score 
+          },
         });
       }
     }
@@ -1003,8 +1008,14 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
           abstract: source.full_text || source.extracted_content?.join('\n') || '',
           full_text: source.full_text || '',
           published_at: source.published_at || '',
-          is_selected: false,
-          metadata: { original_source: 'GoogleNews', source: source.source },
+          is_selected: source.is_selected ?? false,
+          metadata: { 
+            original_source: 'GoogleNews', 
+            source: source.source,
+            similarity_score: source.similarity_score,
+            embedding_similarity: source.embedding_similarity,
+            quality_score: source.quality_score 
+          },
         });
       }
     }
@@ -1021,8 +1032,14 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
           url: source.url || '',
           abstract: source.full_text || source.extracted_content?.join('\n') || '',
           full_text: source.full_text || '',
-          is_selected: false,
-          metadata: { original_source: 'WebSearch', site_name: source.site_name },
+          is_selected: source.is_selected ?? false,
+          metadata: { 
+            original_source: 'WebSearch', 
+            site_name: source.site_name,
+            similarity_score: source.similarity_score,
+            embedding_similarity: source.embedding_similarity,
+            quality_score: source.quality_score 
+          },
         });
       }
     }
@@ -2224,5 +2241,228 @@ export async function incrementResearchRefreshCount(projectId: string) {
   if (updateError) throw updateError;
 
   return newCount;
+}
+
+interface SSEEvent {
+  stage: 'plan' | 'searching' | 'top3' | 'final' | 'error' | 'done';
+  data?: any;
+  message?: string;
+}
+
+interface StreamingResearchCallbacks {
+  onPlan?: (data: any, message: string) => void;
+  onSearching?: (message: string) => void;
+  onTop3?: (data: any, message: string) => void;
+  onFinal?: (data: any, message: string) => void;
+  onError?: (message: string) => void;
+  onDone?: (message: string) => void;
+}
+
+export async function agentDrivenResearchWorkflowStreaming(
+  requirementsDoc: any,
+  projectId?: string,
+  userId?: string,
+  sessionId?: string,
+  callbacks?: StreamingResearchCallbacks
+) {
+  const searchKeywords = extractKeywords(requirementsDoc);
+
+  let localMaterials: any[] = [];
+  let localReferences: any[] = [];
+  
+  if (userId && searchKeywords.length > 0) {
+    try {
+      const [materials, references] = await Promise.all([
+        searchMaterialsByTags(userId, searchKeywords.slice(0, 5)),
+        searchReferencesByTags(userId, searchKeywords.slice(0, 5)),
+      ]);
+      localMaterials = materials || [];
+      localReferences = references || [];
+    } catch (error) {
+      console.error('[agentDrivenResearchWorkflowStreaming] 本地搜索失败:', error);
+    }
+  }
+
+  const supabaseUrl = supabase.supabaseUrl;
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session) {
+    throw new Error('未登录');
+  }
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/research-retrieval-streaming`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      requirementsDoc,
+      projectId,
+      userId,
+      sessionId
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`流式请求失败: ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('无法获取响应流');
+  }
+
+  const decoder = new TextDecoder();
+  let finalResults: any = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const event: SSEEvent = JSON.parse(line.slice(6));
+
+            switch (event.stage) {
+              case 'plan':
+                if (event.data) {
+                  callbacks?.onPlan?.(event.data, event.message || '');
+                } else {
+                  callbacks?.onSearching?.(event.message || '');
+                }
+                break;
+              case 'searching':
+                callbacks?.onSearching?.(event.message || '');
+                break;
+              case 'top3':
+                if (event.data) {
+                  callbacks?.onTop3?.(event.data, event.message || '');
+                }
+                break;
+              case 'final':
+                if (event.data) {
+                  finalResults = event.data;
+                  callbacks?.onFinal?.(event.data, event.message || '');
+                }
+                break;
+              case 'error':
+                callbacks?.onError?.(event.message || '未知错误');
+                throw new Error(event.message);
+              case 'done':
+                callbacks?.onDone?.(event.message || '完成');
+                break;
+            }
+          } catch (parseError) {
+            console.error('[agentDrivenResearchWorkflowStreaming] 解析事件失败:', parseError);
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (sessionId && finalResults) {
+    console.log('[agentDrivenResearchWorkflowStreaming] 开始保存搜索结果到数据库，sessionId:', sessionId);
+    
+    const materialsToSave: Array<Omit<RetrievedMaterial, 'id' | 'created_at'>> = [];
+    
+    if (finalResults.academic_sources?.length > 0) {
+      for (const source of finalResults.academic_sources) {
+        let authorsArray: string[] = [];
+        if (source.authors) {
+          authorsArray = source.authors.split(/[,;、，]/).map((a: string) => a.trim()).filter((a: string) => a);
+        }
+        
+        let citationCount = 0;
+        if (source.citation_count !== undefined && source.citation_count !== null && source.citation_count !== '') {
+          citationCount = parseInt(String(source.citation_count), 10) || 0;
+        }
+        
+        materialsToSave.push({
+          session_id: sessionId,
+          project_id: projectId,
+          user_id: userId,
+          source_type: 'academic',
+          title: source.title || '',
+          url: source.url || '',
+          abstract: source.full_text || source.extracted_content?.join('\n') || '',
+          full_text: source.full_text || '',
+          authors: authorsArray,
+          year: source.year || '',
+          citation_count: citationCount,
+          is_selected: source.is_selected ?? false,
+          metadata: { 
+            original_source: 'GoogleScholar',
+            similarity_score: source.similarity_score,
+            embedding_similarity: source.embedding_similarity,
+            quality_score: source.quality_score 
+          },
+        });
+      }
+    }
+    
+    if (finalResults.news_sources?.length > 0) {
+      for (const source of finalResults.news_sources) {
+        materialsToSave.push({
+          session_id: sessionId,
+          project_id: projectId,
+          user_id: userId,
+          source_type: 'news',
+          title: source.title || '',
+          url: source.url || '',
+          abstract: source.full_text || source.extracted_content?.join('\n') || '',
+          full_text: source.full_text || '',
+          published_at: source.published_at || '',
+          is_selected: source.is_selected ?? false,
+          metadata: { 
+            original_source: 'GoogleNews', 
+            source: source.source,
+            similarity_score: source.similarity_score,
+            embedding_similarity: source.embedding_similarity,
+            quality_score: source.quality_score 
+          },
+        });
+      }
+    }
+    
+    if (finalResults.web_sources?.length > 0) {
+      for (const source of finalResults.web_sources) {
+        materialsToSave.push({
+          session_id: sessionId,
+          project_id: projectId,
+          user_id: userId,
+          source_type: 'web',
+          title: source.title || '',
+          url: source.url || '',
+          abstract: source.full_text || source.extracted_content?.join('\n') || '',
+          full_text: source.full_text || '',
+          is_selected: source.is_selected ?? false,
+          metadata: { 
+            original_source: 'WebSearch', 
+            site_name: source.site_name,
+            similarity_score: source.similarity_score,
+            embedding_similarity: source.embedding_similarity,
+            quality_score: source.quality_score 
+          },
+        });
+      }
+    }
+
+    if (materialsToSave.length > 0) {
+      await batchSaveRetrievedMaterials(materialsToSave);
+    }
+  }
+
+  return {
+    retrievalResults: finalResults,
+    synthesisResults: null
+  };
 }
 

@@ -37,12 +37,15 @@ Deno.serve(async (req) => {
     
     let input: ResearchSynthesisInput;
     let sessionId: string | undefined;
+    let projectId: string | undefined;
     
     if (body.input) {
       input = body.input;
       sessionId = body.sessionId;
+      projectId = body.projectId;
+      console.log('[research-synthesis-agent] 使用 input 格式，projectId:', projectId, 'sessionId:', sessionId);
     } else if (body.projectId) {
-      const projectId = body.projectId;
+      projectId = body.projectId;
       sessionId = body.sessionId;
 
       if (!projectId) {
@@ -65,7 +68,10 @@ Deno.serve(async (req) => {
       if (sessionId) {
         const { data: retrievedMaterials, error: retrievedError } = await supabase.from("retrieved_materials").select("*").eq("session_id", sessionId).eq("is_selected", true).order("created_at", { ascending: false });
         if (!retrievedError && retrievedMaterials && retrievedMaterials.length > 0) {
-          knowledge = (retrievedMaterials || []).map((item: any) => {
+          const selectedMaterials = retrievedMaterials.slice(0, 8);
+          console.log('[research-synthesis-agent] 选择前', selectedMaterials.length, '条资料（总共', retrievedMaterials.length, '条）');
+          
+          knowledge = selectedMaterials.map((item: any) => {
             const content = (item.full_text || item.abstract || '').replace(/[\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
             return { title: (item.title || '无标题').trim(), source: item.source_type || 'unknown', source_url: item.url || '', content: content.substring(0, 2000), collected_at: item.created_at };
           });
@@ -78,7 +84,10 @@ Deno.serve(async (req) => {
         if (knowledgeError) {
           return new Response(JSON.stringify({ error: "获取知识库失败" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
-        knowledge = (knowledgeData || []).map((item: any) => {
+        const selectedKnowledge = (knowledgeData || []).slice(0, 8);
+        console.log('[research-synthesis-agent] 从知识库选择前', selectedKnowledge.length, '条资料');
+        
+        knowledge = selectedKnowledge.map((item: any) => {
           const content = (item.content || item.full_text || '').replace(/[\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
           return { ...item, title: (item.title || '无标题').trim(), source: item.source || 'unknown', source_url: item.source_url || '', content: content.substring(0, 2000) };
         });
@@ -100,8 +109,12 @@ Deno.serve(async (req) => {
     }
 
     let materialsContent = "";
-    input.raw_materials.forEach((item, index) => {
-      materialsContent += `\n\n【资料 ${index + 1}】\n标题: ${item.title}\n来源: ${item.source}\n${item.source_url ? `链接: ${item.source_url}\n` : ''}内容:\n${item.content}\n`;
+    const selectedMaterials = input.raw_materials.slice(0, 8);
+    console.log('[research-synthesis-agent] 从 input 选择前', selectedMaterials.length, '条资料（总共', input.raw_materials.length, '条）');
+    
+    selectedMaterials.forEach((item, index) => {
+      const truncatedContent = item.content.substring(0, 2000);
+      materialsContent += `\n\n【资料 ${index + 1}】\n标题: ${item.title}\n来源: ${item.source}\n${item.source_url ? `链接: ${item.source_url}\n` : ''}内容:\n${truncatedContent}\n`;
     });
 
     let requirementsText = `写作主题: ${input.writing_requirements.topic}\n`;
@@ -192,7 +205,38 @@ ${materialsContent}
     if (!synthesisData.synthesized_insights) synthesisData.synthesized_insights = [];
     if (!synthesisData.contradictions_or_gaps) synthesisData.contradictions_or_gaps = [];
 
-    if (sessionId) {
+    // 保存洞察和空白（需要 sessionId 和 projectId）
+    if (sessionId && projectId) {
+      // 1. 将提炼后的洞察存入 knowledge_base 表
+      if (synthesisData.synthesized_insights?.length > 0) {
+        console.log('[research-synthesis-agent] 准备保存洞察到 knowledge_base，projectId:', projectId, '洞察数量:', synthesisData.synthesized_insights.length);
+        const knowledgeBaseItems = synthesisData.synthesized_insights.map((insight: any) => ({
+          project_id: projectId,
+          title: insight.category + ': ' + insight.insight.substring(0, 50),
+          content: insight.insight,
+          source: insight.source_type || 'synthesis',
+          source_url: null,
+          selected: true,
+          content_status: 'synthesized',
+          metadata: {
+            insight_id: insight.id,
+            category: insight.category,
+            supporting_data: insight.supporting_data,
+            recommended_usage: insight.recommended_usage,
+            citability: insight.citability,
+            limitations: insight.limitations,
+          },
+        }));
+        
+        const { error: kbError } = await supabase.from("knowledge_base").insert(knowledgeBaseItems);
+        if (kbError) {
+          console.error("保存洞察到 knowledge_base 失败:", kbError);
+        } else {
+          console.log(`[research-synthesis-agent] 已保存 ${knowledgeBaseItems.length} 条洞察到 knowledge_base`);
+        }
+      }
+
+      // 2. 保存洞察到 research_insights 表
       if (synthesisData.synthesized_insights?.length > 0) {
         const insightsToInsert = synthesisData.synthesized_insights.map((insight: any) => ({
           session_id: sessionId,
@@ -208,8 +252,10 @@ ${materialsContent}
         }));
         const { error: insightsError } = await supabase.from("research_insights").insert(insightsToInsert);
         if (insightsError) console.error("保存 insights 失败:", insightsError);
+        else console.log(`[research-synthesis-agent] 已保存 ${insightsToInsert.length} 条洞察到 research_insights`);
       }
 
+      // 3. 保存空白到 research_gaps 表
       if (synthesisData.contradictions_or_gaps?.length > 0) {
         const gapsToInsert = synthesisData.contradictions_or_gaps.map((gap: any) => ({
           session_id: sessionId,
@@ -220,7 +266,10 @@ ${materialsContent}
         }));
         const { error: gapsError } = await supabase.from("research_gaps").insert(gapsToInsert);
         if (gapsError) console.error("保存 gaps 失败:", gapsError);
+        else console.log(`[research-synthesis-agent] 已保存 ${gapsToInsert.length} 条空白到 research_gaps`);
       }
+    } else {
+      console.log('[research-synthesis-agent] 跳过数据库保存，sessionId:', sessionId, 'projectId:', projectId);
     }
 
     return new Response(JSON.stringify({ thought: result.rawOutput?.match(/---THOUGHT---\s*([\s\S]*?)---JSON---/)?.[1]?.trim() || "", synthesis: synthesisData, sessionId }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });

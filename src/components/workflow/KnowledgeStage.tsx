@@ -5,6 +5,7 @@ import {
   updateKnowledgeBase,
   updateProject,
   agentDrivenResearchWorkflow,
+  agentDrivenResearchWorkflowStreaming,
   researchSynthesisAgent,
   saveToReferenceLibrary,
   getBrief,
@@ -26,6 +27,7 @@ import {
   getSelectedMaterials,
   updateRetrievedMaterialSelection,
   batchUpdateRetrievedMaterialSelection,
+  batchSaveRetrievedMaterials,
   updateInsightDecision,
   updateGapDecision,
   callArticleStructureAgent,
@@ -38,7 +40,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Search, Sparkles, CheckCircle2, RefreshCw, FileText, ArrowRight } from 'lucide-react';
+import { Search, Sparkles, CheckCircle2, RefreshCw, FileText, ArrowRight, Archive } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,6 +49,7 @@ import SearchResultsPanel from './SearchResultsPanel';
 import SynthesisResultsDialog from './SynthesisResultsDialog';
 import SearchLogsDialog from './SearchLogsDialog';
 import ResearchSynthesisReview from './ResearchSynthesisReview';
+import StreamingSearchProgress from './StreamingSearchProgress';
 
 interface KnowledgeStageProps {
   projectId: string;
@@ -74,6 +77,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [synthesizing, setSynthesizing] = useState(false);
   const [workflowResult, setWorkflowResult] = useState<any>(null);
   const [writingSummary, setWritingSummary] = useState<any>(null);
@@ -115,6 +119,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     web_queries?: string[];
     user_library_queries?: string[];
   } | null>(null);
+  
+  // 流式搜索相关状态
+  const [streamingStage, setStreamingStage] = useState<'idle' | 'planning' | 'searching' | 'top3' | 'complete'>('idle');
+  const [streamingMessage, setStreamingMessage] = useState<string>('');
+  const [streamingTop3, setStreamingTop3] = useState<any[]>([]);
+  const [useStreaming, setUseStreaming] = useState(true); // 默认使用流式搜索
   
   const { toast } = useToast();
   const { user } = useAuth();
@@ -488,6 +498,261 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     }
   };
 
+  const handleSearchStreaming = async (searchQuery?: string) => {
+    const queryToUse = searchQuery || query;
+    if (!queryToUse.trim()) return;
+
+    if (!writingSession) {
+      toast({
+        title: '初始化中',
+        description: '请稍等片刻后再试',
+        variant: 'destructive',
+      });
+      console.error('[handleSearchStreaming] writingSession 未初始化');
+      return;
+    }
+
+    setSearching(true);
+    setStreamingStage('planning');
+    setStreamingMessage('');
+    setStreamingTop3([]);
+    setSearchPlan(null);
+    
+    setSearchLogs(['[' + new Date().toLocaleTimeString('zh-CN') + '] 开始搜索资料...']);
+
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('未登录');
+
+      if (!autoSearched) {
+        console.log('[KnowledgeStage] 清空旧的知识库数据...');
+        await clearProjectKnowledge(projectId);
+        setKnowledge([]);
+      }
+
+      const brief = await getBrief(projectId);
+      if (!brief) throw new Error('未找到需求文档');
+
+      const requirements = typeof brief.requirements === 'string' 
+        ? JSON.parse(brief.requirements) 
+        : brief.requirements;
+
+      const requirementsDoc = {
+        主题: requirements.主题 || brief.topic || queryToUse,
+        关键要点: requirements.关键要点 || [],
+        核心观点: requirements.核心观点 || [],
+        目标读者: requirements.目标读者 || '通用读者',
+        写作风格: requirements.写作风格 || '专业',
+        预期长度: requirements.预期长度 || '中等',
+      };
+
+      const searchKeywords = extractKeywords(requirementsDoc);
+
+      if (searchKeywords.length > 0) {
+        try {
+          const [localMaterials, localReferences] = await Promise.all([
+            searchMaterialsByTags(authUser.id, searchKeywords.slice(0, 5)),
+            searchReferencesByTags(authUser.id, searchKeywords.slice(0, 5)),
+          ]);
+
+          if (localMaterials && localMaterials.length > 0) {
+            setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 找到 ' + localMaterials.length + ' 条个人素材']);
+            
+            const materialItems: KnowledgeBase[] = localMaterials.map((material: any) => ({
+              id: material.id,
+              project_id: projectId,
+              title: material.title,
+              content: material.content || material.abstract || '',
+              source: 'local_material',
+              source_url: material.source_url,
+              published_at: material.published_at,
+              collected_at: material.created_at,
+              selected: false,
+              content_status: 'full_text' as const,
+              extracted_content: material.content ? [material.content] : [],
+              full_text: material.content,
+              created_at: material.created_at,
+            }));
+            setKnowledge(prev => [...prev, ...materialItems]);
+          }
+
+          if (localReferences && localReferences.length > 0) {
+            setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 找到 ' + localReferences.length + ' 篇参考文章']);
+            
+            const refItems: KnowledgeBase[] = localReferences.map((ref: any) => ({
+              id: ref.id,
+              project_id: projectId,
+              title: ref.title,
+              content: ref.content || ref.abstract || '',
+              source: 'reference_article',
+              source_url: ref.source_url,
+              published_at: ref.published_at,
+              collected_at: ref.created_at,
+              selected: false,
+              content_status: 'full_text' as const,
+              extracted_content: ref.content ? [ref.content] : [],
+              full_text: ref.content,
+              created_at: ref.created_at,
+            }));
+            setKnowledge(prev => [...prev, ...refItems]);
+          }
+
+          if ((localMaterials?.length || 0) > 0 || (localReferences?.length || 0) > 0) {
+            toast({
+              title: '📚 已加载本地资料',
+              description: '个人素材: ' + (localMaterials?.length || 0) + ' 条，参考文章: ' + (localReferences?.length || 0) + ' 篇',
+            });
+          }
+        } catch (error) {
+          console.error('[KnowledgeStage] 本地搜索失败:', error);
+        }
+      }
+
+      const { retrievalResults } = await agentDrivenResearchWorkflowStreaming(
+        requirementsDoc,
+        projectId,
+        authUser.id,
+        writingSession?.id,
+        {
+          onPlan: (data, message) => {
+            console.log('[streaming] onPlan:', data);
+            if (data) {
+              setSearchPlan({
+                ...data.search_summary,
+                academic_queries: data.academic_queries,
+                news_queries: data.news_queries,
+                web_queries: data.web_queries,
+                user_library_queries: data.user_library_queries,
+              });
+              setStreamingStage('searching');
+              setStreamingMessage(message);
+              
+              toast({
+                title: '📋 搜索计划已生成',
+                description: message || data.search_summary?.interpreted_topic || '',
+              });
+            } else {
+              setStreamingMessage(message);
+            }
+          },
+          onSearching: (message) => {
+            console.log('[streaming] onSearching:', message);
+            setStreamingStage('searching');
+            setStreamingMessage(message);
+          },
+          onTop3: (data, message) => {
+            console.log('[streaming] onTop3:', data);
+            setStreamingStage('top3');
+            setStreamingTop3(data.top3 || []);
+            setStreamingMessage(message);
+            toast({
+              title: '📌 初步发现',
+              description: message || '已找到核心观点',
+            });
+          },
+          onFinal: (data, message) => {
+            console.log('[streaming] onFinal:', data);
+            setStreamingStage('complete');
+            setStreamingMessage(message);
+            setRetrievalResults(data);
+            
+            if (data.logs && Array.isArray(data.logs)) {
+              const formattedLogs = data.logs.map((log: string) => 
+                '[' + new Date().toLocaleTimeString('zh-CN') + '] ' + log
+              );
+              setSearchLogs(prev => [...prev, ...formattedLogs]);
+            }
+          },
+          onError: (message) => {
+            console.error('[streaming] onError:', message);
+            setStreamingStage('idle');
+            setStreamingMessage(message);
+            toast({
+              title: '❌ 搜索失败',
+              description: message,
+              variant: 'destructive',
+            });
+          },
+          onDone: (message) => {
+            console.log('[streaming] onDone:', message);
+            setStreamingStage('complete');
+            setStreamingMessage(message);
+          }
+        }
+      );
+
+      console.log('[KnowledgeStage] 流式搜索完成');
+
+      let savedMaterials: RetrievedMaterial[] = [];
+      if (writingSession?.id) {
+        try {
+          savedMaterials = await getRetrievedMaterials(writingSession.id);
+          console.log('[KnowledgeStage] 从数据库加载的资料数量:', savedMaterials.length);
+          setRetrievedMaterials(savedMaterials);
+        } catch (loadError) {
+          console.error('[KnowledgeStage] 从数据库加载资料失败:', loadError);
+        }
+      }
+
+      const totalMaterials = savedMaterials.length;
+      
+      setSearchProgress({ 
+        stage: '完成', 
+        message: `已检索到 ${totalMaterials} 条资料，可以开始资料整理`,
+      });
+      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成，共 ' + totalMaterials + ' 条资料']);
+
+      toast({
+        title: '✅ 资料检索完成',
+        description: `已检索到 ${totalMaterials} 条资料，请选择需要的资料后进入下一阶段',
+      });
+
+      setWorkflowResult({
+        retrievalResults,
+        synthesisResults: null,
+      });
+
+      const searchTime = new Date().toLocaleString('zh-CN');
+      setLastSearchTime(searchTime);
+      
+      saveSearchCache(projectId, {
+        searchPlan: searchPlan,
+        retrievedMaterials: savedMaterials,
+        searchLogs: [...searchLogs, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成'],
+        lastSearchTime: searchTime,
+        query: queryToUse,
+      });
+      
+    } catch (error: any) {
+      console.error('流式搜索失败:', error);
+      
+      let errorMessage = '请稍后重试';
+      
+      if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      toast({
+        title: '❌ 资料检索失败',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+      
+      if (errorMessage.includes('API密钥') || errorMessage.includes('API key')) {
+        setTimeout(() => {
+          toast({
+            title: '💡 提示',
+            description: '请检查 Supabase 项目的 Secrets 配置，确保 INTEGRATIONS_API_KEY 已正确设置',
+            duration: 8000,
+          });
+        }, 1000);
+      }
+    } finally {
+      setSearching(false);
+      setTimeout(() => setSearchProgress(null), 3000);
+    }
+  };
+
   const handleSearch = async (searchQuery?: string) => {
     const queryToUse = searchQuery || query;
     if (!queryToUse.trim()) return;
@@ -563,7 +828,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
           // 如果有本地素材，先显示
           if (localMaterials && localMaterials.length > 0) {
-            setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + `] 找到 ${localMaterials.length} 条个人素材`]);
+            setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 找到 ' + localMaterials.length + ' 条个人素材']);
             
             // 转换为 knowledge 格式并添加到知识库
             const materialItems: KnowledgeBase[] = localMaterials.map((material: any) => ({
@@ -586,7 +851,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
           // 如果有参考文章，先显示
           if (localReferences && localReferences.length > 0) {
-            setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + `] 找到 ${localReferences.length} 篇参考文章`]);
+            setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 找到 ' + localReferences.length + ' 篇参考文章']);
             
             // 转换为 knowledge 格式并添加到知识库
             const refItems: KnowledgeBase[] = localReferences.map((ref: any) => ({
@@ -610,7 +875,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           if ((localMaterials?.length || 0) > 0 || (localReferences?.length || 0) > 0) {
             toast({
               title: '📚 已加载本地资料',
-              description: `个人素材: ${localMaterials?.length || 0} 条，参考文章: ${localReferences?.length || 0} 篇`,
+              description: '个人素材: ' + (localMaterials?.length || 0) + ' 条，参考文章: ' + (localReferences?.length || 0) + ' 篇',
             });
           }
         } catch (error) {
@@ -640,17 +905,105 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       });
       setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在从 5 个数据源检索相关资料...']);
 
-      console.log('[KnowledgeStage] 调用 agentDrivenResearchWorkflow，需求文档:', requirementsDoc);
+      console.log('[KnowledgeStage] 调用研究工作流，需求文档:', requirementsDoc);
       console.log('[KnowledgeStage] writingSession:', writingSession);
       console.log('[KnowledgeStage] writingSession.id:', writingSession?.id);
 
-      // 使用新的 Agent 驱动的研究工作流（传入 sessionId）
-      const { retrievalResults, synthesisResults } = await agentDrivenResearchWorkflow(
-        requirementsDoc,
-        projectId,
-        user.id,
-        writingSession?.id // 传入 sessionId
-      );
+      let retrievalResults: any;
+      let synthesisResults: any;
+      
+      if (useStreaming) {
+        // 使用流式搜索
+        setStreamingStage('planning');
+        setStreamingMessage('');
+        setStreamingTop3([]);
+        
+        const { retrievalResults: streamRetrievalResults } = await agentDrivenResearchWorkflowStreaming(
+          requirementsDoc,
+          projectId,
+          user.id,
+          writingSession?.id,
+          {
+            onPlan: (data, message) => {
+              console.log('[streaming] onPlan:', data);
+              if (data) {
+                setSearchPlan({
+                  ...data.search_summary,
+                  academic_queries: data.academic_queries,
+                  news_queries: data.news_queries,
+                  web_queries: data.web_queries,
+                  user_library_queries: data.user_library_queries,
+                });
+                setStreamingStage('searching');
+                setStreamingMessage(message);
+                
+                toast({
+                  title: '📋 搜索计划已生成',
+                  description: message || data.search_summary?.interpreted_topic || '',
+                });
+              } else {
+                setStreamingMessage(message);
+              }
+            },
+            onSearching: (message) => {
+              console.log('[streaming] onSearching:', message);
+              setStreamingStage('searching');
+              setStreamingMessage(message);
+            },
+            onTop3: (data, message) => {
+              console.log('[streaming] onTop3:', data);
+              setStreamingStage('top3');
+              setStreamingTop3(data.top3 || []);
+              setStreamingMessage(message);
+              toast({
+                title: '📌 初步发现',
+                description: message || '已找到核心观点',
+              });
+            },
+            onFinal: (data, message) => {
+              console.log('[streaming] onFinal:', data);
+              setStreamingStage('complete');
+              setStreamingMessage(message);
+              setRetrievalResults(data);
+              
+              if (data.logs && Array.isArray(data.logs)) {
+                const formattedLogs = data.logs.map((log: string) => 
+                  '[' + new Date().toLocaleTimeString('zh-CN') + '] ' + log
+                );
+                setSearchLogs(prev => [...prev, ...formattedLogs]);
+              }
+            },
+            onError: (message) => {
+              console.error('[streaming] onError:', message);
+              setStreamingStage('idle');
+              setStreamingMessage(message);
+              toast({
+                title: '❌ 搜索失败',
+                description: message,
+                variant: 'destructive',
+              });
+            },
+            onDone: (message) => {
+              console.log('[streaming] onDone:', message);
+              setStreamingStage('complete');
+              setStreamingMessage(message);
+            }
+          }
+        );
+        
+        retrievalResults = streamRetrievalResults;
+        synthesisResults = null;
+      } else {
+        // 使用传统的非流式搜索
+        const result = await agentDrivenResearchWorkflow(
+          requirementsDoc,
+          projectId,
+          user.id,
+          writingSession?.id
+        );
+        retrievalResults = result.retrievalResults;
+        synthesisResults = result.synthesisResults;
+      }
 
       console.log('[KnowledgeStage] agentDrivenResearchWorkflow 返回结果:');
       console.log('  - retrievalResults:', retrievalResults);
@@ -702,115 +1055,32 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       setRetrievalResults(retrievalResults);
       setSynthesisResults(synthesisResults);
 
-      // 直接从 retrievalResults 中提取资料，不再调用 getRetrievedMaterials
-      // 资料来源：academic_sources, news_sources, web_sources, user_library_sources, personal_sources
-      const allSources = [
-        ...(retrievalResults.academic_sources || []).map((s: any) => ({
-          id: s.url || Math.random().toString(),
-          session_id: writingSession?.id || '',
-          project_id: projectId,
-          user_id: user.id,
-          source_type: 'academic',
-          title: s.title || '',
-          url: s.url || '',
-          abstract: s.full_text || s.extracted_content?.join('\n') || '',
-          full_text: s.full_text || '',
-          authors: s.authors ? (Array.isArray(s.authors) ? s.authors : s.authors.split(/[,;、，]/)) : [],
-          year: s.year || '',
-          citation_count: s.citation_count || 0,
-          is_selected: false,
-          created_at: new Date().toISOString(),
-        })),
-        ...(retrievalResults.news_sources || []).map((s: any) => ({
-          id: s.url || Math.random().toString(),
-          session_id: writingSession?.id || '',
-          project_id: projectId,
-          user_id: user.id,
-          source_type: 'news',
-          title: s.title || '',
-          url: s.url || '',
-          abstract: s.full_text || s.extracted_content?.join('\n') || '',
-          full_text: s.full_text || '',
-          published_at: s.published_at || '',
-          is_selected: false,
-          created_at: new Date().toISOString(),
-        })),
-        ...(retrievalResults.web_sources || []).map((s: any) => ({
-          id: s.url || Math.random().toString(),
-          session_id: writingSession?.id || '',
-          project_id: projectId,
-          user_id: user.id,
-          source_type: 'web',
-          title: s.title || '',
-          url: s.url || '',
-          abstract: s.full_text || s.extracted_content?.join('\n') || '',
-          full_text: s.full_text || '',
-          is_selected: false,
-          created_at: new Date().toISOString(),
-        })),
-        ...(retrievalResults.user_library_sources || []).map((s: any) => ({
-          id: s.id || Math.random().toString(),
-          session_id: writingSession?.id || '',
-          project_id: projectId,
-          user_id: user.id,
-          source_type: 'user_library',
-          title: s.title || '',
-          abstract: s.content || '',
-          full_text: s.content || '',
-          is_selected: false,
-          created_at: s.created_at || new Date().toISOString(),
-        })),
-        ...(retrievalResults.personal_sources || []).map((s: any) => ({
-          id: s.id || Math.random().toString(),
-          session_id: writingSession?.id || '',
-          project_id: projectId,
-          user_id: user.id,
-          source_type: 'personal',
-          title: s.title || '',
-          abstract: s.content || '',
-          full_text: s.content || '',
-          is_selected: false,
-          created_at: s.created_at || new Date().toISOString(),
-        })),
-      ];
-
-      console.log('[KnowledgeStage] 从 retrievalResults 提取的资料数量:', allSources.length);
-      setRetrievedMaterials(allSources);
-
-      // 转换为 KnowledgeBase 格式
-      const knowledgeItems: KnowledgeBase[] = allSources.map((material: any) => {
-        let publishedAt = material.published_at;
-        if (!publishedAt && material.year) {
-          publishedAt = `${material.year}-01-01T00:00:00Z`;
+      // 资料已在 agentDrivenResearchWorkflow 中保存到 retrieved_materials 表
+      // 从数据库加载已保存的资料
+      console.log('[KnowledgeStage] 从数据库加载已保存的资料，sessionId:', writingSession?.id);
+      
+      let savedMaterials: RetrievedMaterial[] = [];
+      if (writingSession?.id) {
+        try {
+          savedMaterials = await getRetrievedMaterials(writingSession.id);
+          console.log('[KnowledgeStage] 从数据库加载的资料数量:', savedMaterials.length);
+          setRetrievedMaterials(savedMaterials);
+        } catch (loadError) {
+          console.error('[KnowledgeStage] 从数据库加载资料失败:', loadError);
         }
-        
-        return {
-          id: material.id,
-          project_id: projectId,
-          title: material.title,
-          content: material.abstract || material.full_text || '',
-          source: material.source_type,
-          source_url: material.url,
-          published_at: publishedAt,
-          collected_at: material.created_at,
-          selected: material.is_selected,
-          content_status: material.full_text ? 'full_text' : material.abstract ? 'abstract_only' : 'insufficient_content',
-          extracted_content: material.full_text ? [material.full_text] : [],
-          full_text: material.full_text,
-          created_at: material.created_at,
-        };
-      });
-      setKnowledge(knowledgeItems);
+      }
 
+      const totalMaterials = savedMaterials.length;
+      
       setSearchProgress({ 
         stage: '完成', 
-        message: `已检索到 ${allSources.length} 条资料，可以开始资料整理`,
+        message: `已检索到 ${totalMaterials} 条资料，可以开始资料整理`,
       });
-      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成，共 ' + allSources.length + ' 条资料']);
+      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成，共 ' + totalMaterials + ' 条资料']);
 
       toast({
         title: '✅ 资料检索完成',
-        description: `已检索到 ${allSources.length} 条资料，可以开始资料整理`,
+        description: `已检索到 ${totalMaterials} 条资料，请选择需要的资料后进入下一阶段`,
       });
 
       // 保存综合结果到项目
@@ -826,7 +1096,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       // 保存搜索结果到 localStorage 缓存
       saveSearchCache(projectId, {
         searchPlan: retrievalResults?.search_summary || null,
-        retrievedMaterials: allSources,
+        retrievedMaterials: savedMaterials,
         searchLogs: [...searchLogs, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成'],
         lastSearchTime: searchTime,
         query: queryToUse,
@@ -936,12 +1206,75 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     }
   };
 
+  // 归档资料到参考文章库
+  const handleArchiveMaterials = async () => {
+    const selectedMaterials = retrievedMaterials.filter(m => m.is_selected);
+    
+    if (selectedMaterials.length === 0) {
+      toast({
+        title: '请选择资料',
+        description: '请至少选择一条资料进行归档',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!user) {
+      toast({
+        title: '未登录',
+        description: '请先登录',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setArchiving(true);
+      
+      toast({
+        title: '正在归档资料',
+        description: `正在将 ${selectedMaterials.length} 条资料保存到参考文章库...`,
+      });
+
+      // 批量保存到参考文章库
+      let successCount = 0;
+      for (const material of selectedMaterials) {
+        try {
+          await saveToReferenceLibrary(user.id, {
+            title: material.title,
+            content: material.full_text || material.abstract || '',
+            source: material.source_type,
+            source_url: material.url || '',
+            keywords: [],
+          });
+          successCount++;
+        } catch (error) {
+          console.error('[handleArchiveMaterials] 保存失败:', material.title, error);
+        }
+      }
+
+      toast({
+        title: '归档完成',
+        description: `已成功归档 ${successCount}/${selectedMaterials.length} 条资料到参考文章库`,
+      });
+      
+    } catch (error: any) {
+      console.error('[handleArchiveMaterials] 归档失败:', error);
+      toast({
+        title: '归档失败',
+        description: error.message || '请稍后重试',
+        variant: 'destructive',
+      });
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   // 处理进入下一步（从搜索结果直接进入）
   const handleNextStep = async () => {
     console.log('[handleNextStep] 开始进入下一阶段');
     console.log('[handleNextStep] writingSession:', writingSession);
     console.log('[handleNextStep] retrievedMaterials.length:', retrievedMaterials.length);
-    console.log('[handleNextStep] knowledge.length:', knowledge.length);
 
     if (!writingSession) {
       toast({
@@ -952,13 +1285,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       return;
     }
 
-    // 使用当前的 retrievedMaterials
-    const materialsToUse = retrievedMaterials.length > 0 ? retrievedMaterials : knowledge;
+    // 从 retrieved_materials 获取选中的资料
+    const selectedMaterials = retrievedMaterials.filter(m => m.is_selected);
+    console.log('[handleNextStep] 选中的资料数量:', selectedMaterials.length);
     
-    if (materialsToUse.length === 0) {
+    if (selectedMaterials.length === 0) {
       toast({
-        title: '暂无资料',
-        description: '请先进行资料搜索',
+        title: '请选择资料',
+        description: '请至少选择一条资料后进入下一阶段',
         variant: 'destructive',
       });
       return;
@@ -969,62 +1303,17 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       
       toast({
         title: '正在整理资料',
-        description: '正在分析检索到的资料并生成研究洞察...',
+        description: '正在分析选中的资料并生成研究洞察...',
       });
       
       setSynthesisLogs(['[' + new Date().toLocaleTimeString('zh-CN') + '] 开始资料整理...']);
-      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 共 ' + materialsToUse.length + ' 条资料待整理']);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 共 ' + selectedMaterials.length + ' 条选中资料待整理']);
 
-      // 1. 将所有资料保存到 knowledge_base 表
-      console.log('[handleNextStep] 开始保存资料到 knowledge_base，数量:', materialsToUse.length);
-      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在保存资料到知识库...']);
-      
-      const existingKnowledge = await getKnowledgeBase(projectId);
-      const existingUrls = new Set(existingKnowledge.map(k => k.source_url).filter(Boolean));
-      
-      let savedCount = 0;
-      for (const material of materialsToUse) {
-        const materialUrl = 'url' in material ? material.url : (material as any).source_url;
-        const materialSourceType = 'source_type' in material ? material.source_type : (material as any).source;
-        const materialAbstract = 'abstract' in material ? material.abstract : '';
-        const materialYear = 'year' in material ? material.year : null;
-        const materialContent = 'content' in material ? (material as any).content : '';
-        
-        if (materialUrl && existingUrls.has(materialUrl)) {
-          console.log('[handleNextStep] 资料已存在，跳过:', material.title);
-          continue;
-        }
-        
-        try {
-          let publishedAt = material.published_at;
-          if (!publishedAt && materialYear) {
-            publishedAt = `${materialYear}-01-01T00:00:00Z`;
-          }
-          
-          await createKnowledgeBase({
-            project_id: projectId,
-            title: material.title,
-            content: materialAbstract || material.full_text || materialContent || '',
-            source: materialSourceType,
-            source_url: materialUrl,
-            published_at: publishedAt,
-            collected_at: material.created_at,
-            selected: true,
-            content_status: material.full_text ? 'full_text' : materialAbstract ? 'abstract_only' : 'insufficient_content',
-            extracted_content: material.full_text ? [material.full_text] : [],
-            full_text: material.full_text,
-          });
-          savedCount++;
-        } catch (error: any) {
-          console.error('[handleNextStep] 保存资料失败:', material.title, error);
-          setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 保存资料失败: ' + material.title]);
-        }
-      }
-      
-      console.log('[handleNextStep] 资料保存完成，新增:', savedCount, '条，开始调用研究综合 Agent');
-      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 资料保存完成，新增 ' + savedCount + ' 条']);
-
-      // 2. 调用研究综合 Agent
+      // 调用研究综合 Agent
+      // synthesis agent 会：
+      // 1. 从 retrieved_materials 读取选中的资料
+      // 2. 进行分析提炼
+      // 3. 将结果存入 knowledge_base、research_insights、research_gaps
       setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 🤖 启动 Research Synthesis Agent...']);
       setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在分析资料并生成研究洞察...']);
       
@@ -1032,7 +1321,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       
       setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ Research Synthesis Agent 完成']);
       
-      // 3. 获取保存的洞察和空白
+      // 获取保存的洞察和空白
       setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在加载研究洞察和空白...']);
       const insights = await getResearchInsights(writingSession.id);
       const gaps = await getResearchGaps(writingSession.id);
@@ -1599,7 +1888,16 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             {/* 提示信息 */}
 
             {/* 搜索进度显示 */}
-            {searchProgress && (
+            {(searching || streamingStage !== 'idle') && useStreaming ? (
+              <CardContent>
+                <StreamingSearchProgress
+                  stage={streamingStage}
+                  searchPlan={searchPlan}
+                  top3={streamingTop3}
+                  message={streamingMessage}
+                />
+              </CardContent>
+            ) : searchProgress && !useStreaming ? (
               <CardContent>
                 <Card className={`border-2 ${
                   searchProgress.stage === '失败' 
@@ -1643,7 +1941,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                   </CardContent>
                 </Card>
               </CardContent>
-            )}
+            ) : null}
             {/* 搜索计划和搜索结果 - 直接放在资料查询卡片下 */}
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 min-h-[400px]">
@@ -1675,22 +1973,32 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         <Card>
           <CardContent className="py-4">
             <div className="flex justify-between items-center">
-              <div className="text-sm text-muted-foreground">
-                {retrievedMaterials.length > 0 ? (
-                  <span>
-                    已检索到 {retrievedMaterials.length} 条资料，点击"进入下一阶段"开始整理
+              <div className="text-sm text-muted-foreground space-y-1">
+                <div>
+                  共检索到 <span className="font-semibold text-foreground">{retrievedMaterials.length}</span> 条资料
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                    已选中 {retrievedMaterials.filter(m => m.is_selected).length} 条
                   </span>
-                ) : (
-                  <span>
-                    已加载 {knowledge.length} 条资料，点击"进入下一阶段"开始整理
+                  <span className="text-xs">
+                    （点击资料右侧收藏按钮选择要分析的资料）
                   </span>
-                )}
+                </div>
               </div>
-              <div className="flex gap-4">
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline"
+                  onClick={handleArchiveMaterials}
+                  disabled={archiving || retrievedMaterials.filter(m => m.is_selected).length === 0}
+                >
+                  {archiving ? '归档中...' : '归档资料'}
+                  <Archive className="h-4 w-4 ml-2" />
+                </Button>
                 <Button 
                   onClick={handleNextStep}
                   className="min-w-[140px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-                  disabled={confirming || (retrievedMaterials.length === 0 && knowledge.length === 0)}
+                  disabled={confirming || retrievedMaterials.filter(m => m.is_selected).length === 0}
                 >
                   {confirming ? '处理中...' : '进入下一阶段'}
                   <ArrowRight className="h-4 w-4 ml-2" />
