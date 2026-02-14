@@ -3,7 +3,7 @@
  * 整合所有LLM调用、解析、验证流程
  */
 
-import { callLLM, type LLMCallConfig } from './callLLM.ts';
+import { callLLMWithFallback, type LLMCallConfig } from './callLLMWithFallback.ts';
 import { parseEnvelope } from './parseEnvelope.ts';
 import { validateOrThrow } from './validateSchema.ts';
 
@@ -55,7 +55,7 @@ export async function runLLMAgent<T = any>(
 
   try {
     // Step 1: 调用LLM
-    const rawOutput = await callLLM({
+    const rawOutput = await callLLMWithFallback({
       prompt: config.prompt,
       model: config.model,
       temperature: config.temperature,

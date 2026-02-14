@@ -3,7 +3,12 @@
  * 先尝试 Gemini，失败后回退到 Qwen
  */
 
-import { LLMCallConfig } from './callLLM.ts';
+export interface LLMCallConfig {
+  prompt: string;
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
 
 /**
  * 调用 Gemini API
@@ -77,7 +82,7 @@ async function callQwen(config: LLMCallConfig): Promise<string> {
     maxTokens = 8192,
   } = config;
 
-  const apiKey = Deno.env.get('QWEN_API_KEY') || Deno.env.get('INTEGRATIONS_API_KEY');
+  const apiKey = Deno.env.get('QWEN_API_KEY') || Deno.env.get('QIANWEN_API_KEY') || Deno.env.get('INTEGRATIONS_API_KEY');
   if (!apiKey) {
     throw new Error('Qwen API密钥未配置');
   }
