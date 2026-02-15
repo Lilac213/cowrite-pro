@@ -16,11 +16,11 @@ import {
   Bookmark,
   Trash2
 } from 'lucide-react';
-import type { KnowledgeBase } from '@/types';
+import type { RetrievedMaterial } from '@/types';
 import ResultDetailDialog from './ResultDetailDialog';
 
 interface SearchResultsPanelProps {
-  results: KnowledgeBase[];
+  results: RetrievedMaterial[];
   onToggleFavorite: (id: string, selected: boolean) => void;
   onDelete: (ids: string[]) => void;
   onBatchFavorite: (ids: string[], selected: boolean) => void;
@@ -40,7 +40,7 @@ export default function SearchResultsPanel({
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
-  const [selectedResult, setSelectedResult] = useState<KnowledgeBase | null>(null);
+  const [selectedResult, setSelectedResult] = useState<RetrievedMaterial | null>(null);
   const { toast } = useToast();
 
   // 过滤结果
@@ -50,16 +50,16 @@ export default function SearchResultsPanel({
     // 按数据源过滤
     if (sourceFilter !== 'all') {
       filtered = filtered.filter(result => {
-        const source = result.source.toLowerCase();
+        const source = result.source_type.toLowerCase();
         switch (sourceFilter) {
           case 'academic':
-            return source.includes('scholar') || source.includes('academic');
+            return source.includes('academic');
           case 'news':
             return source.includes('news');
           case 'web':
-            return source.includes('search') || source.includes('web');
+            return source.includes('web');
           case 'library':
-            return source.includes('资料库') || source.includes('素材');
+            return source.includes('user_library');
           default:
             return true;
         }
@@ -69,11 +69,11 @@ export default function SearchResultsPanel({
     // 按搜索关键词过滤
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(result => 
-        result.title.toLowerCase().includes(query) ||
-        result.content.toLowerCase().includes(query) ||
-        result.keywords?.some(k => k.toLowerCase().includes(query))
-      );
+      filtered = filtered.filter(result => {
+        const content = result.abstract || result.full_text || '';
+        return result.title.toLowerCase().includes(query) ||
+          content.toLowerCase().includes(query);
+      });
     }
 
     // 按时间过滤
@@ -97,8 +97,8 @@ export default function SearchResultsPanel({
       }
 
       filtered = filtered.filter(result => {
-        // 优先使用 published_at，如果没有则使用 collected_at
-        const dateStr = result.published_at || result.collected_at;
+        // 优先使用 published_at，如果没有则使用 created_at
+        const dateStr = result.published_at || result.created_at;
         if (!dateStr) return false;
         
         const resultDate = new Date(dateStr);
@@ -160,25 +160,35 @@ export default function SearchResultsPanel({
   };
 
   // 打开详情
-  const handleOpenDetail = (result: KnowledgeBase) => {
+  const handleOpenDetail = (result: RetrievedMaterial) => {
     setSelectedResult(result);
     setDetailDialogOpen(true);
   };
 
-  const getSourceIcon = (source: string) => {
-    const lowerSource = source.toLowerCase();
-    if (lowerSource.includes('scholar') || lowerSource.includes('academic')) return <BookOpen className="w-4 h-4" />;
+  const getSourceIcon = (sourceType: string) => {
+    const lowerSource = sourceType.toLowerCase();
+    if (lowerSource.includes('academic')) return <BookOpen className="w-4 h-4" />;
     if (lowerSource.includes('news')) return <Newspaper className="w-4 h-4" />;
-    if (lowerSource.includes('search') || lowerSource.includes('web')) return <Globe className="w-4 h-4" />;
+    if (lowerSource.includes('web')) return <Globe className="w-4 h-4" />;
     return <Database className="w-4 h-4" />;
   };
 
-  const getSourceBadgeVariant = (source: string): "default" | "secondary" | "destructive" | "outline" => {
-    const lowerSource = source.toLowerCase();
-    if (lowerSource.includes('scholar') || lowerSource.includes('academic')) return 'default'; // 蓝色
+  const getSourceBadgeVariant = (sourceType: string): "default" | "secondary" | "destructive" | "outline" => {
+    const lowerSource = sourceType.toLowerCase();
+    if (lowerSource.includes('academic')) return 'default'; // 蓝色
     if (lowerSource.includes('news')) return 'destructive'; // 橙色/红色
-    if (lowerSource.includes('search') || lowerSource.includes('web')) return 'secondary'; // 绿色
+    if (lowerSource.includes('web')) return 'secondary'; // 绿色
     return 'outline';
+  };
+
+  const getSourceName = (sourceType: string) => {
+    switch (sourceType) {
+      case 'academic': return '学术';
+      case 'news': return '资讯';
+      case 'web': return '网页';
+      case 'user_library': return '资料库';
+      default: return sourceType;
+    }
   };
 
   const isAllSelected = filteredResults.length > 0 && selectedIds.size === filteredResults.length;
@@ -278,87 +288,93 @@ export default function SearchResultsPanel({
             <p className="text-sm">暂无搜索结果</p>
           </Card>
         ) : (
-          filteredResults.map((result) => (
-            <Card 
-              key={result.id} 
-              className="hover:shadow-md transition-shadow cursor-pointer"
-            >
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <Checkbox
-                    checked={selectedIds.has(result.id)}
-                    onCheckedChange={(checked) => handleSelectOne(result.id, checked as boolean)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <div 
-                    className="flex-1 space-y-2"
-                    onClick={() => handleOpenDetail(result)}
-                  >
-                    {/* 标题 */}
-                    <h3 className="font-semibold text-base hover:text-primary transition-colors">
-                      {result.title}
-                    </h3>
+          filteredResults.map((result) => {
+            const content = result.abstract || result.full_text || '';
+            return (
+              <Card 
+                key={result.id} 
+                className="hover:shadow-md transition-shadow cursor-pointer"
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      checked={selectedIds.has(result.id)}
+                      onCheckedChange={(checked) => handleSelectOne(result.id, checked as boolean)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <div 
+                      className="flex-1 space-y-2"
+                      onClick={() => handleOpenDetail(result)}
+                    >
+                      {/* 标题 */}
+                      <h3 className="font-semibold text-base hover:text-primary transition-colors">
+                        {result.title}
+                      </h3>
 
-                    {/* 来源和时间 */}
-                    <div className="flex items-center gap-2 text-xs">
-                      <Badge variant={getSourceBadgeVariant(result.source)} className="flex items-center gap-1">
-                        {getSourceIcon(result.source)}
-                        <span>{result.source}</span>
-                      </Badge>
-                      {result.published_at && (
-                        <span className="text-muted-foreground">
-                          {new Date(result.published_at).toLocaleDateString('zh-CN')}
-                        </span>
+                      {/* 来源和时间 */}
+                      <div className="flex items-center gap-2 text-xs">
+                        <Badge variant={getSourceBadgeVariant(result.source_type)} className="flex items-center gap-1">
+                          {getSourceIcon(result.source_type)}
+                          <span>{getSourceName(result.source_type)}</span>
+                        </Badge>
+                        {result.published_at && (
+                          <span className="text-muted-foreground">
+                            {new Date(result.published_at).toLocaleDateString('zh-CN')}
+                          </span>
+                        )}
+                        {result.year && !result.published_at && (
+                          <span className="text-muted-foreground">
+                            {result.year}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 内容摘要 */}
+                      {content && (
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {content.substring(0, 200)}
+                          {content.length > 200 && '...'}
+                        </p>
+                      )}
+
+                      {/* 作者 */}
+                      {result.authors && result.authors.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          作者：{result.authors.join(', ')}
+                        </p>
                       )}
                     </div>
 
-                    {/* 内容摘要 */}
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {result.content.substring(0, 200)}
-                      {result.content.length > 200 && '...'}
-                    </p>
-
-                    {/* 关键词 */}
-                    {result.keywords && result.keywords.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {result.keywords.slice(0, 5).map((keyword, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {keyword}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
+                    {/* 收藏按钮 */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleFavorite(result.id, !result.is_selected);
+                      }}
+                    >
+                      {result.is_selected ? (
+                        <Bookmark className="w-4 h-4 fill-current" />
+                      ) : (
+                        <Bookmark className="w-4 h-4" />
+                      )}
+                    </Button>
                   </div>
-
-                  {/* 收藏按钮 */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleFavorite(result.id, !result.selected);
-                    }}
-                  >
-                    {result.selected ? (
-                      <Bookmark className="w-4 h-4 fill-current" />
-                    ) : (
-                      <Bookmark className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))
+                </CardContent>
+              </Card>
+            );
+          })
         )}
       </div>
 
-      {/* 详情弹窗 */}
-      <ResultDetailDialog
+      {/* 详情弹窗 - 暂时注释掉，需要更新ResultDetailDialog */}
+      {/* <ResultDetailDialog
         open={detailDialogOpen}
         onOpenChange={setDetailDialogOpen}
         result={selectedResult}
         onToggleFavorite={onToggleFavorite}
-      />
+      /> */}
     </div>
   );
 }

@@ -44,6 +44,14 @@ Deno.serve(async (req) => {
 
   const encoder = new TextEncoder();
   let streamController: ReadableStreamDefaultController | null = null;
+  
+  // 添加日志数组
+  const logs: string[] = [];
+  const addLog = (...args: any[]) => {
+    const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+    console.log(...args);
+    logs.push(message);
+  };
 
   const body = new ReadableStream({
     start(controller) {
@@ -54,6 +62,11 @@ Deno.serve(async (req) => {
   const processRequest = async () => {
     try {
       const { requirementsDoc, projectId, userId, sessionId }: ResearchRequest = await req.json();
+      
+      addLog('========== Research Retrieval Streaming Agent ==========');
+      addLog(`projectId: ${projectId || '未提供'}`);
+      addLog(`userId: ${userId || '未提供'}`);
+      addLog(`sessionId: ${sessionId || '未提供'}`);
 
       if (!streamController) return;
 
@@ -80,6 +93,8 @@ CRITICAL: Focus on materials from 2025-2026. Do NOT prioritize content from 2023
 Role:
 你是 CoWrite 的 Research Retrieval Agent。根据用户需求文档生成搜索计划。
 
+特别注意：请仔细分析需求文档中的"关键要点"和"核心观点"，这些是搜索的核心依据。
+
 Available Data Sources:
 1. Google Scholar - 学术研究（2020年至今）
 2. TheNews - 新闻/行业动态（近1-2年）
@@ -105,7 +120,8 @@ Output Format (Envelope Mode):
 
 Rules:
 - 即使没有结果，也必须返回空数组 []
-- 不允许省略任何字段`;
+- 不允许省略任何字段
+- 搜索关键词必须包含需求文档中的关键要点和核心观点中的关键词`;
 
       const requirementsDocStr = typeof requirementsDoc === 'string' ? requirementsDoc : JSON.stringify(requirementsDoc, null, 2);
       const userPrompt = `研究需求文档：\n${requirementsDocStr}\n\n请生成搜索计划。`;
@@ -151,7 +167,7 @@ Rules:
 
       sendSSEEvent(encoder, streamController, {
         stage: 'searching',
-        message: '正在从 Google Scholar、PubMed、ArXiv 检索资料...'
+        message: '正在从 Google Scholar、Google News、Google Search 检索资料...'
       });
 
       const rawResults = {
@@ -181,6 +197,11 @@ Rules:
       }
 
       if (Object.keys(serpapiQueries).length > 0) {
+        sendSSEEvent(encoder, streamController, {
+          stage: 'searching',
+          message: '正在检索学术资料...'
+        });
+        
         const serpapiUrl = `${supabaseUrl}/functions/v1/serpapi-search`;
         const serpapiResponse = await fetch(serpapiUrl, {
           method: 'POST',
@@ -208,6 +229,14 @@ Rules:
                 rawResults.academic_sources.push(...mapped);
               }
             }
+            
+            if (rawResults.academic_sources.length > 0) {
+              sendSSEEvent(encoder, streamController, {
+                stage: 'searching',
+                message: `已找到 ${rawResults.academic_sources.length} 篇学术资料`
+              });
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
           }
 
           if (serpapiResults.news) {
@@ -223,6 +252,14 @@ Rules:
                 rawResults.news_sources.push(...mapped);
               }
             }
+            
+            if (rawResults.news_sources.length > 0) {
+              sendSSEEvent(encoder, streamController, {
+                stage: 'searching',
+                message: `已找到 ${rawResults.news_sources.length} 条新闻资料`
+              });
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
           }
 
           if (serpapiResults.search) {
@@ -237,6 +274,14 @@ Rules:
                 }));
                 rawResults.web_sources.push(...mapped);
               }
+            }
+            
+            if (rawResults.web_sources.length > 0) {
+              sendSSEEvent(encoder, streamController, {
+                stage: 'searching',
+                message: `已找到 ${rawResults.web_sources.length} 条网络资料`
+              });
+              await new Promise(resolve => setTimeout(resolve, 100));
             }
           }
         }
@@ -274,8 +319,21 @@ Rules:
       rawResults.news_sources = Array.from(new Map(rawResults.news_sources.map(item => [item.url, item])).values()).slice(0, 10);
       rawResults.web_sources = Array.from(new Map(rawResults.web_sources.map(item => [item.url, item])).values()).slice(0, 10);
 
+      sendSSEEvent(encoder, streamController, {
+        stage: 'searching',
+        message: '正在清洗和整理资料...'
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       const query = searchPlan.search_summary?.interpreted_topic || '';
       const keywords = searchPlan.search_summary?.key_dimensions || [];
+      
+      console.log('[research-retrieval-streaming] 清洗前资料数量:', {
+        academic: rawResults.academic_sources.length,
+        news: rawResults.news_sources.length,
+        web: rawResults.web_sources.length
+      });
       
       const cleanedAcademic = cleanMaterials(
         rawResults.academic_sources.map(s => ({
@@ -287,7 +345,7 @@ Rules:
           year: s.year,
           citation_count: s.citation_count,
         })),
-        { minContentLength: 50, minQualityScore: 0.2 }
+        { minContentLength: 20, minQualityScore: 0.1, removeLowQuality: false }
       );
       
       const cleanedNews = cleanMaterials(
@@ -298,7 +356,7 @@ Rules:
           source_type: 'news',
           published_at: s.published_at,
         })),
-        { minContentLength: 30, minQualityScore: 0.15 }
+        { minContentLength: 10, minQualityScore: 0.05, removeLowQuality: false }
       );
       
       const cleanedWeb = cleanMaterials(
@@ -308,8 +366,14 @@ Rules:
           content: s.snippet || '',
           source_type: 'web',
         })),
-        { minContentLength: 30, minQualityScore: 0.15 }
+        { minContentLength: 10, minQualityScore: 0.05, removeLowQuality: false }
       );
+
+      console.log('[research-retrieval-streaming] 清洗后资料数量:', {
+        academic: cleanedAcademic.length,
+        news: cleanedNews.length,
+        web: cleanedWeb.length
+      });
 
       const allCleanedMaterials = [
         ...cleanedAcademic,
@@ -317,12 +381,26 @@ Rules:
         ...cleanedWeb
       ];
       
+      sendSSEEvent(encoder, streamController, {
+        stage: 'searching',
+        message: `共整理 ${allCleanedMaterials.length} 条资料，正在计算相关性...`
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const rankedMaterials = await rerankMaterialsWithEmbedding(
         allCleanedMaterials,
         query,
         keywords,
-        { topN: 5 }
+        { topN: 100 }
       );
+      
+      sendSSEEvent(encoder, streamController, {
+        stage: 'searching',
+        message: `已完成相关性排序，共 ${rankedMaterials.length} 条相关资料`
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       const rankedAcademic = rankedMaterials.filter(m => m.source_type === 'academic');
       const rankedNews = rankedMaterials.filter(m => m.source_type === 'news');
@@ -346,7 +424,7 @@ Rules:
       await new Promise(resolve => setTimeout(resolve, 100));
 
       const finalResults = {
-        academic_sources: rankedAcademic.slice(0, 10).map((s: CleanedMaterial) => ({
+        academic_sources: rankedAcademic.map((s: CleanedMaterial) => ({
           source_type: 'GoogleScholar',
           title: s.title,
           authors: s.authors?.join(', ') || '',
@@ -359,8 +437,9 @@ Rules:
           quality_score: s.quality_score,
           similarity_score: s.similarity_score,
           embedding_similarity: s.embedding_similarity,
+          is_selected: s.is_selected,
         })),
-        news_sources: rankedNews.slice(0, 10).map((s: CleanedMaterial) => ({
+        news_sources: rankedNews.map((s: CleanedMaterial) => ({
           source_type: 'GoogleNews',
           title: s.title,
           source: s.source_type,
@@ -372,8 +451,9 @@ Rules:
           quality_score: s.quality_score,
           similarity_score: s.similarity_score,
           embedding_similarity: s.embedding_similarity,
+          is_selected: s.is_selected,
         })),
-        web_sources: rankedWeb.slice(0, 10).map((s: CleanedMaterial) => ({
+        web_sources: rankedWeb.map((s: CleanedMaterial) => ({
           source_type: 'WebSearch',
           title: s.title,
           site_name: '',
@@ -394,9 +474,12 @@ Rules:
         user_library_queries: searchPlan.user_library_queries || []
       };
 
+      addLog('========== 返回结果 ==========');
+      addLog(`学术: ${finalResults.academic_sources.length}, 新闻: ${finalResults.news_sources.length}, 网络: ${finalResults.web_sources.length}`);
+      
       sendSSEEvent(encoder, streamController, {
         stage: 'final',
-        data: finalResults,
+        data: { ...finalResults, logs },
         message: '搜索完成'
       });
 

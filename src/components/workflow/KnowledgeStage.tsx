@@ -466,7 +466,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         
         // 显示提示信息
         toast({
-          title: '📋 已加载需求文档',
+          title: '已加载需求文档',
           description: '正在根据需求文档生成搜索计划并检索资料...',
         });
         
@@ -599,7 +599,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
           if ((localMaterials?.length || 0) > 0 || (localReferences?.length || 0) > 0) {
             toast({
-              title: '📚 已加载本地资料',
+              title: '已加载本地资料',
               description: '个人素材: ' + (localMaterials?.length || 0) + ' 条，参考文章: ' + (localReferences?.length || 0) + ' 篇',
             });
           }
@@ -628,7 +628,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               setStreamingMessage(message);
               
               toast({
-                title: '📋 搜索计划已生成',
+                title: '搜索计划已生成',
                 description: message || data.search_summary?.interpreted_topic || '',
               });
             } else {
@@ -646,7 +646,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             setStreamingTop3(data.top3 || []);
             setStreamingMessage(message);
             toast({
-              title: '📌 初步发现',
+              title: '初步发现',
               description: message || '已找到核心观点',
             });
           },
@@ -668,10 +668,10 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             setStreamingStage('idle');
             setStreamingMessage(message);
             toast({
-              title: '❌ 搜索失败',
-              description: message,
-              variant: 'destructive',
-            });
+            title: '搜索失败',
+            description: message,
+            variant: 'destructive',
+          });
           },
           onDone: (message) => {
             console.log('[streaming] onDone:', message);
@@ -700,10 +700,10 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         stage: '完成', 
         message: `已检索到 ${totalMaterials} 条资料，可以开始资料整理`,
       });
-      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成，共 ' + totalMaterials + ' 条资料']);
+      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 资料检索完成，共 ' + totalMaterials + ' 条资料']);
 
       toast({
-        title: '✅ 资料检索完成',
+        title: '资料检索完成',
         description: `已检索到 ${totalMaterials} 条资料，请选择需要的资料后进入下一阶段`,
       });
 
@@ -718,7 +718,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       saveSearchCache(projectId, {
         searchPlan: searchPlan,
         retrievedMaterials: savedMaterials,
-        searchLogs: [...searchLogs, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成'],
+        searchLogs: [...searchLogs, '[' + new Date().toLocaleTimeString('zh-CN') + '] 资料检索完成'],
         lastSearchTime: searchTime,
         query: queryToUse,
       });
@@ -733,7 +733,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       }
       
       toast({
-        title: '❌ 资料检索失败',
+        title: '资料检索失败',
         description: errorMessage,
         variant: 'destructive',
       });
@@ -741,7 +741,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       if (errorMessage.includes('API密钥') || errorMessage.includes('API key')) {
         setTimeout(() => {
           toast({
-            title: '💡 提示',
+            title: '提示',
             description: '请检查 Supabase 项目的 Secrets 配置，确保 INTEGRATIONS_API_KEY 已正确设置',
             duration: 8000,
           });
@@ -874,7 +874,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
           if ((localMaterials?.length || 0) > 0 || (localReferences?.length || 0) > 0) {
             toast({
-              title: '📚 已加载本地资料',
+              title: '已加载本地资料',
               description: '个人素材: ' + (localMaterials?.length || 0) + ' 条，参考文章: ' + (localReferences?.length || 0) + ' 篇',
             });
           }
@@ -891,7 +891,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] Research Retrieval Agent 正在分析需求文档...']);
 
       toast({
-        title: '🤖 启动 Research Retrieval Agent',
+        title: '启动 Research Retrieval Agent',
         description: '正在分析需求文档并生成搜索计划...',
       });
 
@@ -938,7 +938,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 setStreamingMessage(message);
                 
                 toast({
-                  title: '📋 搜索计划已生成',
+                  title: '搜索计划已生成',
                   description: message || data.search_summary?.interpreted_topic || '',
                 });
               } else {
@@ -956,7 +956,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               setStreamingTop3(data.top3 || []);
               setStreamingMessage(message);
               toast({
-                title: '📌 初步发现',
+                title: '初步发现',
                 description: message || '已找到核心观点',
               });
             },
@@ -978,7 +978,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               setStreamingStage('idle');
               setStreamingMessage(message);
               toast({
-                title: '❌ 搜索失败',
+                title: '搜索失败',
                 description: message,
                 variant: 'destructive',
               });
@@ -1045,7 +1045,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         
         if (planDetails.length > 0) {
           toast({
-            title: '📋 搜索计划已生成',
+            title: '搜索计划已生成',
             description: planDetails[0],
           });
         }
@@ -1076,10 +1076,10 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         stage: '完成', 
         message: `已检索到 ${totalMaterials} 条资料，可以开始资料整理`,
       });
-      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成，共 ' + totalMaterials + ' 条资料']);
+      setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 资料检索完成，共 ' + totalMaterials + ' 条资料']);
 
       toast({
-        title: '✅ 资料检索完成',
+        title: '资料检索完成',
         description: `已检索到 ${totalMaterials} 条资料，请选择需要的资料后进入下一阶段`,
       });
 
@@ -1097,7 +1097,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       saveSearchCache(projectId, {
         searchPlan: retrievalResults?.search_summary || null,
         retrievedMaterials: savedMaterials,
-        searchLogs: [...searchLogs, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 资料检索完成'],
+        searchLogs: [...searchLogs, '[' + new Date().toLocaleTimeString('zh-CN') + '] 资料检索完成'],
         lastSearchTime: searchTime,
         query: queryToUse,
       });
@@ -1151,7 +1151,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       });
       
       toast({
-        title: '❌ 资料检索失败',
+        title: '资料检索失败',
         description: `${errorStage}：${errorMessage}`,
         variant: 'destructive',
       });
@@ -1160,7 +1160,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       if (errorMessage.includes('API密钥') || errorMessage.includes('API key') || errorMessage.includes('INTEGRATIONS_API_KEY')) {
         setTimeout(() => {
           toast({
-            title: '💡 提示',
+            title: '提示',
             description: '请检查 Supabase 项目的 Secrets 配置，确保 INTEGRATIONS_API_KEY 已正确设置',
             duration: 8000,
           });
@@ -1314,12 +1314,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       // 1. 从 retrieved_materials 读取选中的资料
       // 2. 进行分析提炼
       // 3. 将结果存入 knowledge_base、research_insights、research_gaps
-      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 🤖 启动 Research Synthesis Agent...']);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 启动 Research Synthesis Agent...']);
       setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在分析资料并生成研究洞察...']);
       
       const result: SynthesisResult = await callResearchSynthesisAgent(projectId, writingSession.id);
       
-      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ Research Synthesis Agent 完成']);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] Research Synthesis Agent 完成']);
       
       // 获取保存的洞察和空白
       setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在加载研究洞察和空白...']);
@@ -1346,7 +1346,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       console.error('[handleNextStep] 进入下一阶段失败:', error);
       
       // 记录错误日志
-      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ❌ 操作失败: ' + error.message]);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 操作失败: ' + error.message]);
       
       let errorMessage = '请稍后重试';
       let errorTitle = '操作失败';
@@ -1514,13 +1514,13 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       setWritingSummary(result);
 
       toast({
-        title: '✅ 综合摘要已生成',
+        title: '综合摘要已生成',
         description: '可以查看并确认进入下一阶段',
       });
     } catch (error: any) {
       console.error('生成综合摘要失败:', error);
       toast({
-        title: '❌ 生成失败',
+        title: '生成失败',
         description: error.message || '请稍后重试',
         variant: 'destructive',
       });
@@ -1561,13 +1561,13 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       
       await loadKnowledge();
       toast({
-        title: '✅ 批量收藏成功',
+        title: '批量收藏成功',
         description: `已收藏 ${ids.length} 条资料`,
       });
     } catch (error) {
       console.error('批量收藏失败:', error);
       toast({
-        title: '❌ 批量收藏失败',
+        title: '批量收藏失败',
         description: '操作失败，请重试',
         variant: 'destructive',
       });
@@ -1582,13 +1582,13 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       }
       await loadKnowledge();
       toast({
-        title: '✅ 批量删除成功',
+        title: '批量删除成功',
         description: `已删除 ${ids.length} 条资料`,
       });
     } catch (error) {
       console.error('批量删除失败:', error);
       toast({
-        title: '❌ 批量删除失败',
+        title: '批量删除失败',
         description: '操作失败，请重试',
         variant: 'destructive',
       });
@@ -1740,12 +1740,12 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 资料保存完成，新增 ' + savedCount + ' 条']);
 
       // 3. 调用研究综合 Agent
-      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 🤖 启动 Research Synthesis Agent...']);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 启动 Research Synthesis Agent...']);
       setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在分析资料并生成研究洞察...']);
       
       const result: SynthesisResult = await callResearchSynthesisAgent(projectId, writingSession.id);
       
-      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ Research Synthesis Agent 完成']);
+      setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] Research Synthesis Agent 完成']);
       
       // 4. 获取保存的洞察和空白
       setSynthesisLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 正在加载研究洞察和空白...']);
@@ -1911,15 +1911,17 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           {searchProgress.stage === '失败' ? (
-                            <span className="text-destructive text-lg">❌</span>
+                            <span className="text-destructive text-sm font-bold">失败</span>
                           ) : searchProgress.stage === '完成' ? (
-                            <span className="text-primary text-lg">✅</span>
+                            <span className="text-primary text-sm font-bold">完成</span>
                           ) : (
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                           )}
-                          <span className="font-semibold text-sm">
-                            {searchProgress.stage}
-                          </span>
+                          {searchProgress.stage !== '失败' && searchProgress.stage !== '完成' && (
+                            <span className="font-semibold text-sm">
+                              {searchProgress.stage}
+                            </span>
+                          )}
                         </div>
                         <Badge variant={
                           searchProgress.stage === '失败' 
@@ -1958,7 +1960,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 <div className="lg:col-span-2">
                   <h3 className="text-base font-semibold mb-4">搜索结果</h3>
                   <SearchResultsPanel
-                    results={knowledge}
+                    results={retrievedMaterials}
                     onToggleFavorite={handleToggleSelect}
                     onDelete={handleBatchDelete}
                     onBatchFavorite={handleBatchFavorite}

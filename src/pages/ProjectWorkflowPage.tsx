@@ -54,6 +54,8 @@ export default function ProjectWorkflowPage() {
         return;
       }
       setProject(data);
+      // 项目加载完成后，重新加载需求文档
+      await loadRequirementsDoc();
     } catch (error) {
       toast({
         title: '加载失败',
@@ -98,8 +100,9 @@ export default function ProjectWorkflowPage() {
         description: `已跳转到${stages.find((s) => s.key === stageKey)?.label}阶段`,
       });
 
-      // 重新加载项目
+      // 重新加载项目和需求文档
       await loadProject();
+      await loadRequirementsDoc();
     } catch (error) {
       toast({
         title: '跳转失败',

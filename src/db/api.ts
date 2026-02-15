@@ -170,11 +170,10 @@ export async function updateBrief(briefId: string, updates: Partial<Brief>) {
     .from('briefs')
     .update(updates)
     .eq('id', briefId)
-    .select()
-    .maybeSingle();
+    .select();
 
   if (error) throw error;
-  return data as Brief;
+  return Array.isArray(data) && data.length > 0 ? (data[0] as Brief) : null;
 }
 
 // ============ Knowledge Base API ============

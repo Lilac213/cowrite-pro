@@ -64,6 +64,8 @@ CRITICAL: Focus on materials from 2025-2026. Do NOT prioritize content from 2023
 Role:
 你是 CoWrite 的 Research Retrieval Agent。根据用户需求文档生成搜索计划。
 
+特别注意：请仔细分析需求文档中的"关键要点"和"核心观点"，这些是搜索的核心依据。
+
 Available Data Sources:
 1. Google Scholar - 学术研究（2020年至今）
 2. TheNews - 新闻/行业动态（近1-2年）
@@ -89,7 +91,8 @@ Output Format (Envelope Mode):
 
 Rules:
 - 即使没有结果，也必须返回空数组 []
-- 不允许省略任何字段`;
+- 不允许省略任何字段
+- 搜索关键词必须包含需求文档中的关键要点和核心观点中的关键词`;
 
     const requirementsDocStr = typeof requirementsDoc === 'string' ? requirementsDoc : JSON.stringify(requirementsDoc, null, 2);
     const userPrompt = `研究需求文档：\n${requirementsDocStr}\n\n请生成搜索计划。`;
@@ -267,7 +270,7 @@ Rules:
     const query = searchPlan.search_summary?.interpreted_topic || '';
     const keywords = searchPlan.search_summary?.key_dimensions || [];
     
-    // 清洗学术资料
+    // 清洗学术资料 - 放宽限制以保留更多资料
     const cleanedAcademic = cleanMaterials(
       rawResults.academic_sources.map(s => ({
         title: s.title,
@@ -278,11 +281,11 @@ Rules:
         year: s.year,
         citation_count: s.citation_count,
       })),
-      { minContentLength: 50, minQualityScore: 0.2 }
+      { minContentLength: 20, minQualityScore: 0.1, removeLowQuality: false }
     );
     addLog(`[清洗] 学术资料: ${rawResults.academic_sources.length} -> ${cleanedAcademic.length} 条`);
     
-    // 清洗新闻资料
+    // 清洗新闻资料 - 放宽限制
     const cleanedNews = cleanMaterials(
       rawResults.news_sources.map(s => ({
         title: s.title,
@@ -291,11 +294,11 @@ Rules:
         source_type: 'news',
         published_at: s.published_at,
       })),
-      { minContentLength: 30, minQualityScore: 0.15 }
+      { minContentLength: 10, minQualityScore: 0.05, removeLowQuality: false }
     );
     addLog(`[清洗] 新闻资料: ${rawResults.news_sources.length} -> ${cleanedNews.length} 条`);
     
-    // 清洗网页资料
+    // 清洗网页资料 - 放宽限制
     const cleanedWeb = cleanMaterials(
       rawResults.web_sources.map(s => ({
         title: s.title,
@@ -303,7 +306,7 @@ Rules:
         content: s.snippet || '',
         source_type: 'web',
       })),
-      { minContentLength: 30, minQualityScore: 0.15 }
+      { minContentLength: 10, minQualityScore: 0.05, removeLowQuality: false }
     );
     addLog(`[清洗] 网页资料: ${rawResults.web_sources.length} -> ${cleanedWeb.length} 条`);
 
@@ -317,7 +320,7 @@ Rules:
       allCleanedMaterials,
       query,
       keywords,
-      { topN: 5 }
+      { topN: 100 }
     );
 
     const rankedAcademic = rankedMaterials.filter(m => m.source_type === 'academic');
@@ -325,7 +328,7 @@ Rules:
     const rankedWeb = rankedMaterials.filter(m => m.source_type === 'web');
 
     const finalResults = {
-      academic_sources: rankedAcademic.slice(0, 10).map((s: CleanedMaterial) => ({
+      academic_sources: rankedAcademic.map((s: CleanedMaterial) => ({
         source_type: 'GoogleScholar',
         title: s.title,
         authors: s.authors?.join(', ') || '',
@@ -340,7 +343,7 @@ Rules:
         embedding_similarity: s.embedding_similarity,
         is_selected: s.is_selected,
       })),
-      news_sources: rankedNews.slice(0, 10).map((s: CleanedMaterial) => ({
+      news_sources: rankedNews.map((s: CleanedMaterial) => ({
         source_type: 'GoogleNews',
         title: s.title,
         source: s.source_type,
@@ -354,7 +357,7 @@ Rules:
         embedding_similarity: s.embedding_similarity,
         is_selected: s.is_selected,
       })),
-      web_sources: rankedWeb.slice(0, 10).map((s: CleanedMaterial) => ({
+      web_sources: rankedWeb.map((s: CleanedMaterial) => ({
         source_type: 'WebSearch',
         title: s.title,
         site_name: '',
