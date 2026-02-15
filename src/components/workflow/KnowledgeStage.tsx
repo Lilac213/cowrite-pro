@@ -964,7 +964,118 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               console.log('[streaming] onFinal:', data);
               setStreamingStage('complete');
               setStreamingMessage(message);
+              
+              // 确保 data 不为 null
+              if (!data) {
+                console.error('[streaming] onFinal: data is null');
+                return;
+              }
+              
               setRetrievalResults(data);
+              
+              // 将搜索结果转换为 RetrievedMaterial 格式并立即显示
+              const convertedMaterials: RetrievedMaterial[] = [];
+              
+              // 转换学术资料
+              if (data.academic_sources?.length > 0) {
+                data.academic_sources.forEach((source: any, index: number) => {
+                  convertedMaterials.push({
+                    id: `temp-academic-${index}`,
+                    session_id: writingSession?.id || '',
+                    project_id: projectId,
+                    user_id: user?.id,
+                    source_type: 'academic',
+                    title: source.title || '',
+                    url: source.url,
+                    abstract: source.full_text || source.extracted_content?.join('\n') || '',
+                    full_text: source.full_text || '',
+                    authors: source.authors ? source.authors.split(/[,;、，]/).map((a: string) => a.trim()).filter((a: string) => a) : [],
+                    year: source.year,
+                    citation_count: source.citation_count || 0,
+                    is_selected: source.is_selected ?? false,
+                    metadata: {
+                      original_source: source.source_type,
+                      quality_score: source.quality_score,
+                      similarity_score: source.similarity_score,
+                      embedding_similarity: source.embedding_similarity,
+                      rank: index + 1
+                    },
+                    created_at: new Date().toISOString()
+                  });
+                });
+              }
+              
+              // 转换新闻资料
+              if (data.news_sources?.length > 0) {
+                data.news_sources.forEach((source: any, index: number) => {
+                  convertedMaterials.push({
+                    id: `temp-news-${index}`,
+                    session_id: writingSession?.id || '',
+                    project_id: projectId,
+                    user_id: user?.id,
+                    source_type: 'news',
+                    title: source.title || '',
+                    url: source.url,
+                    abstract: source.full_text || source.extracted_content?.join('\n') || '',
+                    full_text: source.full_text || '',
+                    published_at: source.published_at,
+                    is_selected: source.is_selected ?? false,
+                    metadata: {
+                      original_source: source.source_type,
+                      source: source.source,
+                      quality_score: source.quality_score,
+                      similarity_score: source.similarity_score,
+                      embedding_similarity: source.embedding_similarity,
+                      rank: index + 1
+                    },
+                    created_at: new Date().toISOString()
+                  });
+                });
+              }
+              
+              // 转换网页资料
+              if (data.web_sources?.length > 0) {
+                data.web_sources.forEach((source: any, index: number) => {
+                  convertedMaterials.push({
+                    id: `temp-web-${index}`,
+                    session_id: writingSession?.id || '',
+                    project_id: projectId,
+                    user_id: user?.id,
+                    source_type: 'web',
+                    title: source.title || '',
+                    url: source.url,
+                    abstract: source.full_text || source.extracted_content?.join('\n') || '',
+                    full_text: source.full_text || '',
+                    is_selected: source.is_selected ?? false,
+                    metadata: {
+                      original_source: source.source_type,
+                      site_name: source.site_name,
+                      quality_score: source.quality_score,
+                      similarity_score: source.similarity_score,
+                      embedding_similarity: source.embedding_similarity,
+                      rank: index + 1
+                    },
+                    created_at: new Date().toISOString()
+                  });
+                });
+              }
+              
+              // 按相似度分数排序（高到低）
+              convertedMaterials.sort((a, b) => {
+                const scoreA = a.metadata?.similarity_score || a.metadata?.quality_score || 0;
+                const scoreB = b.metadata?.similarity_score || b.metadata?.quality_score || 0;
+                return scoreB - scoreA;
+              });
+              
+              // 标记前3名为top3
+              convertedMaterials.forEach((m, index) => {
+                if (index < 3) {
+                  m.metadata = { ...m.metadata, is_top3: true };
+                }
+              });
+              
+              console.log('[streaming] 转换后的资料数量:', convertedMaterials.length);
+              setRetrievedMaterials(convertedMaterials);
               
               if (data.logs && Array.isArray(data.logs)) {
                 const formattedLogs = data.logs.map((log: string) => 
