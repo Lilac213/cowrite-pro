@@ -109,6 +109,7 @@ export default function AdminPage() {
         updateSystemConfig('llm_api_key', systemConfig.llm_api_key || ''),
         updateSystemConfig('search_provider', systemConfig.search_provider || 'serpapi'),
         updateSystemConfig('search_api_key', systemConfig.search_api_key || ''),
+        updateSystemConfig('integrations_api_key', systemConfig.integrations_api_key || ''),
       ]);
 
       // 同步到 Secrets
@@ -404,6 +405,92 @@ export default function AdminPage() {
               <div className="p-4 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground">
                   <strong>说明：</strong>系统使用 SerpAPI 提供的 Google 搜索服务，包括学术文献搜索（Google Scholar）、网页搜索（Google Search）和新闻搜索（Google News），提供全面的信息检索能力。
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>API 密钥配置</CardTitle>
+              <CardDescription>配置核心服务的API密钥，保存后自动同步到Edge Functions</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Gemini API Key */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium">Gemini API (INTEGRATIONS_API_KEY)</h3>
+                  <Badge variant={systemConfig.integrations_api_key ? 'default' : 'outline'}>
+                    {systemConfig.integrations_api_key ? '✓ 已配置' : '未配置'}
+                  </Badge>
+                </div>
+                
+                {systemConfig.integrations_api_key && (
+                  <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm font-medium text-green-900 dark:text-green-100 mb-1">
+                      <span>✓</span>
+                      <span>Gemini API 已启用</span>
+                    </div>
+                    <p className="text-xs text-green-700 dark:text-green-300">
+                      API Key: {systemConfig.integrations_api_key.substring(0, 20)}...
+                    </p>
+                  </div>
+                )}
+                
+                <div className="space-y-2">
+                  <Label htmlFor="integrations-api-key">API 密钥</Label>
+                  <Input
+                    id="integrations-api-key"
+                    type="password"
+                    placeholder="请输入 Gemini API Key"
+                    value={systemConfig.integrations_api_key || ''}
+                    onChange={(e) => setSystemConfig({ ...systemConfig, integrations_api_key: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    用于调用 Gemini 服务（通过 New API 中转站）
+                  </p>
+                </div>
+              </div>
+
+              {/* Qianwen API Key */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium">通义千问 API (QIANWEN_API_KEY)</h3>
+                  <Badge variant={systemConfig.llm_api_key ? 'default' : 'outline'}>
+                    {systemConfig.llm_api_key ? '✓ 已配置' : '未配置'}
+                  </Badge>
+                </div>
+                
+                {systemConfig.llm_api_key && (
+                  <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm font-medium text-green-900 dark:text-green-100 mb-1">
+                      <span>✓</span>
+                      <span>通义千问 API 已启用</span>
+                    </div>
+                    <p className="text-xs text-green-700 dark:text-green-300">
+                      API Key: {systemConfig.llm_api_key.substring(0, 20)}...
+                    </p>
+                  </div>
+                )}
+                
+                <div className="space-y-2">
+                  <Label htmlFor="llm-api-key">API 密钥</Label>
+                  <Input
+                    id="llm-api-key"
+                    type="password"
+                    placeholder="请输入通义千问 API Key"
+                    value={systemConfig.llm_api_key || ''}
+                    onChange={(e) => setSystemConfig({ ...systemConfig, llm_api_key: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    可在 <a href="https://cloud.siliconflow.cn" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">SiliconFlow</a> 获取 API 密钥
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  <strong>自动同步：</strong>保存后，所有API密钥将自动同步到数据库和Edge Functions环境变量，立即生效。
                 </p>
               </div>
             </CardContent>

@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     const { data: configs, error: configError } = await supabase
       .from('system_config')
       .select('config_key, config_value')
-      .in('config_key', ['llm_api_key', 'llm_provider', 'search_api_key']);
+      .in('config_key', ['llm_api_key', 'llm_provider', 'search_api_key', 'integrations_api_key']);
 
     if (configError) {
       throw configError;
@@ -88,6 +88,14 @@ Deno.serve(async (req) => {
       secretsToSync.push({
         name: 'SERPAPI_API_KEY',
         value: configMap.search_api_key,
+      });
+    }
+
+    // Integrations API Key (Gemini)
+    if (configMap.integrations_api_key) {
+      secretsToSync.push({
+        name: 'INTEGRATIONS_API_KEY',
+        value: configMap.integrations_api_key,
       });
     }
 
@@ -132,8 +140,8 @@ Deno.serve(async (req) => {
         message: '配置已保存到数据库',
         secrets: secretsToSync.map(s => s.name),
         synced: syncResult !== null,
-        note: syncResult 
-          ? 'QIANWEN_API_KEY 和 SERPAPI_API_KEY 已同步到 Edge Function 环境。' 
+        note: syncResult
+          ? '所有API密钥已同步到 Edge Function 环境。'
           : '配置已保存到数据库，Edge Functions 将从数据库读取配置。'
       }),
       { 
