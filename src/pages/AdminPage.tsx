@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getAllProfiles, updateProfile, getSystemConfig, updateSystemConfig, getAllInvitationCodes, createInvitationCode, deactivateInvitationCode, setUserCredits } from '@/db/api';
+import { getAllProfiles, updateProfile, getSystemConfig, updateSystemConfig, getAllInvitationCodes, createInvitationCode, deactivateInvitationCode } from '@/api';
+import { setUserCredits } from '@/services/credit.service';
 import type { Profile, SystemConfig, InvitationCode } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';

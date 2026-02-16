@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getLatestDraft, createDraft, updateDraft, callLLMGenerate, getBrief, getKnowledgeBase, getOutlines, getMaterials, getReferenceArticles } from '@/db/api';
+import { getLatestDraft, createDraft, updateDraft, getBrief, getKnowledgeBase, getOutlines, getMaterials, getReferenceArticles } from '@/api';
 import type { Draft, ParagraphAnnotation } from '@/types';
+import { supabase } from '@/db/supabase';
+
+async function callLLMGenerate(prompt: string) {
+  const { data, error } = await supabase.functions.invoke('llm-generate', { body: { prompt } });
+  if (error) throw error;
+  return data.result;
+}
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';

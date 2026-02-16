@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/db/supabase';
-import { getBrief, createBrief, updateBrief, updateProject, callBriefAgent } from '@/db/api';
+import { getBrief, createBrief, updateBrief, updateProject, callBriefAgent } from '@/api';
 import type { Brief } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

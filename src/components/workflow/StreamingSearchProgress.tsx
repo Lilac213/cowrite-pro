@@ -43,10 +43,10 @@ export default function StreamingSearchProgress({
             {stage === 'complete' && <CheckCircle2 className="h-5 w-5 text-green-600" />}
             <CardTitle className="text-lg">
               {stage === 'idle' && '准备搜索'}
-              {stage === 'planning' && '🧠 生成搜索计划'}
-              {stage === 'searching' && '🔍 正在检索资料'}
-              {stage === 'top3' && '📌 初步发现'}
-              {stage === 'complete' && '✅ 搜索完成'}
+              {stage === 'planning' && '生成搜索计划'}
+              {stage === 'searching' && '正在检索资料'}
+              {stage === 'top3' && '初步发现'}
+              {stage === 'complete' && '搜索完成'}
             </CardTitle>
           </div>
           <Badge variant={stage === 'complete' ? 'default' : 'secondary'}>
@@ -83,7 +83,7 @@ export default function StreamingSearchProgress({
 
             {searchPlan.key_dimensions && searchPlan.key_dimensions.length > 0 && (
               <div>
-                <p className="text-sm font-semibold text-primary mb-2">📊 关键维度</p>
+                <p className="text-sm font-semibold text-primary mb-2">关键维度</p>
                 <div className="flex flex-wrap gap-2">
                   {searchPlan.key_dimensions.map((dim, idx) => (
                     <Badge key={idx} variant="outline" className="text-xs">
@@ -95,11 +95,11 @@ export default function StreamingSearchProgress({
             )}
 
             <div>
-              <p className="text-sm font-semibold text-primary mb-2">🔎 搜索计划</p>
+              <p className="text-sm font-semibold text-primary mb-2">搜索计划</p>
               <div className="space-y-2">
                 {searchPlan.academic_queries && searchPlan.academic_queries.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">📚 学术搜索</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">学术搜索</p>
                     <div className="flex flex-wrap gap-1">
                       {searchPlan.academic_queries.map((q, idx) => (
                         <Badge key={idx} variant="outline" className="text-xs bg-blue-50">
@@ -111,7 +111,7 @@ export default function StreamingSearchProgress({
                 )}
                 {searchPlan.news_queries && searchPlan.news_queries.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">📰 新闻搜索</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">新闻搜索</p>
                     <div className="flex flex-wrap gap-1">
                       {searchPlan.news_queries.map((q, idx) => (
                         <Badge key={idx} variant="outline" className="text-xs bg-green-50">
@@ -123,7 +123,7 @@ export default function StreamingSearchProgress({
                 )}
                 {searchPlan.web_queries && searchPlan.web_queries.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">🌐 网络搜索</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">网络搜索</p>
                     <div className="flex flex-wrap gap-1">
                       {searchPlan.web_queries.map((q, idx) => (
                         <Badge key={idx} variant="outline" className="text-xs bg-purple-50">
@@ -141,13 +141,13 @@ export default function StreamingSearchProgress({
         {stage === 'searching' && !searchPlan && (
           <div className="flex items-center justify-center py-6">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3" />
-            <p className="text-sm text-muted-foreground">正在从 Google Scholar、PubMed、ArXiv 检索资料...</p>
+            <p className="text-sm text-muted-foreground">正在检索资料...</p>
           </div>
         )}
 
         {(stage === 'top3' || stage === 'complete') && top3 && top3.length > 0 && (
           <div className="space-y-3">
-            <p className="text-sm font-semibold text-primary">📌 初步发现（Top 3 核心观点）</p>
+            <p className="text-sm font-semibold text-primary">初步发现（Top 3 核心观点）</p>
             {top3.map((item, idx) => (
               <Card key={idx} className="border-l-4 border-l-green-500">
                 <CardContent className="p-4">

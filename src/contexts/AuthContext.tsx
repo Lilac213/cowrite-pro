@@ -2,20 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { supabase } from '@/db/supabase';
 import type { User } from '@supabase/supabase-js';
 import type { Profile } from '@/types';
+import { getProfile } from '@/api/profile.api';
 
-export async function getProfile(userId: string): Promise<Profile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error('获取用户信息失败:', error);
-    return null;
-  }
-  return data;
-}
 interface AuthContextType {
   user: User | null;
   profile: Profile | null;
@@ -38,7 +26,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       return;
     }
-
     const profileData = await getProfile(user.id);
     setProfile(profileData);
   };
@@ -51,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false);
     });
-    // In this function, do NOT use any await calls. Use `.then()` instead to avoid deadlocks.
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -67,7 +54,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithUsernameOrEmail = async (usernameOrEmail: string, password: string) => {
     try {
       const isEmail = usernameOrEmail.includes('@');
-      
       let email = usernameOrEmail;
       
       if (!isEmail) {
@@ -79,22 +65,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const profile = profileData as { id: string; email: string } | null;
         
-        if (!profile?.id) {
-          throw new Error('用户名不存在');
-        }
-
-        if (!profile?.email) {
-          throw new Error('用户邮箱信息缺失，请联系管理员');
-        }
+        if (!profile?.id) throw new Error('用户名不存在');
+        if (!profile?.email) throw new Error('用户邮箱信息缺失，请联系管理员');
         
         email = profile.email;
       }
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       return { error: null };
     } catch (error) {
@@ -107,13 +84,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            username,
-          },
-        },
+        options: { data: { username } },
       });
-
       if (error) throw error;
       return { error: null, userId: data.user?.id };
     } catch (error) {

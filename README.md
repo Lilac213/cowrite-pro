@@ -1,95 +1,177 @@
-# Welcome to Your Miaoda Project
-Miaoda Application Link URL
-    URL:https://medo.dev/projects/app-9bwpferlujnl
+# CoWrite - AI 写作辅助工具
 
-# Welcome to Your Miaoda Project
+一款结构化写作辅助工具，通过多阶段流程帮助用户完成高质量文章创作。
 
-## Project Info
+## 🚀 快速开始
 
-## Project Directory
+### 环境要求
 
-```
-├── README.md # Documentation
-├── components.json # Component library configuration
-├── index.html # Entry file
-├── package.json # Package management
-├── postcss.config.js # PostCSS configuration
-├── public # Static resources directory
-│   ├── favicon.png # Icon
-│   └── images # Image resources
-├── src # Source code directory
-│   ├── App.tsx # Entry file
-│   ├── components # Components directory
-│   ├── context # Context directory
-│   ├── db # Database configuration directory
-│   ├── hooks # Common hooks directory
-│   ├── index.css # Global styles
-│   ├── layout # Layout directory
-│   ├── lib # Utility library directory
-│   ├── main.tsx # Entry file
-│   ├── routes.tsx # Routing configuration
-│   ├── pages # Pages directory
-│   ├── services # Database interaction directory
-│   ├── types # Type definitions directory
-├── tsconfig.app.json # TypeScript frontend configuration file
-├── tsconfig.json # TypeScript configuration file
-├── tsconfig.node.json # TypeScript Node.js configuration file
-└── vite.config.ts # Vite configuration file
+- Node.js ≥ 20
+- npm ≥ 10
+
+### 安装依赖
+
+```bash
+npm install
 ```
 
-## Tech Stack
+### 配置环境变量
 
-Vite, TypeScript, React, Supabase
+复制 `.env.example` 创建 `.env` 文件：
 
-## Development Guidelines
-
-### How to edit code locally?
-
-You can choose [VSCode](https://code.visualstudio.com/Download) or any IDE you prefer. The only requirement is to have Node.js and npm installed.
-
-### Environment Requirements
-
-```
-# Node.js ≥ 20
-# npm ≥ 10
-Example:
-# node -v   # v20.18.3
-# npm -v    # 10.8.2
+```bash
+cp .env.example .env
 ```
 
-### Installing Node.js on Windows
+配置以下变量：
 
-```
-# Step 1: Visit the Node.js official website: https://nodejs.org/, click download. The website will automatically suggest a suitable version (32-bit or 64-bit) for your system.
-# Step 2: Run the installer: Double-click the downloaded installer to run it.
-# Step 3: Complete the installation: Follow the installation wizard to complete the process.
-# Step 4: Verify installation: Open Command Prompt (cmd) or your IDE terminal, and type `node -v` and `npm -v` to check if Node.js and npm are installed correctly.
-```
+```env
+# Supabase 配置
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-### Installing Node.js on macOS
-
-```
-# Step 1: Using Homebrew (Recommended method): Open Terminal. Type the command `brew install node` and press Enter. If Homebrew is not installed, you need to install it first by running the following command in Terminal:
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-Alternatively, use the official installer: Visit the Node.js official website. Download the macOS .pkg installer. Open the downloaded .pkg file and follow the prompts to complete the installation.
-# Step 2: Verify installation: Open Command Prompt (cmd) or your IDE terminal, and type `node -v` and `npm -v` to check if Node.js and npm are installed correctly.
+# API 配置
+INTEGRATIONS_API_KEY=your_api_key
+OPENAI_BASE_URL=https://api.newapi.pro
 ```
 
-### After installation, follow these steps:
+### 启动开发服务器
+
+```bash
+# 前端
+npm run dev
+
+# 自建API服务器
+cd api-server && npm run build && npm start
+```
+
+访问 http://localhost:5173
+
+## 📁 项目结构
 
 ```
-# Step 1: Download the code package
-# Step 2: Extract the code package
-# Step 3: Open the code package with your IDE and navigate into the code directory
-# Step 4: In the IDE terminal, run the command to install dependencies: npm i
-# Step 5: In the IDE terminal, run the command to start the development server: npm run dev -- --host 127.0.0.1
-# Step 6: if step 5 failed, try this command to start the development server: npx vite --host 127.0.0.1
+├── api-server/              # 自建API服务器
+│   └── src/index.ts        # Fastify服务器入口
+├── src/
+│   ├── api/                # API调用层
+│   ├── components/         # React组件
+│   │   ├── workflow/       # 工作流组件
+│   │   └── ui/            # UI组件库
+│   ├── pages/             # 页面组件
+│   ├── db/                # Supabase配置
+│   ├── hooks/             # 自定义Hooks
+│   ├── services/          # 业务逻辑层
+│   └── types/             # TypeScript类型定义
+├── supabase/
+│   └── migrations/        # 数据库迁移文件
+└── tests/                 # 测试文件
 ```
 
-### How to develop backend services?
+## 🎯 核心功能
 
-Configure environment variables and install relevant dependencies.If you need to use a database, please use the official version of Supabase.
+### 写作流程
 
-## Learn More
+1. **需求明确** - 调用 [`brief-agent`](src/api/brief.api.ts:1) 生成结构化需求文档
+2. **资料搜索** - 调用 [`research-retrieval-agent`](src/api/research.api.ts:1) 搜索相关资料
+3. **资料整理** - 调用 [`research-synthesis-agent`](src/api/research.api.ts:1) 整合分析资料
+4. **文章结构** - 调用 [`structure-agent`](src/api/outline.api.ts:1) 生成文章大纲
+5. **生成草稿** - 调用 [`draft-agent`](src/api/draft.api.ts:1) 生成初稿
+6. **内容审校** - 调用 [`review-agent`](src/api/draft.api.ts:1) 审校优化
+7. **排版导出** - 导出最终文稿
 
-You can also check the help documentation: Download and Building the app（ [https://intl.cloud.baidu.com/en/doc/MIAODA/s/download-and-building-the-app-en](https://intl.cloud.baidu.com/en/doc/MIAODA/s/download-and-building-the-app-en)）to learn more detailed content.
+### 工具箱
+
+- **降AI率工具** - [`AIReducerPage`](src/pages/AIReducerPage.tsx:1)
+- **素材库** - [`MaterialsPageEnhanced`](src/pages/MaterialsPageEnhanced.tsx:1)
+- **参考文章库** - [`ReferencesPageEnhanced`](src/pages/ReferencesPageEnhanced.tsx:1)
+- **格式模板** - [`TemplatesPageEnhanced`](src/pages/TemplatesPageEnhanced.tsx:1)
+
+## 🧪 测试
+
+### 运行测试
+
+```bash
+# 迁移和API测试
+node tests/migration-test.js
+
+# New API中转站测试
+node tests/test-new-api.js
+```
+
+### 测试结果
+
+查看 [`tests/TEST_RESULTS.md`](tests/TEST_RESULTS.md:1) 了解最新测试状态。
+
+## 🛠️ 技术栈
+
+- **前端**: React 18 + TypeScript + Vite
+- **UI**: Radix UI + Tailwind CSS
+- **状态管理**: React Context
+- **数据库**: Supabase (PostgreSQL)
+- **API服务器**: Fastify + TypeScript
+- **路由**: React Router v7
+
+## 📚 配置文档
+
+- [`API_KEY_SETUP.md`](API_KEY_SETUP.md:1) - API密钥配置指南
+- [`QUICK_SETUP_QIANWEN.md`](QUICK_SETUP_QIANWEN.md:1) - 通义千问快速配置
+- [`SERPAPI_CONFIGURATION.md`](SERPAPI_CONFIGURATION.md:1) - SerpAPI配置说明
+- [`SUPABASE_FUNCTIONS_DEPLOY_GUIDE.md`](SUPABASE_FUNCTIONS_DEPLOY_GUIDE.md:1) - Supabase Functions部署指南
+
+## 🔧 开发指南
+
+### 代码规范
+
+```bash
+# 运行Lint检查
+npm run lint
+
+# 构建生产版本
+npm run build
+```
+
+### 数据库迁移
+
+```bash
+# 应用迁移
+supabase db push
+
+# 查看迁移状态
+supabase migration list
+```
+
+## 📖 详细文档
+
+- [`docs/prd.md`](docs/prd.md:1) - 产品需求文档
+- [`ARCHITECTURE_DIAGRAM.md`](ARCHITECTURE_DIAGRAM.md:1) - 架构设计图
+- [`SELF_HOSTED_API_ANALYSIS.md`](SELF_HOSTED_API_ANALYSIS.md:1) - 自建API分析
+
+## 🐛 故障排除
+
+### API服务器无法启动
+
+```bash
+cd api-server
+npm install
+npm run build
+npm start
+```
+
+### 前端无法连接数据库
+
+检查 `.env` 文件中的 Supabase 配置是否正确。
+
+### New API返回401错误
+
+确保 `INTEGRATIONS_API_KEY` 配置了有效的API密钥。
+
+## 📝 许可证
+
+本项目由 Miaoda 平台生成。
+
+## 🔗 相关链接
+
+- Miaoda项目地址: https://medo.dev/projects/app-9bwpferlujnl
+- Supabase文档: https://supabase.com/docs
+- React文档: https://react.dev

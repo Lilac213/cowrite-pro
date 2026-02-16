@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { getProjects, createProject, deleteProject, checkProjectLimit, incrementProjectCount, getProfile, deductUserPoints } from '@/db/api';
+import { getProjects, deleteProject, getProfile } from '@/api';
+import { createProject, checkProjectLimit } from '@/services/project.service';
+import { deductUserPoints } from '@/services/credit.service';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

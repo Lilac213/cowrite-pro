@@ -11,17 +11,16 @@ import { useToast } from '@/hooks/use-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { 
-  getResearchInsights, 
-  getResearchGaps, 
+  getResearchInsights,
+  getResearchGaps,
   updateInsightDecision,
   updateGapDecision,
-  callArticleStructureAgent,
   updateWritingSessionStage,
   updateProject,
   getWritingSession,
   getRetrievedMaterials,
   callResearchSynthesisAgent
-} from '@/db/api';
+} from '@/api';
 import type { ResearchInsight, ResearchGap } from '@/types';
 import { CheckCircle2, Circle, ChevronRight, FileText, AlertCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';

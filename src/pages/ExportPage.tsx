@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { getProject, getLatestDraft, getTemplates, updateProject, markProjectAsCompleted } from '@/db/api';
+import { getProject, getLatestDraft, getTemplates, updateProject, markProjectAsCompleted } from '@/api';
 import type { Project, Draft, Template } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

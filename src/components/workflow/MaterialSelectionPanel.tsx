@@ -17,7 +17,7 @@ import {
   FileEdit 
 } from 'lucide-react';
 import type { RetrievedMaterial, SourceType } from '@/types';
-import { updateMaterialSelection, batchUpdateMaterialSelection } from '@/db/api';
+import { updateMaterialSelection, batchUpdateMaterialSelection } from '@/api';
 import { useToast } from '@/hooks/use-toast';
 
 interface MaterialSelectionPanelProps {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { updateProject, createDraft, getLatestDraft, updateDraft, callDraftAgent } from '@/db/api';
+import { updateProject, createDraft, getLatestDraft, updateDraft, callDraftAgent } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';

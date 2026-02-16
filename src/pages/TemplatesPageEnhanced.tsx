@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getTemplates, createTemplate, deleteTemplate, updateTemplate, generateTemplateRules } from '@/db/api';
+import { getTemplates, createTemplate, deleteTemplate, updateTemplate, generateTemplateRules } from '@/api';
 import type { Template } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

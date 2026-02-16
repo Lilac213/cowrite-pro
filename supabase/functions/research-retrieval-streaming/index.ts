@@ -345,7 +345,7 @@ Rules:
           year: s.year,
           citation_count: s.citation_count,
         })),
-        { minContentLength: 20, minQualityScore: 0.1, removeLowQuality: false }
+        { minContentLength: 20, minQualityScore: 0.1, removeLowQuality: false, deduplicateByUrl: false, deduplicateByTitle: false }
       );
       
       const cleanedNews = cleanMaterials(
@@ -356,7 +356,7 @@ Rules:
           source_type: 'news',
           published_at: s.published_at,
         })),
-        { minContentLength: 10, minQualityScore: 0.05, removeLowQuality: false }
+        { minContentLength: 10, minQualityScore: 0.05, removeLowQuality: false, deduplicateByUrl: false, deduplicateByTitle: false }
       );
       
       const cleanedWeb = cleanMaterials(
@@ -366,7 +366,7 @@ Rules:
           content: s.snippet || '',
           source_type: 'web',
         })),
-        { minContentLength: 10, minQualityScore: 0.05, removeLowQuality: false }
+        { minContentLength: 10, minQualityScore: 0.05, removeLowQuality: false, deduplicateByUrl: false, deduplicateByTitle: false }
       );
 
       console.log('[research-retrieval-streaming] 清洗后资料数量:', {

@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  getReferenceArticles, 
-  createReferenceArticle, 
-  deleteReferenceArticle, 
+import {
+  getReferenceArticles,
+  createReferenceArticle,
+  deleteReferenceArticle,
   searchReferenceArticles,
-  analyzeReferenceArticle,
-  updateReferenceAnalysis,
   updateReferenceArticle,
   createMaterial
-} from '@/db/api';
+} from '@/api';
 import type { ReferenceArticle } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

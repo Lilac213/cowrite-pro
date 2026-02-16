@@ -1,39 +1,18 @@
 import { useState, useEffect } from 'react';
 import {
-  getKnowledgeBase,
-  createKnowledgeBase,
-  updateKnowledgeBase,
-  updateProject,
-  agentDrivenResearchWorkflow,
-  agentDrivenResearchWorkflowStreaming,
-  researchSynthesisAgent,
-  saveToReferenceLibrary,
-  getBrief,
-  getMaterials,
-  getReferenceArticles,
-  searchMaterials,
-  searchReferenceArticles,
-  searchMaterialsByTags,
-  searchReferencesByTags,
-  callLLMGenerate,
-  clearProjectKnowledge,
   getOrCreateWritingSession,
-  callResearchSynthesisAgent,
+  updateWritingSessionStage,
   getResearchInsights,
   getResearchGaps,
-  isResearchStageComplete,
-  updateWritingSessionStage,
-  getRetrievedMaterials,
-  getSelectedMaterials,
-  updateRetrievedMaterialSelection,
-  batchUpdateRetrievedMaterialSelection,
-  batchSaveRetrievedMaterials,
   updateInsightDecision,
   updateGapDecision,
-  callArticleStructureAgent,
-  deductUserPoints,
+  updateProject,
+  getRetrievedMaterials,
+  callResearchSynthesisAgent,
+  getProfile,
   incrementResearchRefreshCount,
-} from '@/db/api';
+} from '@/api';
+import { checkResearchLimit, deductResearchCredits } from '@/services/credit.service';
 import type { KnowledgeBase, WritingSession, ResearchInsight, ResearchGap, SynthesisResult, RetrievedMaterial } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

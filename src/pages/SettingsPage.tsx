@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
-import { useInvitationCode } from '@/db/api';
+import { useInvitationCode } from '@/api';
 import { LogOut, User as UserIcon, Gift } from 'lucide-react';
 
 export default function SettingsPage() {

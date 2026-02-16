@@ -8,7 +8,7 @@ import {
   getMaterials,
   callStructureAgent,
   callDraftAgent,
-} from '@/db/api';
+} from '@/api';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

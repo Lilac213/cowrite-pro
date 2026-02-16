@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
-import { useInvitationCode } from '@/db/api';
+import { useInvitationCode } from '@/api';
 
 export default function LoginPage() {
   const [usernameOrEmail, setUsernameOrEmail] = useState('');

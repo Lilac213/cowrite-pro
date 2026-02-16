@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getProject, updateProject, getKnowledgeBase, getReferenceArticles, getMaterials } from '@/db/api';
+import { getProject, updateProject, getKnowledgeBase, getReferenceArticles, getMaterials } from '@/api';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

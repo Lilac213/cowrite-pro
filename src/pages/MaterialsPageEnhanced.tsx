@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  getMaterials, 
-  createMaterial, 
-  deleteMaterial, 
+import {
+  getMaterials,
+  createMaterial,
+  deleteMaterial,
   updateMaterial,
   searchMaterials,
-  linkMaterialToProjects,
-  updateMaterialTags,
-  organizeMaterials,
   getProjects
-} from '@/db/api';
+} from '@/api';
 import type { Material, Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

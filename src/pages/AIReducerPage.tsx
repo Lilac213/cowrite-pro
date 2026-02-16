@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
-import { callLLMGenerate, checkAIReducerLimit, incrementAIReducerUsage, getProfile } from '@/db/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { getProfile } from '@/api';
+import { checkAIReducerLimit, incrementAIReducerUsage } from '@/services/credit.service';
+
+async function callLLMGenerate(prompt: string) {
+  const { supabase } = await import('@/db/supabase');
+  const { data, error } = await supabase.functions.invoke('llm-generate', { body: { prompt } });
+  if (error) throw error;
+  return data.result;
+}
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
