@@ -18,6 +18,29 @@ const llmQueue = new PQueue({ concurrency: Number(process.env.LLM_CONCURRENCY) |
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const frontendUrlsRaw = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '';
+
+function buildAllowedOrigins(input: string) {
+  const entries = input
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+  const origins = new Set<string>();
+  for (const entry of entries) {
+    origins.add(entry);
+    try {
+      const url = new URL(entry);
+      const host = url.host;
+      const altHost = host.startsWith('www.') ? host.slice(4) : `www.${host}`;
+      origins.add(`${url.protocol}//${altHost}`);
+    } catch {
+      origins.add(entry);
+    }
+  }
+  return Array.from(origins);
+}
+
+const allowedOrigins = buildAllowedOrigins(frontendUrlsRaw);
 
 function getSupabaseAdmin(): SupabaseClient {
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -44,7 +67,17 @@ async function runStrictJsonPrompt(
 }
 
 await app.register(cors, {
-  origin: process.env.FRONTEND_URL || '*',
+  origin: (origin, callback) => {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('Origin not allowed'), false);
+  },
   credentials: true
 });
 
