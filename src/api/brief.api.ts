@@ -1,8 +1,11 @@
 import { supabase } from '@/db/supabase';
+import { apiJson } from './http';
 import type { Brief } from '@/types';
 
+const supabaseClient = supabase as any;
+
 export async function getBrief(projectId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('briefs')
     .select('*')
     .eq('project_id', projectId)
@@ -12,19 +15,20 @@ export async function getBrief(projectId: string) {
 }
 
 export async function createBrief(brief: Omit<Brief, 'id' | 'created_at' | 'updated_at'>) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('briefs')
-    .insert(brief as any)
+    .insert(brief)
     .select()
     .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error('创建 brief 失败');
   return data as Brief;
 }
 
 export async function updateBrief(briefId: string, updates: Partial<Brief>) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('briefs')
-    .update(updates as any)
+    .update(updates)
     .eq('id', briefId)
     .select();
   if (error) throw error;
@@ -32,9 +36,5 @@ export async function updateBrief(briefId: string, updates: Partial<Brief>) {
 }
 
 export async function callBriefAgent(projectId: string, topic: string, userInput: string) {
-  const { data, error } = await supabase.functions.invoke('brief-agent', {
-    body: { project_id: projectId, topic, user_input: userInput }
-  });
-  if (error) throw error;
-  return data;
+  return apiJson('/api/brief-agent', { project_id: projectId, topic, user_input: userInput });
 }

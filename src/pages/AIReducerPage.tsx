@@ -2,12 +2,20 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getProfile } from '@/api';
 import { checkAIReducerLimit, incrementAIReducerUsage } from '@/services/credit.service';
+import { apiJson } from '@/api/http';
 
-async function callLLMGenerate(prompt: string) {
-  const { supabase } = await import('@/db/supabase');
-  const { data, error } = await supabase.functions.invoke('llm-generate', { body: { prompt } });
-  if (error) throw error;
-  return data.result;
+async function callLLMGenerate(prompt: string, context?: string, systemMessage?: string) {
+  const data = await apiJson<{ result: { result: string } }>(
+    '/api/llm/generate',
+    {
+      prompt,
+      context,
+      systemMessage,
+      schema: { required: ['result'] }
+    },
+    true
+  );
+  return data.result.result;
 }
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';

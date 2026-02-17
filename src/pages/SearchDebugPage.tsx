@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/db/supabase';
+import { researchRetrievalAgent } from '@/api';
 import { Search, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 
 export default function SearchDebugPage() {
@@ -51,39 +52,29 @@ export default function SearchDebugPage() {
       }
       addLog(`👤 用户 ID: ${user.id}`);
 
-      // 调用 Edge Function
-      addLog('📡 调用 research-retrieval-agent Edge Function...');
+      // 调用自建 API
+      addLog('📡 调用自建 API research-retrieval...');
       const startTime = Date.now();
 
-      const { data, error: funcError } = await supabase.functions.invoke('research-retrieval-agent', {
-        body: {
-          requirementsDoc: JSON.stringify(parsedDoc),
-          userId: user.id,
-        },
-      });
+      const data: any = await researchRetrievalAgent(JSON.stringify(parsedDoc), undefined, user.id);
 
       const duration = Date.now() - startTime;
       addLog(`⏱️ 请求耗时: ${duration}ms`);
 
-      if (funcError) {
-        addLog(`❌ Edge Function 错误: ${funcError.message}`);
-        throw funcError;
-      }
-
       if (!data) {
-        addLog('❌ Edge Function 返回数据为空');
-        throw new Error('Edge Function 返回数据为空');
+        addLog('❌ 自建 API 返回数据为空');
+        throw new Error('自建 API 返回数据为空');
       }
 
-      addLog('✅ Edge Function 调用成功');
+      addLog('✅ 自建 API 调用成功');
       
       // 显示结果统计
-      if (data.data) {
+      if (data) {
         const stats = {
-          academic: data.data.academic_sources?.length || 0,
-          news: data.data.news_sources?.length || 0,
-          web: data.data.web_sources?.length || 0,
-          user_library: data.data.user_library_sources?.length || 0,
+          academic: data.academic_sources?.length || 0,
+          news: data.news_sources?.length || 0,
+          web: data.web_sources?.length || 0,
+          user_library: data.user_library_sources?.length || 0,
         };
         
         addLog(`📊 搜索结果统计:`);
@@ -93,9 +84,9 @@ export default function SearchDebugPage() {
         addLog(`   - 用户库来源: ${stats.user_library} 条`);
         addLog(`   - 总计: ${stats.academic + stats.news + stats.web + stats.user_library} 条`);
 
-        if (data.data.search_summary) {
-          addLog(`🎯 搜索主题: ${data.data.search_summary.interpreted_topic || 'N/A'}`);
-          addLog(`📌 关键维度: ${data.data.search_summary.key_dimensions?.join(', ') || 'N/A'}`);
+        if (data.search_summary) {
+          addLog(`🎯 搜索主题: ${data.search_summary.interpreted_topic || 'N/A'}`);
+          addLog(`📌 关键维度: ${data.search_summary.key_dimensions?.join(', ') || 'N/A'}`);
         }
       }
 

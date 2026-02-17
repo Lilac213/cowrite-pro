@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { getProjects, deleteProject, getProfile } from '@/api';
 import { createProject, checkProjectLimit } from '@/services/project.service';
-import { deductUserPoints } from '@/services/credit.service';
+import { deductUserPoints, incrementProjectCount } from '@/services/credit.service';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -110,7 +110,7 @@ export default function ProjectListPage() {
     setCreating(true);
     try {
       // 扣除 9 点
-      await deductUserPoints(user.id, 9, '创建项目');
+      await deductUserPoints(user.id, 9);
       
       // 增加项目计数
       await incrementProjectCount(user.id);

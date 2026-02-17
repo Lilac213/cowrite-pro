@@ -19,6 +19,7 @@ import { Separator } from '@/components/ui/separator';
 import { Plus, Trash2, Sparkles, Save, X, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
+import { apiJson } from '@/api/http';
 
 interface OutlineStageProps {
   projectId: string;
@@ -140,23 +141,12 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
   const handleSaveArticleStructure = async () => {
     try {
       // 调用调整接口，确保结构连贯且最后一块是总结
-      const { data, error } = await supabase.functions.invoke('adjust-article-structure', {
-        body: {
-          project_id: projectId,
-          coreThesis,
-          argumentBlocks,
-          operation: 'check',
-        },
+      const data = await apiJson('/api/adjust-article-structure', {
+        project_id: projectId,
+        coreThesis,
+        argumentBlocks,
+        operation: 'check',
       });
-
-      if (error) {
-        console.error('Edge function error:', error);
-        throw new Error(error.message || '调整论证结构失败');
-      }
-
-      if (!data) {
-        throw new Error('未返回调整后的结构');
-      }
 
       // 使用调整后的结构
       const adjustedStructure = {
@@ -213,20 +203,13 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
 
     // 自动调整结构
     try {
-      const { data, error } = await supabase.functions.invoke('adjust-article-structure', {
-        body: {
-          project_id: projectId,
-          coreThesis,
-          argumentBlocks: updatedBlocks,
-          operation: 'add',
-          blockIndex: index,
-        },
+      const data = await apiJson('/api/adjust-article-structure', {
+        project_id: projectId,
+        coreThesis,
+        argumentBlocks: updatedBlocks,
+        operation: 'add',
+        blockIndex: index,
       });
-
-      if (error) {
-        console.error('Adjust structure error:', error);
-        throw new Error(error.message || '调整失败');
-      }
 
       if (data && data.argument_blocks) {
         setArgumentBlocks(data.argument_blocks);
@@ -256,20 +239,13 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
 
     // 自动调整结构
     try {
-      const { data, error } = await supabase.functions.invoke('adjust-article-structure', {
-        body: {
-          project_id: projectId,
-          coreThesis,
-          argumentBlocks: updatedBlocks,
-          operation: 'delete',
-          blockIndex,
-        },
+      const data = await apiJson('/api/adjust-article-structure', {
+        project_id: projectId,
+        coreThesis,
+        argumentBlocks: updatedBlocks,
+        operation: 'delete',
+        blockIndex,
       });
-
-      if (error) {
-        console.error('Adjust structure error:', error);
-        throw new Error(error.message || '调整失败');
-      }
 
       if (data && data.argument_blocks) {
         setArgumentBlocks(data.argument_blocks);

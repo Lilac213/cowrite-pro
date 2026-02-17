@@ -9,6 +9,7 @@ import { Loader2, Plus, Trash2, Sparkles, Save, AlertCircle } from 'lucide-react
 import { supabase } from '@/db/supabase';
 import type { Outline } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { apiJson } from '@/api/http';
 
 interface ParagraphStructure {
   input_assumption: string;
@@ -95,21 +96,17 @@ export default function ParagraphSummaryEditor({
         (block) => block.order === Math.ceil(outline.paragraph_order / 2)
       );
 
-      const { data, error } = await supabase.functions.invoke('generate-paragraph-structure', {
-        body: {
-          coreThesis: articleStructure?.core_thesis,
-          currentArgumentBlock: currentBlock?.title,
-          blockTask: currentBlock?.description,
-          previousParagraphTask: previousOutline?.paragraph_structure?.core_claim,
-          relationWithPrevious: '承接',
-          newInformation: outline.summary,
-          referenceContent: referenceArticles.map((r) => r.content).join('\n'),
-          authorMaterials: materials.map((m) => m.content).join('\n'),
-          retrievedData: knowledgeBase.map((k) => k.content).join('\n'),
-        },
+      const data = await apiJson('/api/generate-paragraph-structure', {
+        coreThesis: articleStructure?.core_thesis,
+        currentArgumentBlock: currentBlock?.title,
+        blockTask: currentBlock?.description,
+        previousParagraphTask: previousOutline?.paragraph_structure?.core_claim,
+        relationWithPrevious: '承接',
+        newInformation: outline.summary,
+        referenceContent: referenceArticles.map((r) => r.content).join('\n'),
+        authorMaterials: materials.map((m) => m.content).join('\n'),
+        retrievedData: knowledgeBase.map((k) => k.content).join('\n'),
       });
-
-      if (error) throw error;
 
       setParagraphStructure(data);
       
@@ -141,15 +138,11 @@ export default function ParagraphSummaryEditor({
 
     setGeneratingEvidence(index);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-evidence', {
-        body: {
-          articleTopic: articleStructure?.core_thesis,
-          coreClaim: paragraphStructure.core_claim,
-          subClaim: subClaimsWithMaterials[index].sub_claim,
-        },
+      const data = await apiJson('/api/generate-evidence', {
+        articleTopic: articleStructure?.core_thesis,
+        coreClaim: paragraphStructure.core_claim,
+        subClaim: subClaimsWithMaterials[index].sub_claim,
       });
-
-      if (error) throw error;
 
       const updated = [...subClaimsWithMaterials];
       updated[index].materials = data.supporting_materials;

@@ -15,6 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
 import { Copy, Plus, Ban, Edit, Send } from 'lucide-react';
 import { formatDateTime } from '@/utils/date';
+import { apiJson } from '@/api/http';
+import { useAuth } from '@/contexts/AuthContext';
 
 // 同步配置到 Edge Function Secrets
 async function syncConfigToSecrets() {
@@ -38,6 +40,7 @@ async function syncConfigToSecrets() {
 }
 
 export default function AdminPage() {
+  const { profile, loading: authLoading } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [invitationCodes, setInvitationCodes] = useState<InvitationCode[]>([]);
   const [systemConfig, setSystemConfig] = useState<Record<string, string>>({});
@@ -56,8 +59,13 @@ export default function AdminPage() {
   const { toast } = useToast();
 
   useEffect(() => {
+    if (authLoading) return;
+    if (profile?.role !== 'admin') {
+      setLoading(false);
+      return;
+    }
     loadData();
-  }, []);
+  }, [authLoading, profile?.role]);
 
   const loadData = async () => {
     try {
@@ -242,15 +250,15 @@ export default function AdminPage() {
 
     setSending(true);
     try {
-      const { error } = await supabase.functions.invoke('send-invite-email', {
-        body: {
+      await apiJson(
+        '/api/send-invite-email',
+        {
           email: inviteEmail,
           inviteCode: selectedCode.code,
           credits: selectedCode.credits,
         },
-      });
-
-      if (error) throw error;
+        true
+      );
 
       setInviteDialogOpen(false);
       toast({
@@ -268,10 +276,21 @@ export default function AdminPage() {
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (profile?.role !== 'admin') {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-2">
+          <h2 className="text-xl font-semibold">无权限访问管理面板</h2>
+          <p className="text-muted-foreground">仅管理员可查看此页面</p>
+        </div>
       </div>
     );
   }

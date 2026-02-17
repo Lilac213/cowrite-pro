@@ -2,11 +2,17 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getLatestDraft, createDraft, updateDraft, getBrief, getKnowledgeBase, getOutlines, getMaterials, getReferenceArticles } from '@/api';
 import type { Draft, ParagraphAnnotation } from '@/types';
-import { supabase } from '@/db/supabase';
+import { apiJson } from '@/api/http';
 
 async function callLLMGenerate(prompt: string) {
-  const { data, error } = await supabase.functions.invoke('llm-generate', { body: { prompt } });
-  if (error) throw error;
+  const data = await apiJson<{ result: { content: string; annotations?: ParagraphAnnotation[] } }>(
+    '/api/llm/generate',
+    {
+      prompt,
+      schema: { required: ['content', 'annotations'] }
+    },
+    true
+  );
   return data.result;
 }
 import { Button } from '@/components/ui/button';
@@ -114,26 +120,7 @@ ${selectedOutlines.map((o, i) => `${i + 1}. ${o.summary}`).join('\n')}
 
 请严格按照 JSON 格式输出，包含 content 和 annotations 两个字段。`;
 
-      const result = await callLLMGenerate(prompt);
-      
-      // 解析 JSON 响应
-      let parsedResult;
-      try {
-        // 尝试提取 JSON
-        const jsonMatch = result.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          parsedResult = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error('无法解析 JSON 响应');
-        }
-      } catch (parseError) {
-        console.error('JSON 解析错误:', parseError);
-        // 如果解析失败，使用原始文本作为内容
-        parsedResult = {
-          content: result,
-          annotations: [],
-        };
-      }
+      const parsedResult = await callLLMGenerate(prompt);
 
       setContent(parsedResult.content);
       setAnnotations(parsedResult.annotations || []);

@@ -41,7 +41,7 @@ async function testEmbeddingService() {
   console.log('  - embedding-service/requirements.txt (依赖)');
   console.log('  - embedding-service/Dockerfile (Docker配置)');
   console.log('  - embedding-service/test.py (测试脚本)');
-  console.log('  - embedding-service/DEPLOY.md (部署指南)\n');
+  console.log('  - docs/all/embedding-service-deploy.md (部署指南)\n');
   
   console.log('📦 技术栈:');
   console.log('  - 模型: bge-base-zh-v1.5');

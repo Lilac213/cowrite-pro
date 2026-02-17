@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { apiFetch, apiJson, apiSSE } from '@/api/http';
 import { TEMPLATE_GENERATION_PROMPT } from '@/constants/prompts';
 import type {
   Profile,
@@ -548,62 +549,19 @@ export async function deleteTemplate(templateId: string) {
 }
 
 // ============ Edge Function API ============
-export async function callLLMGenerate(prompt: string, context?: string, systemMessage?: string) {
-  const { data, error } = await supabase.functions.invoke<{ result?: string; error?: string }>('llm-generate', {
-    body: { prompt, context, systemMessage },
-  });
-
-  if (error) {
-    // 尝试从 error.context 中提取更详细的错误信息
-    if (error.context && typeof error.context === 'object') {
-      const contextError = await error.context.text?.();
-      if (contextError) {
-        try {
-          const parsed = JSON.parse(contextError);
-          throw new Error(parsed.error || error.message);
-        } catch {
-          throw new Error(contextError || error.message);
-        }
-      }
-    }
-    throw new Error(error.message);
-  }
-  
-  // 检查响应中的错误
-  if (data && 'error' in data && data.error) {
-    throw new Error(data.error);
-  }
-  
-  if (!data || !data.result) throw new Error('未收到响应');
+export async function callLLMGenerate(
+  prompt: string,
+  context?: string,
+  systemMessage?: string,
+  schema?: { required?: string[]; optional?: string[]; defaults?: Record<string, any> }
+) {
+  const data = await apiJson<{ result: any }>('/api/llm/generate', { prompt, context, systemMessage, schema }, true);
+  if (!data || data.result === undefined) throw new Error('未收到响应');
   return data.result;
 }
 
 export async function callWebSearch(query: string) {
-  const { data, error } = await supabase.functions.invoke<{ results?: SearchResult[]; error?: string }>('web-search', {
-    body: { query },
-  });
-
-  if (error) {
-    // 尝试从 error.context 中提取更详细的错误信息
-    if (error.context && typeof error.context === 'object') {
-      const contextError = await error.context.text?.();
-      if (contextError) {
-        try {
-          const parsed = JSON.parse(contextError);
-          throw new Error(parsed.error || error.message);
-        } catch {
-          throw new Error(contextError || error.message);
-        }
-      }
-    }
-    throw new Error(error.message);
-  }
-  
-  // 检查响应中的错误
-  if (data && 'error' in data && data.error) {
-    throw new Error(data.error);
-  }
-  
+  const data = await apiJson('/api/web-search', { query });
   if (!data || !data.results) throw new Error('未收到响应');
   return data.results;
 }
@@ -614,8 +572,10 @@ export async function callWebSearch(query: string) {
 export async function generateTemplateRules(description: string) {
   const systemMessage = TEMPLATE_GENERATION_PROMPT.replace('{{USER_INPUT}}', description);
 
-  const result = await callLLMGenerate(description, '', systemMessage);
-  return JSON.parse(result);
+  const result = await callLLMGenerate(description, '', systemMessage, {
+    required: ['meta', 'page', 'styles', 'structure', 'forbidden_direct_formatting']
+  });
+  return result;
 }
 
 // AI 分析参考文章
@@ -644,8 +604,10 @@ ${content}
   "tags": ["标签1", "标签2", "标签3"]
 }`;
 
-  const result = await callLLMGenerate(prompt);
-  return JSON.parse(result);
+  const result = await callLLMGenerate(prompt, undefined, undefined, {
+    required: ['core_points', 'structure', 'borrowable_segments', 'tags']
+  });
+  return result;
 }
 
 // AI 整理素材库
@@ -674,8 +636,10 @@ ${materials.map((m, i) => `${i + 1}. ${m.title}\n${m.content.substring(0, 200)}.
   ]
 }`;
 
-  const result = await callLLMGenerate(prompt);
-  return JSON.parse(result);
+  const result = await callLLMGenerate(prompt, undefined, undefined, {
+    required: ['auto_tags', 'similar_groups', 'article_suggestions']
+  });
+  return result;
 }
 
 // 更新素材关联项目
@@ -764,89 +728,8 @@ export async function getReferencesByTags(userId: string, tags: string[]) {
  * Research Retrieval Agent - 资料检索 Agent
  * 负责在 5 个数据源中检索相关资料
  */
-export async function researchRetrievalAgent(requirementsDoc: any, projectId?: string, userId?: string, sessionId?: string) {
-  console.log('[researchRetrievalAgent] 开始调用，需求文档:', requirementsDoc);
-  console.log('[researchRetrievalAgent] projectId:', projectId);
-  console.log('[researchRetrievalAgent] userId:', userId);
-  console.log('[researchRetrievalAgent] sessionId:', sessionId);
-  console.log('[researchRetrievalAgent] Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
-  console.log('[researchRetrievalAgent] Supabase Anon Key exists:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
-  
-  try {
-    console.log('[researchRetrievalAgent] 准备调用 Edge Function...');
-    
-    const { data, error } = await supabase.functions.invoke('research-retrieval-agent', {
-      body: { requirementsDoc, projectId, userId, sessionId },
-    });
-
-    console.log('[researchRetrievalAgent] Edge Function 调用完成');
-    console.log('[researchRetrievalAgent] Edge Function 响应:', { data, error });
-
-    if (error) {
-      console.error('Research Retrieval Agent Error:', error);
-      console.error('Error type:', typeof error);
-      console.error('Error keys:', Object.keys(error));
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
-      
-      // 尝试提取详细错误信息
-      let errorMessage = error.message || '资料检索失败';
-      
-      // 如果有 context，尝试提取更详细的错误
-      if (error.context) {
-        try {
-          const contextText = typeof error.context === 'string' 
-            ? error.context 
-            : await error.context.text?.();
-          
-          if (contextText) {
-            console.error('Error context text:', contextText);
-            try {
-              const contextJson = JSON.parse(contextText);
-              errorMessage = contextJson.error || contextText;
-            } catch {
-              errorMessage = contextText;
-            }
-          }
-        } catch (e) {
-          console.error('提取错误上下文失败:', e);
-        }
-      }
-      
-      // 如果返回的 data 中包含错误信息
-      if (data && typeof data === 'object' && 'error' in data) {
-        errorMessage = data.error;
-        console.error('Data contains error:', errorMessage);
-      }
-      
-      throw new Error(errorMessage);
-    }
-
-    // 检查返回的数据结构
-    if (!data) {
-      console.error('[researchRetrievalAgent] 返回数据为空');
-      throw new Error('资料检索返回数据为空');
-    }
-
-    // 如果返回的是 { success: true, data: {...}, logs: [...] } 格式，提取 data 和 logs 字段
-    if (data.success && data.data) {
-      console.log('[researchRetrievalAgent] 提取 data 字段:', data.data);
-      return {
-        ...data.data,
-        logs: data.logs || []
-      };
-    }
-
-    // 否则直接返回
-    console.log('[researchRetrievalAgent] 直接返回 data:', data);
-    return data;
-  } catch (error: any) {
-    console.error('[researchRetrievalAgent] Caught exception:', error);
-    console.error('[researchRetrievalAgent] Exception message:', error.message);
-    console.error('[researchRetrievalAgent] Exception stack:', error.stack);
-    console.error('[researchRetrievalAgent] Exception name:', error.name);
-    throw error;
-  }
+export async function researchRetrievalAgent(requirementsDoc: any, projectId?: string, userId?: string, sessionId?: string): Promise<any> {
+  return apiSSE<any>('/api/search/stream', { requirementsDoc, projectId, userId, sessionId });
 }
 
 /**
@@ -854,68 +737,57 @@ export async function researchRetrievalAgent(requirementsDoc: any, projectId?: s
  * 负责将检索结果转化为中文、结构化的写作素材
  */
 export async function researchSynthesisAgent(retrievalResults: any, requirementsDoc: any) {
-  console.log('[researchSynthesisAgent] 开始调用');
-  console.log('  - retrievalResults:', retrievalResults);
-  console.log('  - requirementsDoc:', requirementsDoc);
-  
-  const { data, error } = await supabase.functions.invoke('research-synthesis-agent', {
-    body: { retrievalResults, requirementsDoc },
-  });
+  const rawMaterials: Array<{
+    title: string;
+    source: string;
+    source_url?: string;
+    content: string;
+  }> = [];
 
-  console.log('[researchSynthesisAgent] Edge Function 响应:', { data, error });
+  const pushMaterial = (sourceType: string, item: any) => {
+    const content = item.full_text || item.extracted_content?.join('\n') || item.abstract || item.summary || item.content || item.snippet || '';
+    if (!content) return;
+    rawMaterials.push({
+      title: item.title || '无标题',
+      source: sourceType,
+      source_url: item.url || item.source_url || '',
+      content: content.substring(0, 2000)
+    });
+  };
 
-  if (error) {
-    console.error('Research Synthesis Agent Error:', error);
-    
-    // 尝试提取详细错误信息
-    let errorMessage = error.message || '资料整理失败';
-    
-    // 如果有 context，尝试提取更详细的错误
-    if (error.context) {
-      try {
-        const contextText = typeof error.context === 'string' 
-          ? error.context 
-          : await error.context.text?.();
-        
-        if (contextText) {
-          try {
-            const contextJson = JSON.parse(contextText);
-            errorMessage = contextJson.error || contextText;
-          } catch {
-            errorMessage = contextText;
-          }
-        }
-      } catch (e) {
-        console.error('提取错误上下文失败:', e);
-      }
+  if (retrievalResults?.academic_sources?.length) {
+    for (const item of retrievalResults.academic_sources) {
+      pushMaterial('academic', item);
     }
-    
-    // 如果返回的 data 中包含错误信息
-    if (data && typeof data === 'object' && 'error' in data) {
-      errorMessage = data.error;
+  }
+
+  if (retrievalResults?.news_sources?.length) {
+    for (const item of retrievalResults.news_sources) {
+      pushMaterial('news', item);
     }
-    
-    throw new Error(errorMessage);
   }
 
-  // 检查返回的数据结构
-  if (!data) {
-    console.error('[researchSynthesisAgent] 返回数据为空');
-    throw new Error('资料整理返回数据为空');
+  if (retrievalResults?.web_sources?.length) {
+    for (const item of retrievalResults.web_sources) {
+      pushMaterial('web', item);
+    }
   }
 
-  // 如果返回的是 { success: true, data: {...}, logs: [...] } 格式，提取 data 和 logs 字段
-  if (data.success && data.data) {
-    console.log('[researchSynthesisAgent] 提取 data 字段:', data.data);
-    return {
-      ...data.data,
-      logs: data.logs || []
-    };
-  }
+  const writing_requirements = {
+    topic: requirementsDoc?.topic || requirementsDoc?.主题 || '',
+    target_audience: requirementsDoc?.target_audience || requirementsDoc?.目标读者,
+    writing_purpose: requirementsDoc?.writing_purpose || requirementsDoc?.写作目的,
+    key_points: requirementsDoc?.key_points || requirementsDoc?.关键要点 || requirementsDoc?.核心观点
+  };
 
-  // 否则直接返回
-  console.log('[researchSynthesisAgent] 直接返回 data:', data);
-  return data;
+  const body = {
+    input: {
+      writing_requirements,
+      raw_materials: rawMaterials
+    }
+  };
+
+  return apiJson('/api/research-synthesis-agent', body);
 }
 
 /**
@@ -1134,22 +1006,13 @@ export async function getProjectHistoryByStage(projectId: string, stage: string)
 
 // ============ Document Parsing API ============
 export async function parseDocument(fileUrl: string, fileType: string): Promise<string> {
-  const { data, error } = await supabase.functions.invoke('parse-document', {
-    body: { fileUrl, fileType },
-  });
-
-  if (error) throw error;
+  const data = await apiJson<{ text: string }>('/api/parse-document', { fileUrl, fileType });
   return data.text;
 }
 
 // ============ Content Summarization API ============
 export async function summarizeContent(content: string): Promise<{ summary: string; tags: string[] }> {
-  const { data, error } = await supabase.functions.invoke('summarize-content', {
-    body: { content },
-  });
-
-  if (error) throw error;
-  return data;
+  return apiJson('/api/summarize-content', { content });
 }
 
 // ============ Tag-based Search API ============
@@ -1660,42 +1523,7 @@ export async function callResearchSynthesisAgent(
     body = { input: projectIdOrInput, sessionId };
   }
   
-  const { data, error } = await supabase.functions.invoke('research-synthesis-agent', {
-    body,
-  });
-
-  if (error) {
-    console.error('[callResearchSynthesisAgent] Edge Function 错误:', error);
-    console.error('[callResearchSynthesisAgent] 错误详情:', JSON.stringify(error, null, 2));
-    
-    // 尝试获取更详细的错误信息
-    if (error.context) {
-      console.error('[callResearchSynthesisAgent] 错误上下文:', error.context);
-      try {
-        const contextText = await error.context.text();
-        console.error('[callResearchSynthesisAgent] 上下文文本:', contextText);
-        
-        // 尝试解析 JSON 错误响应
-        try {
-          const errorData = JSON.parse(contextText);
-          throw new Error(
-            `资料整理失败: ${errorData.error || error.message}\n` +
-            `详情: ${errorData.details ? JSON.stringify(errorData.details, null, 2) : '无'}\n` +
-            `时间: ${errorData.timestamp || '未知'}`
-          );
-        } catch (parseError) {
-          // 如果不是 JSON，直接使用文本
-          throw new Error(`资料整理失败: ${contextText || error.message}`);
-        }
-      } catch (textError) {
-        console.error('[callResearchSynthesisAgent] 无法读取上下文文本:', textError);
-      }
-    }
-    
-    throw new Error(`资料整理失败: ${error.message || 'Edge Function 调用失败'}`);
-  }
-  
-  console.log('[callResearchSynthesisAgent] 返回数据:', data);
+  const data = await apiJson<SynthesisResult>('/api/research-synthesis-agent', body);
   
   // 保存 synthesis_result 到 writing_sessions
   if (sessionId && data) {
@@ -1914,29 +1742,9 @@ export async function callArticleStructureAgent(
 
     // 6. 调用 Edge Function
     console.log('[callArticleStructureAgent] 步骤6: 调用 generate-article-structure Edge Function');
-    const { data, error } = await supabase.functions.invoke('generate-article-structure', {
-      body: { input: structureInput }
-    });
+    const data = await apiJson('/api/generate-article-structure', { input: structureInput });
 
-    if (error) {
-      console.error('[callArticleStructureAgent] Edge Function 错误:', error);
-      console.error('[callArticleStructureAgent] 错误详情:', JSON.stringify(error, null, 2));
-      
-      // 尝试获取更详细的错误信息
-      if (error.context) {
-        try {
-          const errorText = await error.context.text();
-          console.error('[callArticleStructureAgent] 错误响应内容:', errorText);
-          throw new Error(`文章结构生成失败: ${errorText}`);
-        } catch (e) {
-          console.error('[callArticleStructureAgent] 无法读取错误响应:', e);
-        }
-      }
-      
-      throw new Error(`文章结构生成失败: ${error.message || 'Edge Function 调用失败'}`);
-    }
-
-    console.log('[callArticleStructureAgent] Edge Function 调用成功');
+    console.log('[callArticleStructureAgent] 调用成功');
     console.log('[callArticleStructureAgent] 返回数据:', JSON.stringify(data, null, 2));
 
     // 7. 保存结构结果到 session
@@ -2127,48 +1935,28 @@ export async function batchUpdateRetrievedMaterialSelection(
  * 调用 brief-agent 生成需求文档
  */
 export async function callBriefAgent(projectId: string, topic: string, userInput: string) {
-  const { data, error } = await supabase.functions.invoke('brief-agent', {
-    body: { project_id: projectId, topic, user_input: userInput }
-  });
-
-  if (error) throw error;
-  return data;
+  return apiJson('/api/brief-agent', { project_id: projectId, topic, user_input: userInput });
 }
 
 /**
  * 调用 structure-agent 生成文章结构
  */
 export async function callStructureAgent(projectId: string) {
-  const { data, error } = await supabase.functions.invoke('structure-agent', {
-    body: { project_id: projectId }
-  });
-
-  if (error) throw error;
-  return data;
+  return apiJson('/api/structure-agent', { project_id: projectId });
 }
 
 /**
  * 调用 draft-agent 生成草稿
  */
 export async function callDraftAgent(projectId: string) {
-  const { data, error } = await supabase.functions.invoke('draft-agent', {
-    body: { project_id: projectId }
-  });
-
-  if (error) throw error;
-  return data;
+  return apiJson('/api/draft-agent', { project_id: projectId });
 }
 
 /**
  * 调用 review-agent 进行审校
  */
 export async function callReviewAgent(projectId: string) {
-  const { data, error } = await supabase.functions.invoke('review-agent', {
-    body: { project_id: projectId }
-  });
-
-  if (error) throw error;
-  return data;
+  return apiJson('/api/review-agent', { project_id: projectId });
 }
 
 /**
@@ -2282,19 +2070,8 @@ export async function agentDrivenResearchWorkflowStreaming(
     }
   }
 
-  const supabaseUrl = supabase.supabaseUrl;
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session) {
-    throw new Error('未登录');
-  }
-
-  const response = await fetch(`${supabaseUrl}/functions/v1/research-retrieval-streaming`, {
+  const response = await apiFetch('/api/search/stream', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`,
-    },
     body: JSON.stringify({
       requirementsDoc,
       projectId,
@@ -2464,4 +2241,3 @@ export async function agentDrivenResearchWorkflowStreaming(
     synthesisResults: null
   };
 }
-

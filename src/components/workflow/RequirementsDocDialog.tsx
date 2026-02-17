@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -190,7 +191,7 @@ export default function RequirementsDocDialog({
               <>
                 {/* 结构化中文标题格式 */}
                 {structuredSections.map((section, index) => {
-                  let icon = null;
+                  let icon: ReactNode = null;
                   let bgColor = '';
                   
                   if (section.title === '需求文档' || section.title === '主题') {

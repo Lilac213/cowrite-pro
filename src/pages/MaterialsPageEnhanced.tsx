@@ -8,6 +8,7 @@ import {
   searchMaterials,
   getProjects
 } from '@/api';
+import { linkMaterialToProjects, updateMaterialTags, organizeMaterials } from '@/db/api';
 import type { Material, Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

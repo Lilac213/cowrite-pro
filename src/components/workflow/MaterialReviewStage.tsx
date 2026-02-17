@@ -21,6 +21,7 @@ import {
   getRetrievedMaterials,
   callResearchSynthesisAgent
 } from '@/api';
+import { callArticleStructureAgent } from '@/db/api';
 import type { ResearchInsight, ResearchGap } from '@/types';
 import { CheckCircle2, Circle, ChevronRight, FileText, AlertCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';

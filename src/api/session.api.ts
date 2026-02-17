@@ -1,8 +1,10 @@
 import { supabase } from '@/db/supabase';
 import type { WritingSession, WritingStage, ResearchInsight, ResearchGap, UserDecision } from '@/types';
 
+const supabaseClient = supabase as any;
+
 export async function getOrCreateWritingSession(projectId: string, userId?: string): Promise<WritingSession> {
-  const { data: existing, error: fetchError } = await supabase
+  const { data: existing, error: fetchError } = await supabaseClient
     .from('writing_sessions')
     .select('*')
     .eq('project_id', projectId)
@@ -13,7 +15,7 @@ export async function getOrCreateWritingSession(projectId: string, userId?: stri
   if (fetchError) throw fetchError;
   if (existing) return existing as WritingSession;
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('writing_sessions')
     .insert({
       project_id: projectId,
@@ -27,7 +29,7 @@ export async function getOrCreateWritingSession(projectId: string, userId?: stri
 
   if (error) {
     if (error.code === '23505') {
-      const { data: retry, error: retryError } = await supabase
+      const { data: retry, error: retryError } = await supabaseClient
         .from('writing_sessions')
         .select('*')
         .eq('project_id', projectId)
@@ -43,7 +45,7 @@ export async function getOrCreateWritingSession(projectId: string, userId?: stri
 }
 
 export async function getWritingSession(projectId: string): Promise<WritingSession | null> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('writing_sessions')
     .select('*')
     .eq('project_id', projectId)
@@ -55,15 +57,15 @@ export async function getWritingSession(projectId: string): Promise<WritingSessi
 }
 
 export async function updateWritingSessionStage(sessionId: string, stage: WritingStage) {
-  const { error } = await supabase
+  const { error } = await supabaseClient
     .from('writing_sessions')
-    .update({ current_stage: stage, updated_at: new Date().toISOString() } as any)
+    .update({ current_stage: stage, updated_at: new Date().toISOString() })
     .eq('id', sessionId);
   if (error) throw error;
 }
 
 export async function getResearchInsights(sessionId: string): Promise<ResearchInsight[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('research_insights')
     .select('*')
     .eq('session_id', sessionId)
@@ -73,7 +75,7 @@ export async function getResearchInsights(sessionId: string): Promise<ResearchIn
 }
 
 export async function getResearchGaps(sessionId: string): Promise<ResearchGap[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('research_gaps')
     .select('*')
     .eq('session_id', sessionId)
@@ -83,17 +85,17 @@ export async function getResearchGaps(sessionId: string): Promise<ResearchGap[]>
 }
 
 export async function updateInsightDecision(insightId: string, decision: UserDecision) {
-  const { error } = await supabase
+  const { error } = await supabaseClient
     .from('research_insights')
-    .update({ user_decision: decision } as any)
+    .update({ user_decision: decision })
     .eq('id', insightId);
   if (error) throw error;
 }
 
 export async function updateGapDecision(gapId: string, decision: 'respond' | 'ignore') {
-  const { error } = await supabase
+  const { error } = await supabaseClient
     .from('research_gaps')
-    .update({ user_decision: decision } as any)
+    .update({ user_decision: decision })
     .eq('id', gapId);
   if (error) throw error;
 }

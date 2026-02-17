@@ -8,6 +8,7 @@ import {
   updateReferenceArticle,
   createMaterial
 } from '@/api';
+import { analyzeReferenceArticle, updateReferenceAnalysis } from '@/db/api';
 import type { ReferenceArticle } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

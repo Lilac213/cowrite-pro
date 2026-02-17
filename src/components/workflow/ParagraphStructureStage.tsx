@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
+import { apiJson } from '@/api/http';
 
 interface ParagraphStructureStageProps {
   projectId: string;
@@ -83,23 +84,16 @@ export default function ParagraphStructureStage({ projectId, onComplete }: Parag
       const blockIndex = argumentBlocks.findIndex((b) => b.id === blockId);
       const previousBlock = blockIndex > 0 ? argumentBlocks[blockIndex - 1] : null;
 
-      const { data, error } = await supabase.functions.invoke('generate-paragraph-reasoning', {
-        body: {
-          coreThesis: project?.article_argument_structure?.core_thesis,
-          currentBlock: block,
-          previousParagraph: previousBlock?.description || null,
-          relationToPrevious: block.relation || '引入',
-          newInformation: block.description,
-          referenceMaterials: referenceArticles,
-          personalMaterials: materials,
-          knowledgeBase: knowledgeBase,
-        },
+      const data = await apiJson('/api/generate-paragraph-reasoning', {
+        coreThesis: project?.article_argument_structure?.core_thesis,
+        currentBlock: block,
+        previousParagraph: previousBlock?.description || null,
+        relationToPrevious: block.relation || '引入',
+        newInformation: block.description,
+        referenceMaterials: referenceArticles,
+        personalMaterials: materials,
+        knowledgeBase: knowledgeBase,
       });
-
-      if (error) {
-        console.error('Generate reasoning error:', error);
-        throw new Error(error.message || '生成失败');
-      }
 
       // 更新段落结构
       const updatedStructures = paragraphStructures.map((ps) =>
@@ -128,15 +122,11 @@ export default function ParagraphStructureStage({ projectId, onComplete }: Parag
   // 生成论据级支撑材料
   const handleGenerateEvidence = async (blockId: string, subClaim: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('generate-evidence', {
-        body: {
-          articleTopic: project?.article_argument_structure?.core_thesis,
-          coreClaim: paragraphStructures.find((ps) => ps.blockId === blockId)?.paragraphReasoning?.core_claim,
-          subClaim: subClaim,
-        },
+      const data = await apiJson('/api/generate-evidence', {
+        articleTopic: project?.article_argument_structure?.core_thesis,
+        coreClaim: paragraphStructures.find((ps) => ps.blockId === blockId)?.paragraphReasoning?.core_claim,
+        subClaim: subClaim,
       });
-
-      if (error) throw new Error(error.message || '生成失败');
 
       // 更新段落结构中的支撑材料
       const updatedStructures = paragraphStructures.map((ps) => {
@@ -182,14 +172,10 @@ export default function ParagraphStructureStage({ projectId, onComplete }: Parag
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('verify-coherence', {
-        body: {
-          coreThesis: project?.article_argument_structure?.core_thesis,
-          paragraphs: paragraphs,
-        },
+      const data = await apiJson('/api/verify-coherence', {
+        coreThesis: project?.article_argument_structure?.core_thesis,
+        paragraphs: paragraphs,
       });
-
-      if (error) throw error;
 
       setCoherenceResult(data);
 

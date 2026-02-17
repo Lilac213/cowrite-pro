@@ -1,8 +1,11 @@
 import { supabase } from '@/db/supabase';
+import { apiJson } from './http';
 import type { Draft } from '@/types';
 
+const supabaseClient = supabase as any;
+
 export async function getDrafts(projectId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('drafts')
     .select('*')
     .eq('project_id', projectId)
@@ -12,7 +15,7 @@ export async function getDrafts(projectId: string) {
 }
 
 export async function getLatestDraft(projectId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('drafts')
     .select('*')
     .eq('project_id', projectId)
@@ -24,38 +27,32 @@ export async function getLatestDraft(projectId: string) {
 }
 
 export async function createDraft(draft: Omit<Draft, 'id' | 'created_at' | 'updated_at'>) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('drafts')
-    .insert(draft as any)
+    .insert(draft)
     .select()
     .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error('创建 draft 失败');
   return data as Draft;
 }
 
 export async function updateDraft(draftId: string, updates: Partial<Draft>) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('drafts')
-    .update(updates as any)
+    .update(updates)
     .eq('id', draftId)
     .select()
     .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error('更新 draft 失败');
   return data as Draft;
 }
 
 export async function callDraftAgent(projectId: string) {
-  const { data, error } = await supabase.functions.invoke('draft-agent', {
-    body: { project_id: projectId }
-  });
-  if (error) throw error;
-  return data;
+  return apiJson('/api/draft-agent', { project_id: projectId });
 }
 
 export async function callReviewAgent(projectId: string) {
-  const { data, error } = await supabase.functions.invoke('review-agent', {
-    body: { project_id: projectId }
-  });
-  if (error) throw error;
-  return data;
+  return apiJson('/api/review-agent', { project_id: projectId });
 }

@@ -11,8 +11,24 @@ import {
   callResearchSynthesisAgent,
   getProfile,
   incrementResearchRefreshCount,
+  getBrief,
+  getKnowledgeBase,
+  createKnowledgeBase,
+  updateKnowledgeBase,
+  clearProjectKnowledge,
+  searchMaterialsByTags,
+  searchReferencesByTags,
 } from '@/api';
-import { checkResearchLimit, deductResearchCredits } from '@/services/credit.service';
+import {
+  isResearchStageComplete,
+  agentDrivenResearchWorkflow,
+  agentDrivenResearchWorkflowStreaming,
+  saveToReferenceLibrary,
+  updateRetrievedMaterialSelection,
+  batchUpdateRetrievedMaterialSelection,
+  researchSynthesisAgent,
+} from '@/db/api';
+import { checkResearchLimit, deductResearchCredits, deductUserPoints } from '@/services/credit.service';
 import type { KnowledgeBase, WritingSession, ResearchInsight, ResearchGap, SynthesisResult, RetrievedMaterial } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1697,7 +1713,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
 
     try {
       // 扣除 1 点
-      await deductUserPoints(user.id, 1, '刷新资料搜索');
+      await deductUserPoints(user.id, 1);
       
       // 增加刷新次数
       await incrementResearchRefreshCount(projectId);
@@ -1874,7 +1890,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         // 检测 API 密钥相关错误
         if (error.message.includes('Api key is invalid') || error.message.includes('API 密钥')) {
           errorTitle = '⚠️ API 密钥配置问题';
-          errorMessage = 'LLM API 密钥未配置或无效。请按以下步骤配置：\n\n1. 访问 https://cloud.siliconflow.cn 获取 API Key\n2. 在 Supabase 项目的 Edge Functions Secrets 中添加 QIANWEN_API_KEY\n3. 重新部署 Edge Function\n\n详细说明请查看项目根目录的 API_KEY_SETUP.md 文件';
+          errorMessage = 'LLM API 密钥未配置或无效。请按以下步骤配置：\n\n1. 访问 https://cloud.siliconflow.cn 获取 API Key\n2. 在 Supabase 项目的 Edge Functions Secrets 中添加 QIANWEN_API_KEY\n3. 重新部署 Edge Function\n\n详细说明请查看 docs/all/api-key-setup.md 文件';
         }
       } else if (error.error) {
         errorMessage = error.error;
