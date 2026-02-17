@@ -48,6 +48,27 @@ await app.register(cors, {
   credentials: true
 });
 
+app.setNotFoundHandler((req, reply) => {
+  req.log.warn({ method: req.method, url: req.url }, 'route not found');
+  reply.code(404).send({ error: '路由不存在' });
+});
+
+app.setErrorHandler((error, req, reply) => {
+  req.log.error(
+    {
+      method: req.method,
+      url: req.url,
+      statusCode: error.statusCode,
+      message: error.message,
+      cause: (error as any).cause
+    },
+    'request failed'
+  );
+  reply.code(error.statusCode || 500).send({
+    error: error.message || '服务异常'
+  });
+});
+
 app.get('/health', async () => ({ status: 'ok' }));
 
 app.post('/api/serpapi-search', async (req, reply) => {

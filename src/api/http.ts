@@ -1,7 +1,10 @@
 import { supabase } from '@/db/supabase';
 
 const rawBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
-const apiBaseUrl = rawBaseUrl ? rawBaseUrl.replace(/\/$/, '') : '';
+const inferredBaseUrl = typeof window !== 'undefined' && window.location.hostname.endsWith('cowrite.top')
+  ? 'https://api.cowrite.top'
+  : '';
+const apiBaseUrl = (rawBaseUrl || inferredBaseUrl).replace(/\/$/, '');
 
 function buildUrl(path: string) {
   if (path.startsWith('http://') || path.startsWith('https://')) {
@@ -32,12 +35,49 @@ export async function apiFetch(
     }
   }
 
-  const response = await fetch(buildUrl(path), {
-    ...options,
-    headers
-  });
+  const url = buildUrl(path);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers
+    });
 
-  return response;
+    return response;
+  } catch (error) {
+    console.error('API 请求失败:', {
+      url,
+      method: options.method || (options.body === undefined ? 'GET' : 'POST'),
+      hasBody: options.body !== undefined && options.body !== null
+    }, error);
+    throw error;
+  }
+}
+
+function buildErrorMessage(
+  response: Response,
+  errorText: string,
+  parsed: any
+) {
+  const isSameOrigin =
+    typeof window !== 'undefined' &&
+    response.url.startsWith(window.location.origin);
+
+  if (response.status === 405 && !apiBaseUrl && isSameOrigin) {
+    return '当前未配置 VITE_API_BASE_URL，请将请求指向自建 API 服务';
+  }
+
+  if (parsed?.error) {
+    if (parsed.details) {
+      return `${parsed.error}: ${parsed.details}`;
+    }
+    return parsed.error as string;
+  }
+
+  if (errorText) {
+    return errorText;
+  }
+
+  return `请求失败: ${response.status} ${response.statusText}`.trim();
 }
 
 export async function apiJson<T = any>(
@@ -58,18 +98,20 @@ export async function apiJson<T = any>(
 
   if (!response.ok) {
     const errorText = await response.text();
-    let message = errorText || response.statusText;
+    let parsed: any = null;
     try {
-      const parsed = JSON.parse(errorText);
-      if (parsed?.error) {
-        message = parsed.error;
-        if (parsed.details) {
-          message = `${message}: ${parsed.details}`;
-        }
-      }
+      parsed = JSON.parse(errorText);
     } catch {
-      message = errorText || response.statusText;
+      parsed = null;
     }
+    const message = buildErrorMessage(response, errorText, parsed);
+    console.error('API 响应错误:', {
+      url: response.url,
+      status: response.status,
+      statusText: response.statusText,
+      message,
+      body: parsed ?? errorText
+    });
     throw new Error(message);
   }
 
@@ -92,7 +134,21 @@ export async function apiSSE<T = any>(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(errorText || response.statusText);
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(errorText);
+    } catch {
+      parsed = null;
+    }
+    const message = buildErrorMessage(response, errorText, parsed);
+    console.error('API SSE 响应错误:', {
+      url: response.url,
+      status: response.status,
+      statusText: response.statusText,
+      message,
+      body: parsed ?? errorText
+    });
+    throw new Error(message);
   }
 
   if (!response.body) {
