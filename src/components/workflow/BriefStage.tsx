@@ -160,9 +160,24 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
   };
 
   const handleConfirm = async () => {
-    if (!brief || !user) return;
+    if (!user) {
+      toast({
+        title: '请先登录',
+        description: '登录后才能确认需求',
+        variant: 'destructive',
+      });
+      return;
+    }
 
-    // 显示资料查询选择对话框
+    if (!brief) {
+      toast({
+        title: '请先生成需求文档',
+        description: '生成后才能确认需求',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setShowResearchDialog(true);
   };
 
@@ -270,11 +285,11 @@ export default function BriefStage({ projectId, onComplete }: BriefStageProps) {
               className="font-mono text-sm"
             />
             <div className="flex justify-end gap-2">
-              <Button onClick={handleConfirm} disabled={confirming || brief?.confirmed} variant="outline">
+              <Button onClick={handleConfirm} disabled={confirming || brief?.confirmed || !brief || !user} variant="outline">
                 <CheckCircle2 className="h-4 w-4 mr-2" />
                 {confirming ? '确认中...' : brief?.confirmed ? '已确认' : '确认需求'}
               </Button>
-              <Button onClick={handleConfirm} disabled={confirming || !brief?.confirmed}>
+              <Button onClick={handleConfirm} disabled={confirming || !brief?.confirmed || !user}>
                 <ArrowRight className="h-4 w-4 mr-2" />
                 进入下一阶段
               </Button>
