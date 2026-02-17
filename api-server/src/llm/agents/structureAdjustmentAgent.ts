@@ -1,5 +1,5 @@
-import { runLLMAgent } from '../runtime/LLMRuntime';
-import { structureSchema } from '../schemas/structureSchema';
+import { runLLMAgent } from '../runtime/LLMRuntime.js';
+import { structureSchema } from '../schemas/structureSchema.js';
 
 export interface StructureAdjustmentInput {
   core_thesis: string;

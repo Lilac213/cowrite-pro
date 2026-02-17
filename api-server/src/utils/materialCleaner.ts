@@ -391,7 +391,7 @@ export async function rerankMaterialsWithEmbedding(
   }
 
   try {
-    const { createEmbedding, createBatchEmbeddings, cosineSimilarity } = await import('./embedding');
+    const { createEmbedding, createBatchEmbeddings, cosineSimilarity } = await import('./embedding.js');
 
     const queryEmbeddingResult = await createEmbedding(query, model);
     const queryEmbedding = queryEmbeddingResult.embedding;

@@ -1,7 +1,7 @@
-import { runLLMAgent } from '../runtime/LLMRuntime';
-import { type ArgumentOutline, structureSchema } from '../schemas/structureSchema';
-import { type WritingBrief } from '../schemas/briefSchema';
-import { type ResearchPack } from '../schemas/researchSchema';
+import { runLLMAgent } from '../runtime/LLMRuntime.js';
+import { type ArgumentOutline, structureSchema } from '../schemas/structureSchema.js';
+import { type WritingBrief } from '../schemas/briefSchema.js';
+import { type ResearchPack } from '../schemas/researchSchema.js';
 
 export interface StructureInput {
   writing_brief: WritingBrief;

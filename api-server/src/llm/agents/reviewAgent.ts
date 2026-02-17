@@ -1,7 +1,7 @@
-import { runLLMAgent } from '../runtime/LLMRuntime';
-import { type ReviewPayload, reviewSchema } from '../schemas/reviewSchema';
-import { type DraftPayload } from '../schemas/draftSchema';
-import { type WritingBrief } from '../schemas/briefSchema';
+import { runLLMAgent } from '../runtime/LLMRuntime.js';
+import { type ReviewPayload, reviewSchema } from '../schemas/reviewSchema.js';
+import { type DraftPayload } from '../schemas/draftSchema.js';
+import { type WritingBrief } from '../schemas/briefSchema.js';
 
 export interface ReviewInput {
   writing_brief: WritingBrief;

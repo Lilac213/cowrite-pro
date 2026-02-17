@@ -1,4 +1,4 @@
-import { callLLMWithFallback } from '../runtime/callLLMWithFallback';
+import { callLLMWithFallback } from '../runtime/callLLMWithFallback.js';
 
 export async function repairJSONWithLLM(brokenJson: string): Promise<string> {
   const maxInputLength = 50000;

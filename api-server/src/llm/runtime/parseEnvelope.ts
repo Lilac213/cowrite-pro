@@ -1,5 +1,5 @@
-import { normalizeLLMOutput, extractFirstJsonBlock } from './normalize';
-import { repairJSONWithLLM, isSameShape } from '../agents/repairJSONAgent';
+import { normalizeLLMOutput, extractFirstJsonBlock } from './normalize.js';
+import { repairJSONWithLLM, isSameShape } from '../agents/repairJSONAgent.js';
 
 export interface Envelope {
   meta: Record<string, any>;

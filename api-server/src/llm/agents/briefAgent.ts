@@ -1,5 +1,5 @@
-import { runLLMAgent } from '../runtime/LLMRuntime';
-import { type WritingBrief, briefSchema } from '../schemas/briefSchema';
+import { runLLMAgent } from '../runtime/LLMRuntime.js';
+import { type WritingBrief, briefSchema } from '../schemas/briefSchema.js';
 
 export interface BriefInput {
   topic: string;

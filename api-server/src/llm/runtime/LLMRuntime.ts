@@ -1,7 +1,7 @@
-import { callLLMWithFallback, type LLMCallConfig } from './callLLMWithFallback';
-import { parseEnvelope } from './parseEnvelope';
-import { normalizeLLMOutput } from './normalize';
-import { validateOrThrow } from './validateSchema';
+import { callLLMWithFallback, type LLMCallConfig } from './callLLMWithFallback.js';
+import { parseEnvelope } from './parseEnvelope.js';
+import { normalizeLLMOutput } from './normalize.js';
+import { validateOrThrow } from './validateSchema.js';
 
 export interface AgentRunConfig {
   agentName: string;

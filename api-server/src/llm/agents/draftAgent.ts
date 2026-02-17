@@ -1,8 +1,8 @@
-import { runLLMAgent } from '../runtime/LLMRuntime';
-import { type DraftPayload, draftSchema } from '../schemas/draftSchema';
-import { type WritingBrief } from '../schemas/briefSchema';
-import { type ArgumentOutline } from '../schemas/structureSchema';
-import { type ResearchPack } from '../schemas/researchSchema';
+import { runLLMAgent } from '../runtime/LLMRuntime.js';
+import { type DraftPayload, draftSchema } from '../schemas/draftSchema.js';
+import { type WritingBrief } from '../schemas/briefSchema.js';
+import { type ArgumentOutline } from '../schemas/structureSchema.js';
+import { type ResearchPack } from '../schemas/researchSchema.js';
 
 export interface DraftInput {
   writing_brief: WritingBrief;
