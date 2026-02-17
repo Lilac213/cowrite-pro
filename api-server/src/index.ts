@@ -196,6 +196,12 @@ app.post('/api/web-search', async (req, reply) => {
 
 app.post('/api/search/stream', async (req, reply) => {
   reply.hijack();
+  const origin = req.headers.origin as string | undefined;
+  if (origin && (allowedOrigins.length === 0 || allowedOrigins.includes(origin))) {
+    reply.raw.setHeader('Access-Control-Allow-Origin', origin);
+    reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
+    reply.raw.setHeader('Vary', 'Origin');
+  }
   reply.raw.setHeader('Content-Type', 'text/event-stream');
   reply.raw.setHeader('Cache-Control', 'no-cache');
   reply.raw.setHeader('Connection', 'keep-alive');
