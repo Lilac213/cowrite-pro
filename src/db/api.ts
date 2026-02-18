@@ -802,6 +802,18 @@ export async function researchSynthesisAgent(retrievalResults: any, requirements
  * 2. 调用 Research Retrieval Agent 检索外部资料
  * 注：点数在项目创建时已扣除，此处不再扣点
  */
+const normalizeTimestamp = (value: any): string | undefined => {
+  if (!value) return undefined;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  return undefined;
+};
+
 export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectId?: string, userId?: string, sessionId?: string) {
   // 提取搜索关键词
   const searchKeywords = extractKeywords(requirementsDoc);
@@ -884,7 +896,7 @@ export async function agentDrivenResearchWorkflow(requirementsDoc: any, projectI
           url: source.url || '',
           abstract: source.full_text || source.extracted_content?.join('\n') || '',
           full_text: source.full_text || '',
-          published_at: source.published_at || '',
+          published_at: normalizeTimestamp(source.published_at),
           is_selected: source.is_selected ?? false,
           metadata: { 
             original_source: 'GoogleNews', 
@@ -2213,7 +2225,7 @@ export async function agentDrivenResearchWorkflowStreaming(
           url: source.url || '',
           abstract: source.full_text || source.extracted_content?.join('\n') || '',
           full_text: source.full_text || '',
-          published_at: source.published_at || '',
+          published_at: normalizeTimestamp(source.published_at),
           is_selected: source.is_selected ?? false,
           metadata: { 
             original_source: 'GoogleNews', 

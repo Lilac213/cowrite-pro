@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,6 +48,7 @@ export default function SearchResultsPanel({
   const [translatingIds, setTranslatingIds] = useState<Set<string>>(new Set());
   const [fetchingIds, setFetchingIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+  const inFlightTranslations = useRef<Set<string>>(new Set());
 
   // 过滤结果
   const filteredResults = useMemo(() => {
@@ -140,49 +141,64 @@ export default function SearchResultsPanel({
 
   useEffect(() => {
     let cancelled = false;
-    const translateAbstracts = async () => {
-      for (const result of sortedResults) {
+    const runTranslations = async () => {
+      const candidates = sortedResults.filter(result => {
         const content = result.abstract || result.full_text || '';
-        if (!content || !isLikelyEnglish(content)) continue;
-        if (translationMap[result.id] || translatingIds.has(result.id)) continue;
-        setTranslatingIds(prev => new Set(prev).add(result.id));
-        try {
-          const prompt = content.slice(0, 1200);
-          const translated = await callLLMGenerate(prompt, undefined, '将以下英文摘要翻译成中文，只输出翻译结果，不要添加额外说明。', {
-            required: ['translation'],
-            defaults: { translation: '' }
-          });
-          const text =
-            typeof translated === 'string'
-              ? translated
-              : translated?.translation || '';
-          if (!cancelled && text) {
-            setTranslationMap(prev => ({ ...prev, [result.id]: text }));
-          }
-        } catch (error) {
-          if (!cancelled) {
-            toast({
-              title: '摘要翻译失败',
-              description: result.title,
-              variant: 'destructive',
+        if (!content || !isLikelyEnglish(content)) return false;
+        if (translationMap[result.id]) return false;
+        if (inFlightTranslations.current.has(result.id)) return false;
+        return true;
+      });
+      if (candidates.length === 0) return;
+      const concurrency = 2;
+      const queue = [...candidates];
+      const workers = Array.from({ length: Math.min(concurrency, queue.length) }).map(async () => {
+        while (queue.length > 0 && !cancelled) {
+          const result = queue.shift();
+          if (!result) break;
+          const content = result.abstract || result.full_text || '';
+          inFlightTranslations.current.add(result.id);
+          setTranslatingIds(prev => new Set(prev).add(result.id));
+          try {
+            const prompt = content.slice(0, 1200);
+            const translated = await callLLMGenerate(prompt, undefined, '将以下英文摘要翻译成中文，只输出翻译结果，不要添加额外说明。', {
+              required: ['translation'],
+              defaults: { translation: '' }
             });
-          }
-        } finally {
-          if (!cancelled) {
-            setTranslatingIds(prev => {
-              const next = new Set(prev);
-              next.delete(result.id);
-              return next;
-            });
+            const text =
+              typeof translated === 'string'
+                ? translated
+                : translated?.translation || '';
+            if (!cancelled && text) {
+              setTranslationMap(prev => ({ ...prev, [result.id]: text }));
+            }
+          } catch (error) {
+            if (!cancelled) {
+              toast({
+                title: '摘要翻译失败',
+                description: result.title,
+                variant: 'destructive',
+              });
+            }
+          } finally {
+            inFlightTranslations.current.delete(result.id);
+            if (!cancelled) {
+              setTranslatingIds(prev => {
+                const next = new Set(prev);
+                next.delete(result.id);
+                return next;
+              });
+            }
           }
         }
-      }
+      });
+      await Promise.all(workers);
     };
-    translateAbstracts();
+    runTranslations();
     return () => {
       cancelled = true;
     };
-  }, [sortedResults, translationMap, translatingIds, toast]);
+  }, [sortedResults, translationMap, toast]);
 
   // 全选/取消全选
   const handleSelectAll = (checked: boolean) => {
@@ -490,13 +506,12 @@ export default function SearchResultsPanel({
         )}
       </div>
 
-      {/* 详情弹窗 - 暂时注释掉，需要更新ResultDetailDialog */}
-      {/* <ResultDetailDialog
+      <ResultDetailDialog
         open={detailDialogOpen}
         onOpenChange={setDetailDialogOpen}
         result={selectedResult}
         onToggleFavorite={onToggleFavorite}
-      /> */}
+      />
     </div>
   );
 }
