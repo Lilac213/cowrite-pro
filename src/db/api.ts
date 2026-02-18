@@ -566,6 +566,12 @@ export async function callWebSearch(query: string) {
   return data.results;
 }
 
+export async function fetchFullWebpageContent(url: string) {
+  const data = await apiJson<{ content?: string }>('/api/fetch-webpage', { url });
+  if (!data || !data.content) throw new Error('未获取到网页内容');
+  return data.content;
+}
+
 // ============ AI Assistant API ============
 
 // AI 生成模板规则
@@ -2031,7 +2037,7 @@ export async function incrementResearchRefreshCount(projectId: string) {
 }
 
 interface SSEEvent {
-  stage: 'plan' | 'searching' | 'top3' | 'final' | 'error' | 'done';
+  stage: 'plan' | 'searching' | 'top3' | 'result' | 'final' | 'error' | 'done';
   data?: any;
   message?: string;
 }
@@ -2040,6 +2046,7 @@ interface StreamingResearchCallbacks {
   onPlan?: (data: any, message: string) => void;
   onSearching?: (message: string) => void;
   onTop3?: (data: any, message: string) => void;
+  onResult?: (data: any, message: string) => void;
   onFinal?: (data: any, message: string) => void;
   onError?: (message: string) => void;
   onDone?: (message: string) => void;
@@ -2091,52 +2098,63 @@ export async function agentDrivenResearchWorkflowStreaming(
 
   const decoder = new TextDecoder();
   let finalResults: any = null;
+  let buffer = '';
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() || '';
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const event: SSEEvent = JSON.parse(line.slice(6));
+      for (const part of parts) {
+        const lines = part.split('\n');
+        const dataLines = lines.filter(line => line.startsWith('data:'));
+        if (dataLines.length === 0) continue;
+        const jsonText = dataLines.map(line => line.replace(/^data:\s*/, '').trim()).join('\n');
+        if (!jsonText) continue;
 
-            switch (event.stage) {
-              case 'plan':
-                if (event.data) {
-                  callbacks?.onPlan?.(event.data, event.message || '');
-                } else {
-                  callbacks?.onSearching?.(event.message || '');
-                }
-                break;
-              case 'searching':
+        try {
+          const event: SSEEvent = JSON.parse(jsonText);
+
+          switch (event.stage) {
+            case 'plan':
+              if (event.data) {
+                callbacks?.onPlan?.(event.data, event.message || '');
+              } else {
                 callbacks?.onSearching?.(event.message || '');
-                break;
-              case 'top3':
-                if (event.data) {
-                  callbacks?.onTop3?.(event.data, event.message || '');
-                }
-                break;
-              case 'final':
-                if (event.data) {
-                  finalResults = event.data;
-                  callbacks?.onFinal?.(event.data, event.message || '');
-                }
-                break;
-              case 'error':
-                callbacks?.onError?.(event.message || '未知错误');
-                throw new Error(event.message);
-              case 'done':
-                callbacks?.onDone?.(event.message || '完成');
-                break;
-            }
-          } catch (parseError) {
-            console.error('[agentDrivenResearchWorkflowStreaming] 解析事件失败:', parseError);
+              }
+              break;
+            case 'searching':
+              callbacks?.onSearching?.(event.message || '');
+              break;
+            case 'top3':
+              if (event.data) {
+                callbacks?.onTop3?.(event.data, event.message || '');
+              }
+              break;
+            case 'result':
+              if (event.data) {
+                callbacks?.onResult?.(event.data, event.message || '');
+              }
+              break;
+            case 'final':
+              if (event.data) {
+                finalResults = event.data;
+                callbacks?.onFinal?.(event.data, event.message || '');
+              }
+              break;
+            case 'error':
+              callbacks?.onError?.(event.message || '未知错误');
+              throw new Error(event.message);
+            case 'done':
+              callbacks?.onDone?.(event.message || '完成');
+              break;
           }
+        } catch (parseError) {
+          console.error('[agentDrivenResearchWorkflowStreaming] 解析事件失败:', parseError);
         }
       }
     }

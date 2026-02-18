@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { callLLMGenerate } from '@/db/api';
 import { 
   Globe, 
   BookOpen, 
@@ -24,6 +25,7 @@ interface SearchResultsPanelProps {
   onToggleFavorite: (id: string, selected: boolean) => void;
   onDelete: (ids: string[]) => void;
   onBatchFavorite: (ids: string[], selected: boolean) => void;
+  onFetchFullText?: (material: RetrievedMaterial) => Promise<void>;
 }
 
 type SourceType = 'all' | 'academic' | 'news' | 'web' | 'library';
@@ -33,7 +35,8 @@ export default function SearchResultsPanel({
   results, 
   onToggleFavorite, 
   onDelete,
-  onBatchFavorite
+  onBatchFavorite,
+  onFetchFullText
 }: SearchResultsPanelProps) {
   const [sourceFilter, setSourceFilter] = useState<SourceType>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,6 +44,9 @@ export default function SearchResultsPanel({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedResult, setSelectedResult] = useState<RetrievedMaterial | null>(null);
+  const [translationMap, setTranslationMap] = useState<Record<string, string>>({});
+  const [translatingIds, setTranslatingIds] = useState<Set<string>>(new Set());
+  const [fetchingIds, setFetchingIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   // 过滤结果
@@ -109,10 +115,79 @@ export default function SearchResultsPanel({
     return filtered;
   }, [results, sourceFilter, searchQuery, timeFilter]);
 
+  const getRelevanceScore = (result: RetrievedMaterial) => {
+    const metadata = result.metadata || {};
+    const similarity = typeof metadata.similarity_score === 'number' ? metadata.similarity_score : 0;
+    const embedding = typeof metadata.embedding_similarity === 'number' ? metadata.embedding_similarity : 0;
+    const quality = typeof metadata.quality_score === 'number' ? metadata.quality_score : 0;
+    const rankBoost = typeof metadata.rank === 'number' && metadata.rank > 0 ? 1 / metadata.rank : 0;
+    return similarity + embedding + quality + rankBoost;
+  };
+
+  const sortedResults = useMemo(() => {
+    return [...filteredResults].sort((a, b) => getRelevanceScore(b) - getRelevanceScore(a));
+  }, [filteredResults]);
+
+  const top3Ids = useMemo(() => {
+    return new Set(sortedResults.slice(0, 3).map(result => result.id));
+  }, [sortedResults]);
+
+  const isLikelyEnglish = (text: string) => {
+    const letters = text.match(/[A-Za-z]/g)?.length || 0;
+    const han = text.match(/[\u4e00-\u9fa5]/g)?.length || 0;
+    return letters > 40 && letters > han * 2;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const translateAbstracts = async () => {
+      for (const result of sortedResults) {
+        const content = result.abstract || result.full_text || '';
+        if (!content || !isLikelyEnglish(content)) continue;
+        if (translationMap[result.id] || translatingIds.has(result.id)) continue;
+        setTranslatingIds(prev => new Set(prev).add(result.id));
+        try {
+          const prompt = content.slice(0, 1200);
+          const translated = await callLLMGenerate(prompt, undefined, '将以下英文摘要翻译成中文，只输出翻译结果，不要添加额外说明。', {
+            required: ['translation'],
+            defaults: { translation: '' }
+          });
+          const text =
+            typeof translated === 'string'
+              ? translated
+              : translated?.translation || '';
+          if (!cancelled && text) {
+            setTranslationMap(prev => ({ ...prev, [result.id]: text }));
+          }
+        } catch (error) {
+          if (!cancelled) {
+            toast({
+              title: '摘要翻译失败',
+              description: result.title,
+              variant: 'destructive',
+            });
+          }
+        } finally {
+          if (!cancelled) {
+            setTranslatingIds(prev => {
+              const next = new Set(prev);
+              next.delete(result.id);
+              return next;
+            });
+          }
+        }
+      }
+    };
+    translateAbstracts();
+    return () => {
+      cancelled = true;
+    };
+  }, [sortedResults, translationMap, translatingIds, toast]);
+
   // 全选/取消全选
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(new Set(filteredResults.map(r => r.id)));
+      setSelectedIds(new Set(sortedResults.map(r => r.id)));
     } else {
       setSelectedIds(new Set());
     }
@@ -191,7 +266,7 @@ export default function SearchResultsPanel({
     }
   };
 
-  const isAllSelected = filteredResults.length > 0 && selectedIds.size === filteredResults.length;
+  const isAllSelected = sortedResults.length > 0 && selectedIds.size === sortedResults.length;
 
   return (
     <div className="flex flex-col h-full space-y-4">
@@ -255,7 +330,7 @@ export default function SearchResultsPanel({
               onCheckedChange={handleSelectAll}
             />
             <span className="text-sm text-muted-foreground">
-              找到 {filteredResults.length} 条相关结果
+              找到 {sortedResults.length} 条相关结果
               {selectedIds.size > 0 && ` (已选择 ${selectedIds.size} 条)`}
             </span>
           </div>
@@ -282,14 +357,17 @@ export default function SearchResultsPanel({
 
       {/* 搜索结果列表 */}
       <div className="flex-1 overflow-auto space-y-3">
-        {filteredResults.length === 0 ? (
+        {sortedResults.length === 0 ? (
           <Card className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <SearchIcon className="w-16 h-16 mb-4 opacity-20" />
             <p className="text-sm">暂无搜索结果</p>
           </Card>
         ) : (
-          filteredResults.map((result) => {
+          sortedResults.map((result) => {
             const content = result.abstract || result.full_text || '';
+            const translated = translationMap[result.id];
+            const displayContent = translated || content;
+            const isTop3 = Boolean(result.metadata?.is_top3) || top3Ids.has(result.id);
             return (
               <Card 
                 key={result.id} 
@@ -317,6 +395,9 @@ export default function SearchResultsPanel({
                           {getSourceIcon(result.source_type)}
                           <span>{getSourceName(result.source_type)}</span>
                         </Badge>
+                        {isTop3 && (
+                          <Badge variant="secondary">TOP 3</Badge>
+                        )}
                         {result.published_at && (
                           <span className="text-muted-foreground">
                             {new Date(result.published_at).toLocaleDateString('zh-CN')}
@@ -330,11 +411,14 @@ export default function SearchResultsPanel({
                       </div>
 
                       {/* 内容摘要 */}
-                      {content && (
+                      {displayContent && (
                         <p className="text-sm text-muted-foreground line-clamp-2">
-                          {content.substring(0, 200)}
-                          {content.length > 200 && '...'}
+                          {displayContent.substring(0, 200)}
+                          {displayContent.length > 200 && '...'}
                         </p>
+                      )}
+                      {isLikelyEnglish(content) && !translated && translatingIds.has(result.id) && (
+                        <p className="text-xs text-muted-foreground">摘要翻译中...</p>
                       )}
 
                       {/* 作者 */}
@@ -343,6 +427,44 @@ export default function SearchResultsPanel({
                           作者：{result.authors.join(', ')}
                         </p>
                       )}
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        {result.url && (
+                          <a
+                            href={result.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!onFetchFullText || fetchingIds.has(result.id)) return;
+                              setFetchingIds(prev => new Set(prev).add(result.id));
+                              onFetchFullText(result)
+                                .then(() => {
+                                  toast({
+                                    title: '已抓取原文',
+                                    description: result.title,
+                                  });
+                                })
+                                .catch((error) => {
+                                  toast({
+                                    title: '抓取失败',
+                                    description: error instanceof Error ? error.message : '请稍后重试',
+                                    variant: 'destructive',
+                                  });
+                                })
+                                .finally(() => {
+                                  setFetchingIds(prev => {
+                                    const next = new Set(prev);
+                                    next.delete(result.id);
+                                    return next;
+                                  });
+                                });
+                            }}
+                            className="text-primary hover:underline"
+                          >
+                            {fetchingIds.has(result.id) ? '抓取中...' : '原文链接'}
+                          </a>
+                        )}
+                      </div>
                     </div>
 
                     {/* 收藏按钮 */}

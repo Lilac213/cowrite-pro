@@ -81,6 +81,21 @@ export async function updateMaterialSelection(materialId: string, isSelected: bo
   if (error) throw error;
 }
 
+export async function updateRetrievedMaterialContent(
+  materialId: string,
+  updates: Partial<Pick<RetrievedMaterial, 'abstract' | 'full_text' | 'metadata'>>
+) {
+  const { data, error } = await supabaseClient
+    .from('retrieved_materials')
+    .update({ ...updates })
+    .eq('id', materialId)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('更新检索资料失败');
+  return data as RetrievedMaterial;
+}
+
 export async function batchUpdateMaterialSelection(selections: Array<{ id: string; is_selected: boolean }>) {
   await Promise.all(selections.map(({ id, is_selected }) => updateMaterialSelection(id, is_selected)));
 }

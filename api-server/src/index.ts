@@ -520,6 +520,35 @@ Rules:
     const rankedNews = rankedMaterials.filter(m => m.source_type === 'news');
     const rankedWeb = rankedMaterials.filter(m => m.source_type === 'web');
 
+    if (rankedMaterials.length > 0) {
+      for (let i = 0; i < rankedMaterials.length; i += 1) {
+        const item = rankedMaterials[i];
+        send({
+          stage: 'result',
+          data: {
+            item: {
+              source_type: item.source_type,
+              title: item.title,
+              url: item.url,
+              content: item.content || '',
+              authors: item.authors || [],
+              year: item.year,
+              published_at: item.published_at,
+              citation_count: item.citation_count || 0,
+              quality_score: item.quality_score,
+              similarity_score: item.similarity_score,
+              embedding_similarity: item.embedding_similarity,
+            },
+            rank: i + 1,
+            is_top3: i < 3,
+            total: rankedMaterials.length,
+          },
+          message: `已追加第 ${i + 1} 条资料`
+        });
+        await encoderDelay();
+      }
+    }
+
     if (rankedMaterials.length >= 3) {
       send({
         stage: 'top3',
@@ -595,6 +624,31 @@ Rules:
   } catch (error: any) {
     send({ stage: 'error', message: error.message || '搜索失败' });
     reply.raw.end();
+  }
+});
+
+app.post('/api/fetch-webpage', async (req, reply) => {
+  try {
+    const { url } = (req.body || {}) as { url?: string };
+    if (!url) {
+      return reply.code(400).send({ error: '缺少 url 参数' });
+    }
+    const response = await fetch(url, { redirect: 'follow' });
+    if (!response.ok) {
+      return reply.code(response.status).send({ error: `抓取失败: ${response.status}` });
+    }
+    const html = await response.text();
+    const cleaned = html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const content = cleaned.slice(0, 20000);
+    return reply.send({ content });
+  } catch (error) {
+    return reply.code(500).send({ error: '抓取失败', details: error instanceof Error ? error.message : String(error) });
   }
 });
 

@@ -18,6 +18,7 @@ import {
   clearProjectKnowledge,
   searchMaterialsByTags,
   searchReferencesByTags,
+  updateRetrievedMaterialContent,
 } from '@/api';
 import {
   isResearchStageComplete,
@@ -27,6 +28,7 @@ import {
   updateRetrievedMaterialSelection,
   batchUpdateRetrievedMaterialSelection,
   researchSynthesisAgent,
+  fetchFullWebpageContent,
 } from '@/db/api';
 import { checkResearchLimit, deductResearchCredits, deductUserPoints } from '@/services/credit.service';
 import type { KnowledgeBase, WritingSession, ResearchInsight, ResearchGap, SynthesisResult, RetrievedMaterial } from '@/types';
@@ -122,6 +124,55 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   
   const { toast } = useToast();
   const { user } = useAuth();
+
+  const buildStreamingMaterial = (item: any, rank?: number, isTop3?: boolean): RetrievedMaterial => {
+    const authors = Array.isArray(item.authors)
+      ? item.authors
+      : typeof item.authors === 'string'
+        ? item.authors.split(/[,;、，]/).map((a: string) => a.trim()).filter((a: string) => a)
+        : [];
+    return {
+      id: item.id || `stream-${item.source_type || 'web'}-${rank || Date.now()}`,
+      session_id: writingSession?.id || '',
+      project_id: projectId,
+      user_id: user?.id,
+      source_type: item.source_type || 'web',
+      title: item.title || '',
+      url: item.url,
+      abstract: item.content || item.abstract || item.full_text || '',
+      full_text: item.full_text || '',
+      authors,
+      year: item.year,
+      citation_count: item.citation_count || 0,
+      published_at: item.published_at,
+      is_selected: item.is_selected ?? false,
+      metadata: {
+        original_source: item.source_type,
+        quality_score: item.quality_score,
+        similarity_score: item.similarity_score,
+        embedding_similarity: item.embedding_similarity,
+        rank,
+        is_top3: isTop3,
+      },
+      created_at: new Date().toISOString(),
+    };
+  };
+
+  const upsertRetrievedMaterial = (material: RetrievedMaterial) => {
+    setRetrievedMaterials(prev => {
+      const index = prev.findIndex(m => (material.url && m.url === material.url) || m.id === material.id);
+      if (index >= 0) {
+        const next = [...prev];
+        next[index] = {
+          ...next[index],
+          ...material,
+          metadata: { ...(next[index].metadata || {}), ...(material.metadata || {}) }
+        };
+        return next;
+      }
+      return [...prev, material];
+    });
+  };
 
   // 新增：localStorage 缓存相关函数
   const getCacheKey = (projectId: string) => `search_cache_${projectId}`;
@@ -633,6 +684,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             setStreamingStage('searching');
             setStreamingMessage(message);
           },
+          onResult: (data, message) => {
+            if (data?.item) {
+              const material = buildStreamingMaterial(data.item, data.rank, data.is_top3);
+              upsertRetrievedMaterial(material);
+            }
+            setStreamingStage('searching');
+            setStreamingMessage(message);
+          },
           onTop3: (data, message) => {
             console.log('[streaming] onTop3:', data);
             setStreamingStage('top3');
@@ -941,6 +1000,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               setStreamingStage('searching');
               setStreamingMessage(message);
             },
+            onResult: (data, message) => {
+              if (data?.item) {
+                const material = buildStreamingMaterial(data.item, data.rank, data.is_top3);
+                upsertRetrievedMaterial(material);
+              }
+              setStreamingStage('searching');
+              setStreamingMessage(message);
+            },
             onTop3: (data, message) => {
               console.log('[streaming] onTop3:', data);
               setStreamingStage('top3');
@@ -1116,7 +1183,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       console.log('  - search_summary:', retrievalResults?.search_summary);
 
       // 提取并显示日志
-      if (retrievalResults.logs && Array.isArray(retrievalResults.logs)) {
+      if (retrievalResults?.logs && Array.isArray(retrievalResults.logs)) {
         const formattedLogs = retrievalResults.logs.map((log: string) => 
           '[' + new Date().toLocaleTimeString('zh-CN') + '] ' + log
         );
@@ -1507,6 +1574,22 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         variant: 'destructive',
       });
     }
+  };
+
+  const handleFetchFullText = async (material: RetrievedMaterial) => {
+    if (!material.url) {
+      throw new Error('缺少原文链接');
+    }
+    const content = await fetchFullWebpageContent(material.url);
+    const updated = await updateRetrievedMaterialContent(material.id, {
+      full_text: content,
+      abstract: material.abstract || content.slice(0, 300),
+      metadata: {
+        ...(material.metadata || {}),
+        fetched_at: new Date().toISOString(),
+      }
+    });
+    setRetrievedMaterials(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
   };
 
   const handleSynthesize = async () => {
@@ -2063,6 +2146,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                     onToggleFavorite={handleToggleSelect}
                     onDelete={handleBatchDelete}
                     onBatchFavorite={handleBatchFavorite}
+                    onFetchFullText={handleFetchFullText}
                   />
                 </div>
               </div>

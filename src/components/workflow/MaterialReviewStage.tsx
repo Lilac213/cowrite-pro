@@ -44,6 +44,7 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isStreamingMaterials, setIsStreamingMaterials] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sessionId, setSessionId] = useState<string>('');
   const [synthesisLog, setSynthesisLog] = useState<any>(null);
@@ -89,6 +90,21 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
   useEffect(() => {
     loadMaterials();
   }, [projectId]);
+
+  const streamMaterials = async (items: MaterialItem[]) => {
+    setMaterials([]);
+    if (items.length === 0) {
+      setIsStreamingMaterials(false);
+      return;
+    }
+    setIsStreamingMaterials(true);
+    setLoading(false);
+    for (const item of items) {
+      setMaterials(prev => [...prev, item]);
+      await new Promise(resolve => setTimeout(resolve, 30));
+    }
+    setIsStreamingMaterials(false);
+  };
 
   const loadMaterials = async () => {
     try {
@@ -182,7 +198,7 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
             }));
 
             console.log('[MaterialReviewStage] 转换后的资料数量:', insightItems.length + gapItems.length);
-            setMaterials([...insightItems, ...gapItems]);
+            await streamMaterials([...insightItems, ...gapItems]);
             
             toast({
               title: '✅ 综合分析完成',
@@ -229,7 +245,7 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
         }));
 
         console.log('[MaterialReviewStage] 转换后的资料数量:', insightItems.length + gapItems.length);
-        setMaterials([...insightItems, ...gapItems]);
+        await streamMaterials([...insightItems, ...gapItems]);
       }
       
       // 尝试从 session 中恢复日志（从 synthesis_result 字段）
@@ -262,6 +278,7 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
       });
     } finally {
       setLoading(false);
+      setIsStreamingMaterials(false);
     }
   };
 
@@ -477,7 +494,7 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
   }
 
   // 如果没有任何资料，显示提示信息
-  if (materials.length === 0) {
+  if (materials.length === 0 && !isStreamingMaterials) {
     return (
       <div className="flex items-center justify-center h-96">
         <Card className="max-w-md">
