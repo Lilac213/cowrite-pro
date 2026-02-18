@@ -196,12 +196,6 @@ app.post('/api/web-search', async (req, reply) => {
 
 app.post('/api/search/stream', async (req, reply) => {
   reply.hijack();
-  const origin = req.headers.origin as string | undefined;
-  if (origin && (allowedOrigins.length === 0 || allowedOrigins.includes(origin))) {
-    reply.raw.setHeader('Access-Control-Allow-Origin', origin);
-    reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
-    reply.raw.setHeader('Vary', 'Origin');
-  }
   reply.raw.setHeader('Content-Type', 'text/event-stream');
   reply.raw.setHeader('Cache-Control', 'no-cache');
   reply.raw.setHeader('Connection', 'keep-alive');
@@ -311,6 +305,7 @@ Rules:
       user_library_sources: [] as any[],
       personal_sources: [] as any[]
     };
+    const serpapiLogs: string[] = [];
 
     const serpapiQueries: {
       scholar?: SearchQuery[];
@@ -371,6 +366,18 @@ Rules:
     if (searchPromises.length > 0) {
       const serpapiResults = await Promise.all(searchPromises);
       for (const result of serpapiResults) {
+        if (result.error) {
+          const engineLabel = result.engine === 'scholar'
+            ? 'Scholar'
+            : result.engine === 'news'
+              ? 'News'
+              : 'Search';
+          const errorMessage = `SerpAPI ${engineLabel} 请求失败: ${result.error}`;
+          serpapiLogs.push(errorMessage);
+          send({ stage: 'searching', message: errorMessage });
+          await encoderDelay();
+        }
+
         if (result.engine === 'scholar' && result.results?.length > 0) {
           const mapped = result.results.slice(0, 5).map((item: any) => ({
             title: item.title || '',
@@ -566,7 +573,8 @@ Rules:
       academic_queries: searchPlan.academic_queries || [],
       news_queries: searchPlan.news_queries || [],
       web_queries: searchPlan.web_queries || [],
-      user_library_queries: searchPlan.user_library_queries || []
+      user_library_queries: searchPlan.user_library_queries || [],
+      logs: serpapiLogs
     };
 
     send({ stage: 'final', data: { ...finalResults }, message: '搜索完成' });

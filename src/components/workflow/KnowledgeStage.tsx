@@ -118,7 +118,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   // 流式搜索相关状态
   const [streamingStage, setStreamingStage] = useState<'idle' | 'planning' | 'searching' | 'top3' | 'complete'>('idle');
   const [streamingMessage, setStreamingMessage] = useState<string>('');
-  const [streamingTop3, setStreamingTop3] = useState<any[]>([]);
   const [useStreaming, setUseStreaming] = useState(true); // 默认使用流式搜索
   
   const { toast } = useToast();
@@ -510,7 +509,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     setSearching(true);
     setStreamingStage('planning');
     setStreamingMessage('');
-    setStreamingTop3([]);
     setSearchPlan(null);
     
     setSearchLogs(['[' + new Date().toLocaleTimeString('zh-CN') + '] 开始搜索资料...']);
@@ -638,7 +636,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           onTop3: (data, message) => {
             console.log('[streaming] onTop3:', data);
             setStreamingStage('top3');
-            setStreamingTop3(data.top3 || []);
             setStreamingMessage(message);
             toast({
               title: '初步发现',
@@ -911,7 +908,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
         // 使用流式搜索
         setStreamingStage('planning');
         setStreamingMessage('');
-        setStreamingTop3([]);
         
         const { retrievalResults: streamRetrievalResults } = await agentDrivenResearchWorkflowStreaming(
           requirementsDoc,
@@ -948,7 +944,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
             onTop3: (data, message) => {
               console.log('[streaming] onTop3:', data);
               setStreamingStage('top3');
-              setStreamingTop3(data.top3 || []);
               setStreamingMessage(message);
               toast({
                 title: '初步发现',
@@ -1998,8 +1993,6 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               <CardContent>
                 <StreamingSearchProgress
                   stage={streamingStage}
-                  searchPlan={searchPlan}
-                  top3={streamingTop3}
                   message={streamingMessage}
                 />
               </CardContent>
