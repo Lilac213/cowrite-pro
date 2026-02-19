@@ -62,9 +62,6 @@ export default function StreamingSearchProgress({
         </div>
         <div className="mt-3 space-y-2">
           <Progress value={info.progress} className="h-2" />
-          <div className="h-1 w-full bg-muted rounded overflow-hidden">
-            <div className="h-full w-1/3 bg-gradient-to-r from-foreground via-background to-foreground animate-pulse" />
-          </div>
         </div>
         <CardDescription className="mt-3">
           {message || info.detail}

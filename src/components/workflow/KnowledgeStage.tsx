@@ -24,7 +24,6 @@ import {
   isResearchStageComplete,
   agentDrivenResearchWorkflow,
   agentDrivenResearchWorkflowStreaming,
-  saveToReferenceLibrary,
   updateRetrievedMaterialSelection,
   batchUpdateRetrievedMaterialSelection,
   researchSynthesisAgent,
@@ -124,6 +123,8 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   
   const { toast } = useToast();
   const { user } = useAuth();
+  const selectedMaterials = retrievedMaterials.filter(material => material.is_selected);
+  const archiveReady = selectedMaterials.length > 0 && selectedMaterials.every(material => material.full_text && material.full_text.trim().length > 0);
 
   const buildStreamingMaterial = (item: any, rank?: number, isTop3?: boolean): RetrievedMaterial => {
     const authors = Array.isArray(item.authors)
@@ -1132,7 +1133,9 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
               });
               
               console.log('[streaming] 转换后的资料数量:', convertedMaterials.length);
-              setRetrievedMaterials(convertedMaterials);
+              convertedMaterials.forEach(material => {
+                upsertRetrievedMaterial(material);
+              });
               
               if (data.logs && Array.isArray(data.logs)) {
                 const formattedLogs = data.logs.map((log: string) => 
@@ -1401,29 +1404,24 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       
       toast({
         title: '正在归档资料',
-        description: `正在将 ${selectedMaterials.length} 条资料保存到参考文章库...`,
+        description: `正在抓取 ${selectedMaterials.length} 条资料的原文内容...`,
       });
 
-      // 批量保存到参考文章库
       let successCount = 0;
       for (const material of selectedMaterials) {
         try {
-          await saveToReferenceLibrary(user.id, {
-            title: material.title,
-            content: material.full_text || material.abstract || '',
-            source: material.source_type,
-            source_url: material.url || '',
-            keywords: [],
-          });
+          if (!material.full_text) {
+            await handleFetchFullText(material);
+          }
           successCount++;
         } catch (error) {
-          console.error('[handleArchiveMaterials] 保存失败:', material.title, error);
+          console.error('[handleArchiveMaterials] 抓取失败:', material.title, error);
         }
       }
 
       toast({
         title: '归档完成',
-        description: `已成功归档 ${successCount}/${selectedMaterials.length} 条资料到参考文章库`,
+        description: `已成功归档 ${successCount}/${selectedMaterials.length} 条资料`,
       });
       
     } catch (error: any) {
@@ -1461,6 +1459,15 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       toast({
         title: '请选择资料',
         description: '请至少选择一条资料后进入下一阶段',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const missingFullText = selectedMaterials.filter(m => !m.full_text || m.full_text.trim().length === 0);
+    if (missingFullText.length > 0) {
+      toast({
+        title: '请先归档资料',
+        description: '归档完成后才能进入下一阶段',
         variant: 'destructive',
       });
       return;
@@ -2010,7 +2017,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
   };
 
   // 解析搜索计划
-  const searchSummary = retrievalResults ? {
+  const searchSummary = searchPlan || (retrievalResults ? {
     interpreted_topic: retrievalResults.search_summary?.interpreted_topic,
     key_dimensions: retrievalResults.search_summary?.key_dimensions,
     // 查询字段在顶层，不在 search_summary 里
@@ -2018,7 +2025,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
     news_queries: retrievalResults.news_queries,
     web_queries: retrievalResults.web_queries,
     user_library_queries: retrievalResults.user_library_queries,
-  } : undefined;
+  } : undefined);
 
   // Debug logging
   console.log('[KnowledgeStage] retrievalResults:', retrievalResults);
@@ -2154,7 +2161,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
           </Card>
 
       {/* 底部操作按钮 */}
-      {knowledge.length > 0 && (
+      {retrievedMaterials.length > 0 && (
         <Card>
           <CardContent className="py-4">
             <div className="flex justify-between items-center">
@@ -2164,7 +2171,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                    已选中 {retrievedMaterials.filter(m => m.is_selected).length} 条
+                    已选中 {selectedMaterials.length} 条
                   </span>
                   <span className="text-xs">
                     （点击资料右侧收藏按钮选择要分析的资料）
@@ -2175,7 +2182,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 <Button 
                   variant="outline"
                   onClick={handleArchiveMaterials}
-                  disabled={archiving || retrievedMaterials.filter(m => m.is_selected).length === 0}
+                  disabled={archiving || selectedMaterials.length === 0}
                 >
                   {archiving ? '归档中...' : '归档资料'}
                   <Archive className="h-4 w-4 ml-2" />
@@ -2183,7 +2190,7 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
                 <Button 
                   onClick={handleNextStep}
                   className="min-w-[140px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-                  disabled={confirming || retrievedMaterials.filter(m => m.is_selected).length === 0}
+                  disabled={confirming || !archiveReady}
                 >
                   {confirming ? '处理中...' : '进入下一阶段'}
                   <ArrowRight className="h-4 w-4 ml-2" />
