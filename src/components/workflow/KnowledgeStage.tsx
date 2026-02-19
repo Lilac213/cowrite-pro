@@ -1196,7 +1196,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       // 提取搜索计划
       if (retrievalResults?.search_summary) {
         console.log('[KnowledgeStage] 搜索计划:', retrievalResults.search_summary);
-        setSearchPlan(retrievalResults.search_summary);
+        setSearchPlan(prev => ({
+          interpreted_topic: retrievalResults.search_summary?.interpreted_topic ?? prev?.interpreted_topic,
+          key_dimensions: retrievalResults.search_summary?.key_dimensions ?? prev?.key_dimensions,
+          academic_queries: retrievalResults.academic_queries ?? prev?.academic_queries,
+          news_queries: retrievalResults.news_queries ?? prev?.news_queries,
+          web_queries: retrievalResults.web_queries ?? prev?.web_queries,
+          user_library_queries: retrievalResults.user_library_queries ?? prev?.user_library_queries,
+        }));
         setSearchLogs(prev => [...prev, '[' + new Date().toLocaleTimeString('zh-CN') + '] 搜索计划已生成']);
         
         // 显示搜索计划（查询字段在顶层，不在 search_summary 里）
@@ -1266,7 +1273,14 @@ export default function KnowledgeStage({ projectId, onComplete }: KnowledgeStage
       
       // 保存搜索结果到 localStorage 缓存
       saveSearchCache(projectId, {
-        searchPlan: retrievalResults?.search_summary || null,
+        searchPlan: {
+          interpreted_topic: retrievalResults?.search_summary?.interpreted_topic,
+          key_dimensions: retrievalResults?.search_summary?.key_dimensions,
+          academic_queries: retrievalResults?.academic_queries,
+          news_queries: retrievalResults?.news_queries,
+          web_queries: retrievalResults?.web_queries,
+          user_library_queries: retrievalResults?.user_library_queries,
+        },
         retrievedMaterials: savedMaterials,
         searchLogs: [...searchLogs, '[' + new Date().toLocaleTimeString('zh-CN') + '] 资料检索完成'],
         lastSearchTime: searchTime,

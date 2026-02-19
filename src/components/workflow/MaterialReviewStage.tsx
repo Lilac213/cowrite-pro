@@ -141,12 +141,58 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
       
       // 获取研究洞察和空白
       console.log('[MaterialReviewStage] 开始获取 insights 和 gaps');
-      const [insights, gaps] = await Promise.all([
+      let [insights, gaps] = await Promise.all([
         getResearchInsights(session.id),
         getResearchGaps(session.id)
       ]);
       
-      console.log('[MaterialReviewStage] insights:', insights.length, 'gaps:', gaps.length);
+      console.log('[MaterialReviewStage] DB insights:', insights.length, 'gaps:', gaps.length);
+
+      // Fallback: 如果 DB 为空，尝试从 session.synthesis_result 读取
+      if (insights.length === 0 && gaps.length === 0 && session.synthesis_result) {
+        console.log('[MaterialReviewStage] DB 为空，尝试从 session.synthesis_result 读取 fallback 数据');
+        try {
+          const synthesisResult = typeof session.synthesis_result === 'string' 
+            ? JSON.parse(session.synthesis_result) 
+            : session.synthesis_result;
+            
+          if (synthesisResult?.synthesis) {
+             const fallbackInsights = synthesisResult.synthesis.synthesized_insights || [];
+             const fallbackGaps = synthesisResult.synthesis.contradictions_or_gaps || [];
+             
+             if (fallbackInsights.length > 0 || fallbackGaps.length > 0) {
+               console.log('[MaterialReviewStage] 使用 fallback 数据:', fallbackInsights.length, fallbackGaps.length);
+               // 转换为 ResearchInsight 类型 (部分字段可能缺失，需注意)
+               insights = fallbackInsights.map((item: any) => ({
+                 id: item.id || crypto.randomUUID(),
+                 session_id: session.id,
+                 insight_id: item.id,
+                 category: item.category,
+                 insight: item.insight,
+                 supporting_data: item.supporting_data,
+                 source_type: item.source_type,
+                 recommended_usage: item.recommended_usage,
+                 citability: item.citability,
+                 limitations: item.limitations,
+                 user_decision: 'pending',
+                 created_at: new Date().toISOString()
+               })) as any; // 强制类型转换
+
+               gaps = fallbackGaps.map((item: any) => ({
+                 id: item.id || crypto.randomUUID(),
+                 session_id: session.id,
+                 gap_id: item.id,
+                 issue: item.issue,
+                 description: item.description,
+                 user_decision: 'pending',
+                 created_at: new Date().toISOString()
+               })) as any;
+             }
+          }
+        } catch (e) {
+          console.error('[MaterialReviewStage] 解析 synthesis_result 失败:', e);
+        }
+      }
 
       // 如果没有 insights 和 gaps，检查是否有 retrieved_materials
       if (insights.length === 0 && gaps.length === 0) {
@@ -168,15 +214,53 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
           
           try {
             // 调用综合分析 Agent
-            await callResearchSynthesisAgent(projectId, session.id);
+            const agentResult = await callResearchSynthesisAgent(projectId, session.id);
             
             // 重新获取 insights 和 gaps
-            const [newInsights, newGaps] = await Promise.all([
+            let [newInsights, newGaps] = await Promise.all([
               getResearchInsights(session.id),
               getResearchGaps(session.id)
             ]);
             
-            console.log('[MaterialReviewStage] 综合分析完成，insights:', newInsights.length, 'gaps:', newGaps.length);
+            console.log('[MaterialReviewStage] 综合分析完成，DB insights:', newInsights.length, 'gaps:', newGaps.length);
+
+            // Fallback: 如果 DB 为空，使用 agentResult
+            if (newInsights.length === 0 && newGaps.length === 0 && agentResult?.synthesis) {
+              console.log('[MaterialReviewStage] DB 为空，使用 agentResult fallback 数据');
+              const fallbackInsights = agentResult.synthesis.synthesized_insights || [];
+              const fallbackGaps = agentResult.synthesis.contradictions_or_gaps || [];
+
+              if (fallbackInsights.length > 0 || fallbackGaps.length > 0) {
+                newInsights = fallbackInsights.map((item: any) => ({
+                 id: item.id || crypto.randomUUID(),
+                 session_id: session.id,
+                 insight_id: item.id,
+                 category: item.category,
+                 insight: item.insight,
+                 supporting_data: item.supporting_data,
+                 source_type: item.source_type,
+                 recommended_usage: item.recommended_usage,
+                 citability: item.citability,
+                 limitations: item.limitations,
+                 user_decision: 'pending',
+                 created_at: new Date().toISOString()
+               })) as any;
+
+               newGaps = fallbackGaps.map((item: any) => ({
+                 id: item.id || crypto.randomUUID(),
+                 session_id: session.id,
+                 gap_id: item.id,
+                 issue: item.issue,
+                 description: item.description,
+                 user_decision: 'pending',
+                 created_at: new Date().toISOString()
+               })) as any;
+              }
+            }
+            
+            console.log('[MaterialReviewStage] 最终使用 insights:', newInsights.length, 'gaps:', newGaps.length);
+            
+            // 转换为统一格式
             
             // 转换为统一格式
             const insightItems: MaterialItem[] = newInsights.map(insight => ({

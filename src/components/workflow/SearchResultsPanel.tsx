@@ -50,6 +50,10 @@ export default function SearchResultsPanel({
   const { toast } = useToast();
   const inFlightTranslations = useRef<Set<string>>(new Set());
 
+  useEffect(() => {
+    setSelectedIds(new Set(results.filter(result => result.is_selected).map(result => result.id)));
+  }, [results]);
+
   // 过滤结果
   const filteredResults = useMemo(() => {
     let filtered = results;
@@ -203,8 +207,14 @@ export default function SearchResultsPanel({
   // 全选/取消全选
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(new Set(sortedResults.map(r => r.id)));
+      const ids = sortedResults.map(r => r.id);
+      onBatchFavorite(ids, true);
+      setSelectedIds(new Set(ids));
     } else {
+      const ids = sortedResults.map(r => r.id);
+      if (ids.length > 0) {
+        onBatchFavorite(ids, false);
+      }
       setSelectedIds(new Set());
     }
   };
@@ -218,6 +228,7 @@ export default function SearchResultsPanel({
       newSelected.delete(id);
     }
     setSelectedIds(newSelected);
+    onToggleFavorite(id, checked);
   };
 
   // 批量收藏

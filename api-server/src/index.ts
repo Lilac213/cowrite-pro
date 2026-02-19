@@ -2,6 +2,28 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import PQueue from 'p-queue';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import fs from 'fs';
+import path from 'path';
+
+// Load .env manually if not loaded
+if (!process.env.SUPABASE_URL) {
+  try {
+    const envPath = path.resolve(process.cwd(), '.env');
+    if (fs.existsSync(envPath)) {
+      const envConfig = fs.readFileSync(envPath, 'utf-8');
+      envConfig.split('\n').forEach(line => {
+        const [key, ...val] = line.split('=');
+        if (key && val) {
+          process.env[key.trim()] = val.join('=').trim();
+        }
+      });
+      console.log('Loaded .env file manually');
+    }
+  } catch (e) {
+    console.error('Failed to load .env', e);
+  }
+}
+
 import { runBriefAgent } from './llm/agents/briefAgent.js';
 import { runStructureAgent } from './llm/agents/structureAgent.js';
 import { runDraftAgent } from './llm/agents/draftAgent.js';
@@ -19,6 +41,10 @@ const llmQueue = new PQueue({ concurrency: Number(process.env.LLM_CONCURRENCY) |
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const frontendUrlsRaw = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '';
+
+console.log('API Server Environment Check:');
+console.log('- SUPABASE_URL:', !!supabaseUrl);
+console.log('- SUPABASE_SERVICE_KEY:', !!supabaseServiceKey);
 
 function buildAllowedOrigins(input: string) {
   const entries = input
@@ -1784,7 +1810,15 @@ ${materialsContent}
         limitations: insight.limitations || "",
         user_decision: "pending",
       }));
-      await supabase.from("research_insights").insert(insightsToInsert);
+      try {
+        const { error: insertInsightError } = await supabase.from("research_insights").insert(insightsToInsert);
+        if (insertInsightError) {
+          console.error("Failed to insert research_insights (non-fatal):", insertInsightError);
+          // throw insertInsightError; // Do not throw, allow fallback to client-side storage
+        }
+      } catch (e) {
+        console.error("Exception inserting research_insights (non-fatal):", e);
+      }
     }
 
     if (synthesisData.contradictions_or_gaps?.length > 0) {
@@ -1795,7 +1829,15 @@ ${materialsContent}
         description: gap.description,
         user_decision: "pending",
       }));
-      await supabase.from("research_gaps").insert(gapsToInsert);
+      try {
+        const { error: insertGapError } = await supabase.from("research_gaps").insert(gapsToInsert);
+        if (insertGapError) {
+          console.error("Failed to insert research_gaps (non-fatal):", insertGapError);
+          // throw insertGapError; // Do not throw
+        }
+      } catch (e) {
+        console.error("Exception inserting research_gaps (non-fatal):", e);
+      }
     }
   }
 
