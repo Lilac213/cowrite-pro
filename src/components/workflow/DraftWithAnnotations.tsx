@@ -43,7 +43,7 @@ export default function DraftWithAnnotations({
   }, [content]);
 
   // 解析段落
-  const paragraphs = content.split(/\n\n+/).filter(p => p.trim());
+  const paragraphs = (content || '').split(/\n\n+/).filter(p => p.trim());
 
   const handleParagraphClick = (paragraphId: string) => {
     setActiveParagraphId(paragraphId);

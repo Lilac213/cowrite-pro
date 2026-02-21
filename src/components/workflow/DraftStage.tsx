@@ -44,7 +44,7 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
       const data = await getLatestDraft(projectId);
       if (data) {
         setDraft(data);
-        setContent(data.content);
+        setContent(data.content || '');
         if (data.annotations) {
           setAnnotations(data.annotations);
         }
@@ -65,7 +65,7 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
       const contentResult: any = await callDraftContentAgent(projectId);
       
       if (contentResult.success) {
-        const fullContent = contentResult.content;
+        const fullContent = contentResult.content || '';
         const draftId = contentResult.draft_id;
         
         // Update content to start typing
