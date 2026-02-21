@@ -271,7 +271,7 @@ export default function DraftWithAnnotations({
                       <Textarea
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
-                        className="min-h-[150px] font-serif text-lg leading-relaxed resize-none shadow-inner bg-slate-50"
+                        className="min-h-[150px] font-serif text-xl leading-relaxed resize-none shadow-inner bg-slate-50"
                         autoFocus
                         onKeyDown={(e) => {
                           // Ctrl+Enter or Cmd+Enter to save
@@ -327,7 +327,7 @@ export default function DraftWithAnnotations({
                     </div>
                     
                     {/* Content */}
-                    <p className="text-base text-slate-800 leading-loose font-serif text-justify whitespace-pre-wrap">
+                    <p className="text-xl text-slate-800 leading-loose font-serif text-justify whitespace-pre-wrap">
                       {renderParagraphContent(cleanText)}
                     </p>
                   </div>
