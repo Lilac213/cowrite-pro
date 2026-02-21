@@ -99,3 +99,17 @@ export async function updateGapDecision(gapId: string, decision: 'respond' | 'ig
     .eq('id', gapId);
   if (error) throw error;
 }
+
+export async function saveResearchInsight(insight: Partial<ResearchInsight>) {
+  const { error } = await supabaseClient
+    .from('research_insights')
+    .upsert(insight, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+export async function saveResearchGap(gap: Partial<ResearchGap>) {
+  const { error } = await supabaseClient
+    .from('research_gaps')
+    .upsert(gap, { onConflict: 'id' });
+  if (error) throw error;
+}

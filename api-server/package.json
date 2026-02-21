@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "check-schema": "tsx src/scripts/check_columns.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },

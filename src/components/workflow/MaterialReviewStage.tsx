@@ -13,6 +13,8 @@ import remarkGfm from 'remark-gfm';
 import { 
   getResearchInsights,
   getResearchGaps,
+  saveResearchInsight,
+  saveResearchGap,
   updateInsightDecision,
   updateGapDecision,
   updateWritingSessionStage,
@@ -160,13 +162,16 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
              const fallbackInsights = synthesisResult.synthesis.synthesized_insights || [];
              const fallbackGaps = synthesisResult.synthesis.contradictions_or_gaps || [];
              
+             // Helper to check if string is valid UUID
+             const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+             
              if (fallbackInsights.length > 0 || fallbackGaps.length > 0) {
                console.log('[MaterialReviewStage] 使用 fallback 数据:', fallbackInsights.length, fallbackGaps.length);
                // 转换为 ResearchInsight 类型 (部分字段可能缺失，需注意)
                insights = fallbackInsights.map((item: any) => ({
-                 id: item.id || crypto.randomUUID(),
+                 id: isUUID(item.id) ? item.id : crypto.randomUUID(),
                  session_id: session.id,
-                 insight_id: item.id,
+                 insight_id: item.id, // Store original ID (e.g. "insight_1") here
                  category: item.category,
                  insight: item.insight,
                  supporting_data: item.supporting_data,
@@ -179,9 +184,9 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
                })) as any; // 强制类型转换
 
                gaps = fallbackGaps.map((item: any) => ({
-                 id: item.id || crypto.randomUUID(),
+                 id: isUUID(item.id) ? item.id : crypto.randomUUID(),
                  session_id: session.id,
-                 gap_id: item.id,
+                 gap_id: item.id, // Store original ID (e.g. "gap_1") here
                  issue: item.issue,
                  description: item.description,
                  user_decision: 'pending',
@@ -230,11 +235,14 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
               const fallbackInsights = agentResult.synthesis.synthesized_insights || [];
               const fallbackGaps = agentResult.synthesis.contradictions_or_gaps || [];
 
+              // Helper to check if string is valid UUID
+              const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
               if (fallbackInsights.length > 0 || fallbackGaps.length > 0) {
                 newInsights = fallbackInsights.map((item: any) => ({
-                 id: item.id || crypto.randomUUID(),
+                 id: isUUID(item.id) ? item.id : crypto.randomUUID(),
                  session_id: session.id,
-                 insight_id: item.id,
+                 insight_id: item.id, // Store original ID (e.g. "insight_1") here
                  category: item.category,
                  insight: item.insight,
                  supporting_data: item.supporting_data,
@@ -247,9 +255,9 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
                })) as any;
 
                newGaps = fallbackGaps.map((item: any) => ({
-                 id: item.id || crypto.randomUUID(),
+                 id: isUUID(item.id) ? item.id : crypto.randomUUID(),
                  session_id: session.id,
-                 gap_id: item.id,
+                 gap_id: item.id, // Store original ID (e.g. "gap_1") here
                  issue: item.issue,
                  description: item.description,
                  user_decision: 'pending',
@@ -404,13 +412,23 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
       
       // 批量更新
       await Promise.all(
-        selectedMaterials.map(material => {
+        selectedMaterials.map(async material => {
           if (material.type === 'insight') {
-            return updateInsightDecision(material.id, decision);
+            const insightData = material.data as any;
+            return saveResearchInsight({
+              ...insightData,
+              id: material.id, // Ensure UUID is used
+              user_decision: decision
+            });
           } else {
             // gaps 使用 respond/ignore
             const gapDecision = decision === 'adopt' ? 'respond' : 'ignore';
-            return updateGapDecision(material.id, gapDecision);
+            const gapData = material.data as any;
+            return saveResearchGap({
+              ...gapData,
+              id: material.id, // Ensure UUID is used
+              user_decision: gapDecision
+            });
           }
         })
       );
@@ -418,12 +436,8 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
       // 更新本地状态
       setMaterials(prev => prev.map(m => {
         if (selectedIds.has(m.id)) {
-          if (m.type === 'insight') {
-            return { ...m, decision };
-          } else {
-            const gapDecision = decision === 'adopt' ? 'respond' : 'ignore';
-            return { ...m, decision: gapDecision };
-          }
+          // ... (keep existing state update logic)
+          return { ...m, decision: m.type === 'insight' ? decision : (decision === 'adopt' ? 'respond' : 'ignore') };
         }
         return m;
       }));
@@ -453,21 +467,27 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
       if (!material) return;
 
       if (material.type === 'insight') {
-        await updateInsightDecision(materialId, decision);
+        const insightData = material.data as any;
+        await saveResearchInsight({
+          ...insightData,
+          id: materialId, // Ensure UUID is used
+          user_decision: decision
+        });
       } else {
         const gapDecision = decision === 'adopt' ? 'respond' : 'ignore';
-        await updateGapDecision(materialId, gapDecision);
+        const gapData = material.data as any;
+        await saveResearchGap({
+          ...gapData,
+          id: materialId, // Ensure UUID is used
+          user_decision: gapDecision
+        });
       }
 
       // 更新本地状态
       setMaterials(prev => prev.map(m => {
         if (m.id === materialId) {
-          if (m.type === 'insight') {
-            return { ...m, decision };
-          } else {
-            const gapDecision = decision === 'adopt' ? 'respond' : 'ignore';
-            return { ...m, decision: gapDecision };
-          }
+          // ... (keep existing state update logic)
+          return { ...m, decision: m.type === 'insight' ? decision : (decision === 'adopt' ? 'respond' : 'ignore') };
         }
         return m;
       }));
