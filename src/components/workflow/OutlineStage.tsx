@@ -16,15 +16,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Trash2, Sparkles, Save, X, Edit } from 'lucide-react';
+import { Plus, Trash2, Sparkles, Save, X, Edit, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/db/supabase';
 import { apiJson } from '@/api/http';
-
-interface OutlineStageProps {
-  projectId: string;
-  onComplete: () => void;
-}
 
 interface OutlineStageProps {
   projectId: string;
@@ -41,6 +36,7 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
   const [referenceArticles, setReferenceArticles] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
   const [knowledgeBase, setKnowledgeBase] = useState<any[]>([]);
+  const [hasAttemptedAutoGenerate, setHasAttemptedAutoGenerate] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -64,9 +60,27 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
       setMaterials(mats);
       setKnowledgeBase(kb.filter((k) => k.selected));
 
-      if (projectData?.article_argument_structure) {
+      // 尝试获取最新的 article_structure (优先于 projects 表中的缓存)
+      const { data: latestStructure } = await supabase
+        .from('article_structures')
+        .select('payload_jsonb')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestStructure && (latestStructure as any).payload_jsonb) {
+        const structure = (latestStructure as any).payload_jsonb as any;
+        setCoreThesis(structure.core_thesis || '');
+        setArgumentBlocks(structure.argument_blocks || []);
+      } else if (projectData?.article_argument_structure) {
         setCoreThesis(projectData.article_argument_structure.core_thesis || '');
         setArgumentBlocks(projectData.article_argument_structure.argument_blocks || []);
+      } else if (!hasAttemptedAutoGenerate && !generatingStructure) {
+        // 如果没有结构且未尝试生成过，则自动生成
+        setHasAttemptedAutoGenerate(true);
+        // 使用 setTimeout 避免在渲染期间直接触发副作用，并确保 handleGenerateArticleStructure 已定义
+        setTimeout(() => handleGenerateArticleStructure(), 0);
       }
     } catch (error) {
       console.error('加载数据失败:', error);
@@ -84,7 +98,32 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
         throw new Error(result.details || result.error);
       }
 
-      // 从 article_structures 表读取生成的结构
+      // 优先使用接口返回的结构
+      if (result.argument_outline) {
+        const argumentOutline = result.argument_outline;
+        setCoreThesis(argumentOutline.core_thesis);
+        setArgumentBlocks(argumentOutline.argument_blocks);
+        
+        // 保存到 projects 表（保持兼容性）
+        await supabase
+          .from('projects')
+          // @ts-ignore
+          .update({
+            article_argument_structure: {
+              core_thesis: argumentOutline.core_thesis,
+              argument_blocks: argumentOutline.argument_blocks,
+            },
+          })
+          .eq('id', projectId);
+
+        toast({
+          title: '生成成功',
+          description: '文章级论证结构已生成',
+        });
+        return;
+      }
+
+      // 如果接口未返回结构，则尝试从 article_structures 表读取 (兼容旧逻辑)
       const { data: structure, error: structError } = await supabase
         .from('article_structures')
         .select('payload_jsonb')
@@ -121,10 +160,12 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
       console.error('生成失败详情:', error);
       
       let errorMessage = '无法生成论证结构';
-      if (error.message && error.message.includes('未找到 research_pack')) {
+      const msg = error.message || '';
+      
+      if (msg.includes('未找到 research_pack') || msg.includes('未找到有效的 research_insights')) {
         errorMessage = '请先完成资料搜索和整理';
-      } else if (error.message) {
-        errorMessage = error.message;
+      } else if (msg) {
+        errorMessage = msg;
       }
       
       toast({
@@ -264,6 +305,30 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
     }
   };
 
+  // 移动论证块
+  const handleMoveBlock = (index: number, direction: 'up' | 'down') => {
+    if (
+      (direction === 'up' && index === 0) ||
+      (direction === 'down' && index === argumentBlocks.length - 1)
+    ) {
+      return;
+    }
+
+    const newBlocks = [...argumentBlocks];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    // 交换位置
+    [newBlocks[index], newBlocks[targetIndex]] = [newBlocks[targetIndex], newBlocks[index]];
+    
+    // 更新 order
+    const updatedBlocks = newBlocks.map((block, idx) => ({
+      ...block,
+      order: idx + 1
+    }));
+
+    setArgumentBlocks(updatedBlocks);
+  };
+
   const handleConfirm = async () => {
     if (!coreThesis || argumentBlocks.length === 0) {
       toast({
@@ -386,6 +451,24 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
                             )}
                           </span>
                           <div className="flex gap-1">
+                            <Button
+                              onClick={() => handleMoveBlock(index, 'up')}
+                              size="sm"
+                              variant="ghost"
+                              disabled={index === 0}
+                              title="上移"
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              onClick={() => handleMoveBlock(index, 'down')}
+                              size="sm"
+                              variant="ghost"
+                              disabled={index === argumentBlocks.length - 1}
+                              title="下移"
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </Button>
                             <Button
                               onClick={() => handleAddArgumentBlock(index + 1)}
                               size="sm"

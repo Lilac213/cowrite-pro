@@ -516,6 +516,8 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
 
   // 进入下一阶段
   const handleNextStage = async () => {
+    console.log('[MaterialReviewStage] handleNextStage called. SessionId:', sessionId, 'PendingCount:', pendingCount);
+
     if (pendingCount > 0) {
       toast({
         title: '还有未决策的资料',
@@ -534,7 +536,9 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
       });
 
       // 调用文章结构生成
+      console.log('[MaterialReviewStage] Calling callArticleStructureAgent with:', { sessionId, projectId });
       await callArticleStructureAgent(sessionId, projectId);
+      console.log('[MaterialReviewStage] callArticleStructureAgent returned successfully');
 
       // 更新会话阶段
       await updateWritingSessionStage(sessionId, 'structure');

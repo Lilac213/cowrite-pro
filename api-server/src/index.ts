@@ -1371,9 +1371,11 @@ app.post('/api/structure-agent', async (req, reply) => {
   }
 
   // 3. 获取 Insights (从 research_insights 表)
-  // 优先使用 session_id 过滤，如果没有则使用 project_id
-  let insightsQuery = supabase
-    .from('research_insights')
+          console.log('[structure-agent] Querying research_insights for:', { project_id, currentSessionId });
+          
+          // 优先使用 session_id 过滤，如果没有则使用 project_id
+          let insightsQuery = supabase
+            .from('research_insights')
     .select('*')
     .in('user_decision', ['adopt', 'downgrade']); // 获取用户采用(adopt)或降级(downgrade)的洞察
 
@@ -1384,8 +1386,9 @@ app.post('/api/structure-agent', async (req, reply) => {
   }
 
   const { data: insights, error: insightsError } = await insightsQuery;
+          console.log('[structure-agent] Found insights:', insights?.length, 'Error:', insightsError);
 
-  if (insightsError) throw insightsError;
+          if (insightsError) throw insightsError;
 
   // 4. 获取 Sources (从 retrieved_materials 表)
   // 同样优先使用 session_id
@@ -1526,18 +1529,46 @@ app.post('/api/draft-agent', async (req, reply) => {
 
   const argument_outline = structure.payload_jsonb;
 
-  const { data: insights, error: insightsError } = await supabase
-    .from('synthesized_insights')
+  // 3. 获取 Insights (从 research_insights 表)
+  // 优先使用 session_id 过滤
+  let insightsQuery = supabase
+    .from('research_insights')
     .select('*')
+    .in('user_decision', ['adopt', 'downgrade']); // 获取用户采用(adopt)或降级(downgrade)的洞察
+
+  // 尝试获取 session_id
+  let currentSessionId: string | undefined;
+  const { data: session } = await supabase
+    .from('writing_sessions')
+    .select('id')
     .eq('project_id', project_id)
-    .eq('user_decision', 'confirmed');
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+    
+  if (session) {
+    currentSessionId = session.id;
+    insightsQuery = insightsQuery.eq('session_id', currentSessionId);
+  } else {
+    insightsQuery = insightsQuery.eq('project_id', project_id);
+  }
+
+  const { data: insights, error: insightsError } = await insightsQuery;
 
   if (insightsError) throw insightsError;
 
-  const { data: sources, error: sourcesError } = await supabase
-    .from('research_sources')
-    .select('*')
-    .eq('project_id', project_id);
+  // 4. 获取 Sources (从 retrieved_materials 表)
+  let sourcesQuery = supabase
+    .from('retrieved_materials')
+    .select('*');
+
+  if (currentSessionId) {
+    sourcesQuery = sourcesQuery.eq('session_id', currentSessionId);
+  } else {
+    sourcesQuery = sourcesQuery.eq('project_id', project_id);
+  }
+
+  const { data: sources, error: sourcesError } = await sourcesQuery;
 
   if (sourcesError) throw sourcesError;
 
@@ -1546,16 +1577,30 @@ app.post('/api/draft-agent', async (req, reply) => {
   }
 
   const research_pack = {
-    sources: sources || [],
+    sources: (sources || []).map(s => ({
+      id: s.id,
+      title: s.title || '无标题',
+      content: s.full_text || s.abstract || '',
+      summary: (s.abstract || s.full_text || '').substring(0, 200),
+      source_url: s.url || '',
+      source_type: (['web', 'personal', 'academic', 'news'].includes(s.source_type) ? s.source_type : 'web') as any,
+      credibility_score: 0.8,
+      recency_score: 0.8,
+      relevance_score: 0.8,
+      token_length: (s.full_text || '').length,
+      tags: [],
+      created_at: new Date().toISOString()
+    })),
     insights: insights.map(i => ({
-      id: i.id,
-      category: i.category,
-      content: i.content,
-      supporting_source_ids: i.supporting_source_ids || [],
-      citability: i.citability,
-      evidence_strength: i.evidence_strength,
-      risk_flag: i.risk_flag,
-      confidence_score: i.confidence_score
+      id: i.insight_id || i.id, // 优先使用 insight_id
+      category: i.category || 'General',
+      content: i.insight_text || i.insight, // 优先使用 insight_text
+      supporting_source_ids: [], // 目前没有直接关联，设为空
+      citability: i.user_decision === 'downgrade' ? 'background' : (['direct', 'paraphrase', 'background'].includes(i.citability) ? i.citability : 'paraphrase') as any,
+      evidence_strength: i.user_decision === 'adopt' ? 'strong' : 'medium' as any,
+      risk_flag: false,
+      confidence_score: 0.9,
+      user_decision: i.user_decision as any
     })),
     summary: {
       total_sources: sources?.length || 0,
