@@ -1,4 +1,4 @@
-import { runLLMAgent } from '../runtime/LLMRuntime';
+import { runLLMAgent } from '../runtime/LLMRuntime.js';
 
 interface RefineParagraphInput {
   paragraph_content: string;

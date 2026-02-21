@@ -76,12 +76,13 @@ export default function DraftWithAnnotations({
 
         if (insights) {
           const matMap: Record<string, Citation> = {};
-          insights.forEach((insight, index) => {
+          insights.forEach((insight: any, index: number) => {
             // Map index+1 (e.g. "1") to citation data
             // We assume text uses (见资料1), (见资料2) etc.
             matMap[(index + 1).toString()] = {
               id: insight.id,
-              material_title: insight.original_text?.slice(0, 50) + '...' || '未命名资料', // Fallback title
+              material_id: insight.id, // Add material_id to match Citation type if needed, or update Citation type
+              material_title: (insight.original_text?.slice(0, 50) + '...') || '未命名资料', // Fallback title
               material_source: '研究洞察',
               material_summary: insight.insight,
               quote: insight.original_text,
@@ -232,9 +233,9 @@ export default function DraftWithAnnotations({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-200px)]">
-      {/* 左侧：正文 */}
-      <Card className="flex flex-col border-r-0 rounded-r-none">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-200px)]">
+      {/* 左侧：正文 (Occupies 7/12 columns, making it wider) */}
+      <Card className="flex flex-col border-r-0 rounded-r-none lg:col-span-7">
         <CardHeader className="bg-slate-50 border-b">
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5 text-primary" />
@@ -337,8 +338,8 @@ export default function DraftWithAnnotations({
         </CardContent>
       </Card>
 
-      {/* 右侧：协作教练 */}
-      <Card className="flex flex-col bg-slate-50/50 border-l-0 rounded-l-none shadow-none">
+      {/* 右侧：协作教练 (Occupies 5/12 columns) */}
+      <Card className="flex flex-col bg-slate-50/50 border-l-0 rounded-l-none shadow-none lg:col-span-5">
         <CardHeader className="bg-slate-50/80 backdrop-blur border-b sticky top-0 z-10">
           <CardTitle className="flex items-center gap-2 text-lg">
             <BookOpen className="h-5 w-5 text-primary" />
