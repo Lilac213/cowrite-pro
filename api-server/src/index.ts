@@ -1828,23 +1828,16 @@ app.post('/api/draft/analyze-structure', async (req, reply) => {
       // 查找对应的 block 以获取引用信息
       const block = draft.payload_jsonb.draft_blocks.find((b: any) => b.paragraph_id === a.paragraph_id);
       
-      // Determine paragraph type (simple logic)
-      let paragraph_type = '观点提出';
-      if (block) {
-          if (block.order === 1) paragraph_type = '引言';
-          else if (block.order === draft.payload_jsonb.draft_blocks.length) paragraph_type = '结论';
-      }
-
       return {
         paragraph_id: a.paragraph_id,
-        paragraph_type: paragraph_type,
+        paragraph_type: a.paragraph_type,
         information_source: {
           references: block?.citations?.map((c: any) => c.source_title) || [],
           is_direct_quote: false
         },
-        viewpoint_generation: '多文献综合',
-        development_logic: a.rationale,
-        editing_suggestions: a.suggestion
+        viewpoint_generation: a.viewpoint_generation,
+        development_logic: a.development_logic,
+        editing_suggestions: a.editing_suggestions
       };
     });
 
