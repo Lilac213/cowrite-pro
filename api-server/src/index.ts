@@ -31,6 +31,7 @@ import { runDraftContentAgent } from './llm/agents/draftContentAgent.js';
 import { runDraftAnalysisAgent } from './llm/agents/draftAnalysisAgent.js';
 import { runReviewAgent } from './llm/agents/reviewAgent.js';
 import { runStructureAdjustmentAgent } from './llm/agents/structureAdjustmentAgent.js';
+import { runRefineParagraphAgent } from './llm/agents/refineParagraphAgent.js';
 import { runLLMAgent, runLLMRaw } from './llm/runtime/LLMRuntime.js';
 import { validateOrThrow } from './llm/runtime/validateSchema.js';
 import { cleanMaterials, rerankMaterialsWithEmbedding, type CleanedMaterial } from './utils/materialCleaner.js';
@@ -2227,6 +2228,33 @@ ${materialsContent}
   }
 
   return reply.send({ thought: result.rawOutput?.match(/---THOUGHT---\s*([\s\S]*?)---JSON---/)?.[1]?.trim() || "", synthesis: synthesisData, sessionId });
+});
+
+app.post('/api/draft/refine-paragraph', async (req, reply) => {
+  const { paragraph_content, instruction, context } = (req.body || {}) as { paragraph_content: string; instruction: string; context?: string };
+
+  if (!paragraph_content || !instruction) {
+    return reply.code(400).send({ error: '缺少必需参数：paragraph_content 或 instruction' });
+  }
+
+  try {
+    const result = await llmQueue.add(() => runRefineParagraphAgent({
+      paragraph_content,
+      instruction,
+      context
+    }));
+
+    return reply.send({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    req.log.error(error, 'Refine Paragraph Failed');
+    return reply.code(500).send({
+      error: '段落润色失败',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
 });
 
 const port = Number(process.env.PORT) || 3000;

@@ -257,6 +257,16 @@ export interface ParagraphGuidance {
   collaboration_prompt: string; // 激发协作的提示
 }
 
+export interface Citation {
+  id: string;
+  material_title: string;
+  material_source?: string;
+  material_summary?: string;
+  material_url?: string;
+  quote?: string;
+  position: number;
+}
+
 export interface ParagraphAnnotation {
   paragraph_id: string;
   paragraph_type: '引言' | '文献综述' | '观点提出' | '对比分析' | '方法说明' | '结论' | '其他';
@@ -268,6 +278,11 @@ export interface ParagraphAnnotation {
   viewpoint_generation: '文献直接观点' | '多文献综合' | '基于数据的推导' | '模型逻辑推演';
   development_logic: string;
   editing_suggestions: string;
+  // Extended fields for Coaching Rail (optional as they might be populated from logic/suggestions)
+  generation_rationale?: string;
+  personal_content_suggestions?: string[];
+  experience_suggestions?: string[];
+  collaboration_prompt?: string;
 }
 
 export interface Review {

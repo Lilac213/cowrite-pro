@@ -64,3 +64,11 @@ export async function callDraftAnalysisAgent(draftId: string) {
 export async function callReviewAgent(projectId: string) {
   return apiJson('/api/review-agent', { project_id: projectId }, true);
 }
+
+export async function refineParagraph(paragraphContent: string, instruction: string, context?: string) {
+  return apiJson('/api/draft/refine-paragraph', { 
+    paragraph_content: paragraphContent, 
+    instruction, 
+    context 
+  }, true);
+}

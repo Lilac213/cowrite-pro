@@ -1,18 +1,37 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { ParagraphAnnotation } from '@/types';
-import { FileText, BookOpen, Lightbulb, Edit3, Sparkles } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import type { ParagraphAnnotation, Citation } from '@/types';
+import { FileText, BookOpen, Edit3, Check, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { supabase } from '@/db/supabase';
+import CitationMarker from '../draft/CitationMarker';
+import DraftGuidance from '../draft/DraftGuidance';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useAuth } from '@/contexts/AuthContext';
+import { createMaterial } from '@/api/material.api';
+import { toast } from 'sonner';
 
 interface DraftWithAnnotationsProps {
   content: string;
   annotations: ParagraphAnnotation[];
   onContentChange?: (content: string) => void;
   readonly?: boolean;
+  projectId?: string;
 }
 
-const paragraphTypeColors = {
+const paragraphTypeColors: Record<string, string> = {
   '引言': 'bg-blue-100 text-blue-800',
   '文献综述': 'bg-purple-100 text-purple-800',
   '观点提出': 'bg-green-100 text-green-800',
@@ -22,92 +41,293 @@ const paragraphTypeColors = {
   '其他': 'bg-gray-100 text-gray-800',
 };
 
-const viewpointGenerationLabels = {
-  '文献直接观点': '📚 文献直接观点',
-  '多文献综合': '🔗 多文献综合',
-  '基于数据的推导': '📊 基于数据的推导',
-  '模型逻辑推演': '🤖 模型逻辑推演',
-};
-
 export default function DraftWithAnnotations({
   content,
   annotations,
   onContentChange,
   readonly = false,
+  projectId,
 }: DraftWithAnnotationsProps) {
+  const { user } = useAuth();
   const [activeParagraphId, setActiveParagraphId] = useState<string | null>(null);
-  const [editableContent, setEditableContent] = useState(content);
+  const [editingParagraphId, setEditingParagraphId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [materials, setMaterials] = useState<Record<string, Citation>>({});
+  
+  // Material Save Dialog State
+  const [showSaveMaterialDialog, setShowSaveMaterialDialog] = useState(false);
+  const [pendingMaterialContent, setPendingMaterialContent] = useState('');
 
-  useEffect(() => {
-    setEditableContent(content);
-  }, [content]);
-
-  // 解析段落
+  // Parse paragraphs
+  // Note: We use a more robust split that preserves empty lines if needed, but for now standard split is fine
   const paragraphs = (content || '').split(/\n\n+/).filter(p => p.trim());
 
-  const handleParagraphClick = (paragraphId: string) => {
+  // Fetch materials for citations
+  useEffect(() => {
+    if (!projectId) return;
+
+    const fetchMaterials = async () => {
+      try {
+        // Fetch research insights as they are the source of "资料X" usually
+        const { data: insights } = await supabase
+          .from('research_insights')
+          .select('*')
+          .eq('project_id', projectId);
+
+        if (insights) {
+          const matMap: Record<string, Citation> = {};
+          insights.forEach((insight, index) => {
+            // Map index+1 (e.g. "1") to citation data
+            // We assume text uses (见资料1), (见资料2) etc.
+            matMap[(index + 1).toString()] = {
+              id: insight.id,
+              material_title: insight.original_text?.slice(0, 50) + '...' || '未命名资料', // Fallback title
+              material_source: '研究洞察',
+              material_summary: insight.insight,
+              quote: insight.original_text,
+              position: 0 // Not used in this context
+            };
+          });
+          setMaterials(matMap);
+        }
+      } catch (error) {
+        console.error('Failed to fetch materials:', error);
+      }
+    };
+
+    fetchMaterials();
+  }, [projectId]);
+
+  const handleParagraphClick = (paragraphId: string, text: string) => {
+    if (activeParagraphId === paragraphId) return;
+    
     setActiveParagraphId(paragraphId);
-    // 滚动到对应注释
+    
+    // Scroll to annotation
     const annotationElement = document.getElementById(`annotation-${paragraphId}`);
     if (annotationElement) {
       annotationElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   };
 
+  const handleEditStart = (paragraphId: string, text: string) => {
+    if (readonly) return;
+    setEditingParagraphId(paragraphId);
+    setEditValue(text);
+    setActiveParagraphId(paragraphId);
+  };
+
+  const handleEditCancel = () => {
+    setEditingParagraphId(null);
+    setEditValue('');
+  };
+
+  const handleEditSave = (paragraphId: string) => {
+    if (!onContentChange) return;
+
+    const index = parseInt(paragraphId.replace('P', '')) - 1;
+    const newParagraphs = [...paragraphs];
+    if (index >= 0 && index < newParagraphs.length) {
+      // Check if content actually changed
+      if (newParagraphs[index] !== editValue) {
+        newParagraphs[index] = editValue;
+        onContentChange(newParagraphs.join('\n\n'));
+        
+        // Trigger Material Save Dialog
+        setPendingMaterialContent(editValue);
+        setShowSaveMaterialDialog(true);
+      }
+    }
+    
+    setEditingParagraphId(null);
+    setEditValue('');
+  };
+  
+  const handleConfirmSaveMaterial = async () => {
+    if (!user || !pendingMaterialContent) return;
+    
+    try {
+      await createMaterial({
+        user_id: user.id,
+        project_id: projectId, // Optional association
+        title: `文章片段 - ${new Date().toLocaleDateString()}`,
+        content: pendingMaterialContent,
+        material_type: 'experience', // Default type, user can edit later
+        keywords: ['draft-snippet']
+      });
+      toast.success('已保存到个人素材库');
+    } catch (error) {
+      console.error('Failed to save material:', error);
+      toast.error('保存素材失败');
+    } finally {
+      setShowSaveMaterialDialog(false);
+      setPendingMaterialContent('');
+    }
+  };
+
   const handleAnnotationClick = (paragraphId: string) => {
     setActiveParagraphId(paragraphId);
-    // 滚动到对应段落
     const paragraphElement = document.getElementById(`paragraph-${paragraphId}`);
     if (paragraphElement) {
       paragraphElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   };
 
-  const getAnnotationForParagraph = (paragraphId: string) => {
-    return annotations.find(a => a.paragraph_id === paragraphId);
+  // Helper to update paragraph from Chat/Suggestions
+  const updateParagraphFromGuidance = (paragraphId: string, newContent: string) => {
+    if (!onContentChange) return;
+    
+    const index = parseInt(paragraphId.replace('P', '')) - 1;
+    const newParagraphs = [...paragraphs];
+    if (index >= 0 && index < newParagraphs.length) {
+      if (newParagraphs[index] !== newContent) {
+        newParagraphs[index] = newContent;
+        onContentChange(newParagraphs.join('\n\n'));
+        
+        // Trigger Material Save Dialog
+        setPendingMaterialContent(newContent);
+        setShowSaveMaterialDialog(true);
+      }
+    }
+  };
+
+  // Render paragraph content with interactive citations
+  const renderParagraphContent = (text: string) => {
+    // Regex to match (见资料X) or [资料X] or (资料X)
+    // Captures the number
+    const regex = /[(（\[]见?资料(\d+)[)）\]]/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      // Text before match
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
+      }
+      
+      const materialIndex = match[1];
+      const material = materials[materialIndex];
+      
+      if (material) {
+        parts.push(
+          <CitationMarker 
+            key={`${match.index}`} 
+            citation={material} 
+            index={parseInt(materialIndex)} 
+          />
+        );
+      } else {
+        parts.push(match[0]); // Keep original if no material found
+      }
+      
+      lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-200px)]">
       {/* 左侧：正文 */}
-      <Card className="flex flex-col">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
+      <Card className="flex flex-col border-r-0 rounded-r-none">
+        <CardHeader className="bg-slate-50 border-b">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <FileText className="h-5 w-5 text-primary" />
             文章正文
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full pr-4">
-            <div className="space-y-4">
+        <CardContent className="flex-1 overflow-hidden p-0 bg-white">
+          <ScrollArea className="h-full px-6 py-6">
+            <div className="space-y-6 pb-20">
               {paragraphs.map((paragraph, index) => {
                 const paragraphId = `P${index + 1}`;
                 const isActive = activeParagraphId === paragraphId;
-                const annotation = getAnnotationForParagraph(paragraphId);
+                const isEditing = editingParagraphId === paragraphId;
+                const annotation = annotations.find(a => a.paragraph_id === paragraphId);
+                
+                // Clean paragraph marker if present in text (e.g. [P1])
+                const cleanText = paragraph.replace(/^\[P\d+\]\s*/, '');
+
+                if (isEditing) {
+                  return (
+                    <div key={paragraphId} className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="flex items-center justify-between mb-1">
+                        <Badge variant="outline">正在编辑: {paragraphId}</Badge>
+                        <div className="flex gap-1">
+                           <Button size="sm" variant="ghost" onClick={handleEditCancel} className="h-7 w-7 p-0 rounded-full hover:bg-red-100 hover:text-red-600">
+                             <X className="h-4 w-4" />
+                           </Button>
+                           <Button size="sm" variant="ghost" onClick={() => handleEditSave(paragraphId)} className="h-7 w-7 p-0 rounded-full hover:bg-green-100 hover:text-green-600">
+                             <Check className="h-4 w-4" />
+                           </Button>
+                        </div>
+                      </div>
+                      <Textarea
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="min-h-[150px] font-serif text-lg leading-relaxed resize-none shadow-inner bg-slate-50"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          // Ctrl+Enter or Cmd+Enter to save
+                          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                            handleEditSave(paragraphId);
+                          }
+                        }}
+                      />
+                      <div className="text-xs text-muted-foreground text-right">
+                        按 Ctrl+Enter 保存, Esc 取消
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <div
                     key={paragraphId}
                     id={`paragraph-${paragraphId}`}
-                    className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                    className={`group relative p-6 rounded-xl transition-all duration-300 border-2 ${
                       isActive
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50'
+                        ? 'border-primary/30 bg-primary/5 shadow-md'
+                        : 'border-transparent hover:border-slate-200 hover:bg-slate-50'
                     }`}
-                    onClick={() => handleParagraphClick(paragraphId)}
+                    onClick={() => handleParagraphClick(paragraphId, cleanText)}
+                    onDoubleClick={() => handleEditStart(paragraphId, cleanText)}
                   >
-                    <div className="flex items-start gap-2 mb-2">
-                      <Badge variant="outline" className="shrink-0">
+                    {/* Paragraph Header */}
+                    <div className="flex items-center gap-3 mb-3 opacity-60 group-hover:opacity-100 transition-opacity">
+                      <Badge variant="secondary" className="font-mono text-xs bg-slate-200 text-slate-700">
                         {paragraphId}
                       </Badge>
                       {annotation && (
-                        <Badge className={paragraphTypeColors[annotation.paragraph_type]}>
+                        <Badge className={`${paragraphTypeColors[annotation.paragraph_type]} border-0 font-normal`}>
                           {annotation.paragraph_type}
                         </Badge>
                       )}
+                      
+                      {/* Quick Edit Button */}
+                      {!readonly && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-6 w-6 ml-auto opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditStart(paragraphId, cleanText);
+                          }}
+                        >
+                          <Edit3 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                      {paragraph.replace(/^\[P\d+\]\s*/, '')}
+                    
+                    {/* Content */}
+                    <p className="text-base text-slate-800 leading-loose font-serif text-justify whitespace-pre-wrap">
+                      {renderParagraphContent(cleanText)}
                     </p>
                   </div>
                 );
@@ -118,116 +338,39 @@ export default function DraftWithAnnotations({
       </Card>
 
       {/* 右侧：协作教练 */}
-      <Card className="flex flex-col bg-slate-50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
-            协作教练 (COACHING RAIL)
+      <Card className="flex flex-col bg-slate-50/50 border-l-0 rounded-l-none shadow-none">
+        <CardHeader className="bg-slate-50/80 backdrop-blur border-b sticky top-0 z-10">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <BookOpen className="h-5 w-5 text-primary" />
+            协作教练
+            <Badge variant="outline" className="ml-2 font-normal text-xs uppercase tracking-wider">Coaching Rail</Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full pr-4">
-            <div className="space-y-4">
-              {annotations.map((annotation) => {
-                const isActive = activeParagraphId === annotation.paragraph_id;
-
-                if (!isActive && activeParagraphId !== null) return null; // Only show active annotation if one is selected
-
-                return (
-                  <Card
-                    key={annotation.paragraph_id}
-                    id={`annotation-${annotation.paragraph_id}`}
-                    className={`transition-all ${
-                      isActive ? 'ring-2 ring-primary shadow-lg' : 'opacity-80 hover:opacity-100'
-                    }`}
-                    onClick={() => handleAnnotationClick(annotation.paragraph_id)}
-                  >
-                    <CardHeader className="pb-3 border-b bg-white rounded-t-lg">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-xs font-mono">#{annotation.paragraph_id}</Badge>
-                          <span className="font-semibold text-sm">{annotation.paragraph_type}</span>
-                        </div>
-                        {isActive && <Badge variant="default" className="bg-green-600">当前聚焦</Badge>}
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4 p-4 text-sm bg-white rounded-b-lg">
-                      
-                      {/* 段落逻辑 (LOGIC) */}
-                      <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
-                        <div className="font-bold text-slate-700 mb-2 flex items-center gap-2 text-xs uppercase tracking-wider">
-                          <Lightbulb className="h-3 w-3" />
-                          段落逻辑 (LOGIC)
-                        </div>
-                        <div className="text-slate-600 leading-relaxed">
-                          {annotation.development_logic || "本段逻辑推演..."}
-                        </div>
-                      </div>
-
-                      {/* 建议补充 (SUGGESTIONS) */}
-                      <div className="bg-amber-50 p-3 rounded-md border border-amber-100">
-                        <div className="font-bold text-amber-700 mb-2 flex items-center gap-2 text-xs uppercase tracking-wider">
-                          <Edit3 className="h-3 w-3" />
-                          建议补充 (SUGGESTIONS)
-                        </div>
-                        <div className="text-amber-800 italic leading-relaxed">
-                          "{annotation.editing_suggestions || "无具体建议"}"
-                        </div>
-                      </div>
-
-                      {/* 实时协作 (ACTIVE) - 模拟用户提到的功能 */}
-                      <div className="bg-black text-white p-4 rounded-lg shadow-md mt-4">
-                        <div className="font-bold text-white mb-2 flex items-center justify-between text-xs uppercase tracking-wider">
-                          <div className="flex items-center gap-2">
-                            <Sparkles className="h-3 w-3 text-yellow-400" />
-                            实时协作 (ACTIVE)
-                          </div>
-                          <Sparkles className="h-3 w-3 text-yellow-400" />
-                        </div>
-                        <div className="space-y-3">
-                           <p className="text-gray-300 text-xs">
-                             激发协作：插入个人视角
-                           </p>
-                           <p className="text-gray-400 text-xs italic">
-                             系统检测到您在 Step 2 笔记中提到过“某大型国有银行的迁移阵痛”。
-                           </p>
-                           <button className="w-full bg-white text-black py-2 px-3 rounded text-xs font-bold hover:bg-gray-100 transition-colors flex items-center justify-center gap-2">
-                             <div className="w-4 h-4 rounded-full bg-black text-white flex items-center justify-center text-[10px]">+</div>
-                             插入我的创业亲身经历
-                           </button>
-                        </div>
-                      </div>
-
-                      {/* 信息来源 (collapsed by default or smaller) */}
-                      <div className="pt-2 border-t mt-2">
-                        <div className="font-semibold mb-1 flex items-center gap-1 text-xs text-muted-foreground">
-                          <FileText className="h-3 w-3" />
-                          参考来源
-                        </div>
-                        <div className="text-xs text-muted-foreground space-y-1 pl-4 border-l-2 border-muted">
-                          {annotation.information_source.references && annotation.information_source.references.length > 0 ? (
-                            annotation.information_source.references.map((ref, i) => (
-                              <div key={i} className="truncate">• {ref}</div>
-                            ))
-                          ) : (
-                            <div>无直接引用</div>
-                          )}
-                        </div>
-                      </div>
-
-                    </CardContent>
-                  </Card>
-                );
-              })}
-              {annotations.length === 0 && (
-                <div className="text-center text-muted-foreground py-10">
-                  暂无教练建议，请生成草稿
-                </div>
-              )}
-            </div>
-          </ScrollArea>
+        <CardContent className="flex-1 overflow-hidden p-0">
+          <DraftGuidance 
+            guidance={annotations} 
+            activeParagraphId={activeParagraphId || undefined}
+            paragraphContent={activeParagraphId ? paragraphs[parseInt(activeParagraphId.replace('P', '')) - 1] : undefined}
+            onUpdateParagraph={updateParagraphFromGuidance}
+          />
         </CardContent>
       </Card>
+
+      {/* Material Save Dialog */}
+      <AlertDialog open={showSaveMaterialDialog} onOpenChange={setShowSaveMaterialDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>保存到个人素材库？</AlertDialogTitle>
+            <AlertDialogDescription>
+              您刚刚修改了段落内容。是否将此更新后的内容作为一个新的“经验”或“观点”素材保存到您的个人素材库中，以便将来复用？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowSaveMaterialDialog(false)}>不保存</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSaveMaterial}>保存素材</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

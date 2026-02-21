@@ -255,6 +255,7 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
               annotations={annotations}
               onContentChange={setContent}
               readonly={readonly || isTyping}
+              projectId={projectId}
             />
         </TabsContent>
 
