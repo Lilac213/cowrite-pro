@@ -16,6 +16,10 @@ export interface DraftBlock {
   coherence_score: number;
   requires_user_input: boolean;
   order: number;
+  coaching_tip?: {
+    rationale: string;
+    suggestion: string;
+  };
 }
 
 export interface DraftPayload {
@@ -62,6 +66,13 @@ export const draftSchema = {
 
       if (typeof block.coherence_score !== 'number') {
         return false;
+      }
+      
+      // coaching_tip is optional but if present must have rationale and suggestion
+      if (block.coaching_tip) {
+        if (!block.coaching_tip.rationale || !block.coaching_tip.suggestion) {
+          return false;
+        }
       }
     }
 

@@ -27,6 +27,8 @@ if (!process.env.SUPABASE_URL) {
 import { runBriefAgent } from './llm/agents/briefAgent.js';
 import { runStructureAgent } from './llm/agents/structureAgent.js';
 import { runDraftAgent } from './llm/agents/draftAgent.js';
+import { runDraftContentAgent } from './llm/agents/draftContentAgent.js';
+import { runDraftAnalysisAgent } from './llm/agents/draftAnalysisAgent.js';
 import { runReviewAgent } from './llm/agents/reviewAgent.js';
 import { runStructureAdjustmentAgent } from './llm/agents/structureAdjustmentAgent.js';
 import { runLLMAgent, runLLMRaw } from './llm/runtime/LLMRuntime.js';
@@ -786,12 +788,24 @@ app.post('/api/adjust-article-structure', async (req, reply) => {
     if (argumentBlocks && Array.isArray(argumentBlocks)) {
       const timestamp = Date.now();
       adjustedData.argument_blocks = adjustedData.argument_blocks.map((block: any, index: number) => {
-        const matchedOriginal = argumentBlocks.find((orig: any) =>
-          orig.title === block.title || orig.description === block.description
+        // 优先尝试通过 ID 匹配
+        let matchedOriginal = argumentBlocks.find((orig: any) => 
+          block.id && block.id !== 'new_block' && block.id !== 'new' && orig.id === block.id
         );
+
+        // 如果没有匹配到 ID，尝试通过标题或内容匹配 (兼容旧逻辑或 AI 生成了新标题但意图是同一个块)
+        if (!matchedOriginal) {
+          matchedOriginal = argumentBlocks.find((orig: any) =>
+            orig.title === block.title || 
+            (orig.description && block.description && orig.description === block.description) ||
+            (orig.main_argument && block.main_argument && orig.main_argument === block.main_argument)
+          );
+        }
+
         const blockId = matchedOriginal?.id || `block_${timestamp}_${index}`;
         return {
-          ...block,
+          ...(matchedOriginal || {}), // 保留原有的 detailed info (如 supporting_points, citations)
+          ...block, // 覆盖新的 info (如 title, order, relation)
           id: blockId,
           order: index + 1,
         };
@@ -1612,10 +1626,36 @@ app.post('/api/draft-agent', async (req, reply) => {
 
   const draftPayload = await llmQueue.add(() => runDraftAgent({ writing_brief, argument_outline, research_pack })) as Awaited<ReturnType<typeof runDraftAgent>>;
 
+  // Construct full content and annotations
+  const content = draftPayload.draft_blocks.map(block => block.content).join('\n\n');
+  
+  const annotations = draftPayload.draft_blocks.map(block => {
+    // Determine paragraph type based on order or content analysis (simplified for now)
+    // You might want to ask the agent to output paragraph_type explicitly if needed
+    let paragraph_type = '其他';
+    if (block.order === 1) paragraph_type = '引言';
+    else if (block.order === draftPayload.draft_blocks.length) paragraph_type = '结论';
+    else paragraph_type = '观点提出'; // Default for body paragraphs
+
+    return {
+      paragraph_id: `P${block.order}`, // Assuming order matches paragraph index + 1
+      paragraph_type: paragraph_type,
+      information_source: {
+        references: block.citations.map(c => c.source_title),
+        is_direct_quote: block.citations.some(c => c.citation_type === 'direct')
+      },
+      viewpoint_generation: '多文献综合', // Default or derive from logic
+      development_logic: block.coaching_tip?.rationale || '逻辑推演',
+      editing_suggestions: block.coaching_tip?.suggestion || '无建议'
+    };
+  });
+
   const { data: draft, error: insertError } = await supabase
     .from('drafts')
     .insert({
       project_id,
+      content,
+      annotations,
       payload_jsonb: draftPayload,
       version: 1,
       global_coherence_score: draftPayload.global_coherence_score
@@ -1647,8 +1687,187 @@ app.post('/api/draft-agent', async (req, reply) => {
   return reply.send({
     success: true,
     draft_id: draft.id,
+    content: draft.content,
+    annotations: draft.annotations,
     draft_payload: draftPayload
   });
+});
+
+app.post('/api/draft/generate-content', async (req, reply) => {
+  const { project_id } = (req.body || {}) as { project_id?: string };
+
+  if (!project_id) {
+    return reply.code(400).send({ error: '缺少必需参数：project_id' });
+  }
+
+  const supabase = getSupabaseAdmin();
+
+  try {
+    // 1. 获取 Writing Brief
+    const { data: requirement, error: reqError } = await supabase
+      .from('requirements')
+      .select('payload_jsonb')
+      .eq('project_id', project_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (reqError || !requirement) throw new Error('未找到 writing_brief');
+    const writing_brief = requirement.payload_jsonb;
+
+    // 2. 获取 Article Structure
+    const { data: structure, error: structError } = await supabase
+      .from('article_structures')
+      .select('payload_jsonb')
+      .eq('project_id', project_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (structError || !structure) throw new Error('未找到 article_structure');
+    const argument_outline = structure.payload_jsonb.argument_outline || structure.payload_jsonb;
+
+    // 3. 获取 Research Pack
+    const { data: insights } = await supabase.from('research_insights')
+      .select('*').eq('project_id', project_id).in('user_decision', ['adopt', 'downgrade']);
+    
+    const { data: sources } = await supabase.from('retrieved_materials')
+      .select('*').eq('project_id', project_id);
+
+    const research_pack = {
+      insights: (insights || []).map(i => ({
+        id: i.insight_id || i.id,
+        content: i.insight_text || i.insight,
+        supporting_source_ids: [],
+        evidence_strength: 'medium'
+      })),
+      sources: (sources || []).map(s => ({
+        id: s.id,
+        title: s.title || '无标题',
+        summary: s.abstract || s.full_text || '',
+        source_url: s.url || ''
+      }))
+    };
+
+    // 4. 运行 Draft Content Agent
+    const draftPayload = await llmQueue.add(() => runDraftContentAgent({ 
+      writing_brief, 
+      argument_outline, 
+      research_pack: research_pack as any 
+    })) as Awaited<ReturnType<typeof runDraftContentAgent>>;
+
+    // 5. 构建 Content
+    const content = draftPayload.draft_blocks.map(block => block.content).join('\n\n');
+
+    // 6. 保存到 Drafts 表 (Annotations 为空)
+    const { data: draft, error: insertError } = await supabase
+      .from('drafts')
+      .insert({
+        project_id,
+        content,
+        annotations: [], // 暂时为空，等待分析
+        payload_jsonb: draftPayload,
+        version: 1,
+        global_coherence_score: draftPayload.global_coherence_score
+      })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+
+    return reply.send({
+      success: true,
+      draft_id: draft.id,
+      content,
+      draft_blocks: draftPayload.draft_blocks
+    });
+
+  } catch (error) {
+    req.log.error(error, '生成草稿内容失败');
+    return reply.code(500).send({
+      error: '生成草稿内容失败',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+app.post('/api/draft/analyze-structure', async (req, reply) => {
+  const { project_id, draft_id } = (req.body || {}) as { project_id?: string; draft_id?: string };
+
+  if (!project_id) {
+    return reply.code(400).send({ error: '缺少必需参数：project_id' });
+  }
+
+  const supabase = getSupabaseAdmin();
+
+  try {
+    // 1. 获取 Draft
+    let draftQuery = supabase.from('drafts').select('*').eq('project_id', project_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (draft_id) {
+      draftQuery = supabase.from('drafts').select('*').eq('id', draft_id).single();
+    }
+    const { data: draft, error: draftError } = await draftQuery;
+
+    if (draftError || !draft) throw new Error('未找到 draft');
+
+    // 2. 获取 Writing Brief 和 Article Structure (用于上下文)
+    const { data: requirement } = await supabase.from('requirements').select('payload_jsonb').eq('project_id', project_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const { data: structure } = await supabase.from('article_structures').select('payload_jsonb').eq('project_id', project_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+    if (!requirement || !structure) throw new Error('缺少上下文信息 (Brief 或 Structure)');
+
+    // 3. 运行 Analysis Agent
+    const analysisPayload = await llmQueue.add(() => runDraftAnalysisAgent({
+      draft_payload: draft.payload_jsonb,
+      writing_brief: requirement.payload_jsonb,
+      argument_outline: structure.payload_jsonb.argument_outline || structure.payload_jsonb
+    })) as Awaited<ReturnType<typeof runDraftAnalysisAgent>>;
+
+    // 4. 转换 Annotations 格式以匹配前端
+    const annotations = analysisPayload.annotations.map(a => {
+      // 查找对应的 block 以获取引用信息
+      const block = draft.payload_jsonb.draft_blocks.find((b: any) => b.paragraph_id === a.paragraph_id);
+      
+      // Determine paragraph type (simple logic)
+      let paragraph_type = '观点提出';
+      if (block) {
+          if (block.order === 1) paragraph_type = '引言';
+          else if (block.order === draft.payload_jsonb.draft_blocks.length) paragraph_type = '结论';
+      }
+
+      return {
+        paragraph_id: a.paragraph_id,
+        paragraph_type: paragraph_type,
+        information_source: {
+          references: block?.citations?.map((c: any) => c.source_title) || [],
+          is_direct_quote: false
+        },
+        viewpoint_generation: '多文献综合',
+        development_logic: a.rationale,
+        editing_suggestions: a.suggestion
+      };
+    });
+
+    // 5. 更新 Draft
+    const { error: updateError } = await supabase
+      .from('drafts')
+      .update({ annotations })
+      .eq('id', draft.id);
+
+    if (updateError) throw updateError;
+
+    return reply.send({
+      success: true,
+      annotations
+    });
+
+  } catch (error) {
+    req.log.error(error, '分析草稿结构失败');
+    return reply.code(500).send({
+      error: '分析草稿结构失败',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
 });
 
 app.post('/api/review-agent', async (req, reply) => {

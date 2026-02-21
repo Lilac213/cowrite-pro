@@ -10,7 +10,7 @@ export interface DraftInput {
   research_pack: ResearchPack;
 }
 
-function buildDraftPrompt(input: DraftInput): string {
+function buildDraftContentPrompt(input: DraftInput): string {
   const { writing_brief, argument_outline, research_pack } = input;
 
   if (!writing_brief || !argument_outline || !research_pack) {
@@ -25,7 +25,7 @@ function buildDraftPrompt(input: DraftInput): string {
     throw new Error('research_pack 为空，无法生成草稿');
   }
 
-  return `你是一个专业的内容写作师。你的任务是根据写作需求、文章结构和资料包，生成结构化的草稿。
+  return `你是一个专业的内容写作师。你的任务是根据写作需求、文章结构和资料包，生成结构化的草稿内容。
 
 【重要提示】
 你必须严格使用以下三个输入来生成草稿：
@@ -78,18 +78,14 @@ ${research_pack.sources.slice(0, 10).map(source =>
 4. 使用可视化引用标记：当引用资料时，在文中标注（见资料N）
 5. 评估每个段落的连贯性（coherence_score）
 6. 标记是否需要用户补充内容
-7. 为每个段落生成 "Coaching Rail"（协作教练）内容：
-   - rationale: 解释为什么这样写（例如：采用"现状-挑战-必然性"结构，为了增强紧迫感）
-   - suggestion: 建议用户可以补充什么（例如：建议补充关于合规风险的实际案例）
-   - 语气：鼓励性、专业、引导性
 
 【输出要求 - 信封模式】
 {
   "meta": {
-    "agent": "draftAgent",
+    "agent": "draftContentAgent",
     "timestamp": "当前时间ISO格式"
   },
-  "payload": "{\"draft_blocks\":[{\"block_id\":\"block_1\",\"paragraph_id\":\"p1\",\"content\":\"段落内容...（见资料1）...\",\"derived_from\":[\"insight_1\"],\"citations\":[{\"source_id\":\"source_1\",\"source_url\":\"https://...\",\"source_title\":\"资料标题\",\"quote\":\"引用内容\",\"citation_type\":\"paraphrase\",\"citation_display\":\"（见资料1）\"}],\"coherence_score\":0.9,\"requires_user_input\":false,\"order\":1,\"coaching_tip\":{\"rationale\":\"该段落采用...结构，旨在...\",\"suggestion\":\"建议在此处补充...\"}}],\"global_coherence_score\":0.88,\"missing_evidence_blocks\":[],\"needs_revision\":false,\"total_word_count\":3000}"
+  "payload": "{\"draft_blocks\":[{\"block_id\":\"block_1\",\"paragraph_id\":\"p1\",\"content\":\"段落内容...（见资料1）...\",\"derived_from\":[\"insight_1\"],\"citations\":[{\"source_id\":\"source_1\",\"source_url\":\"https://...\",\"source_title\":\"资料标题\",\"quote\":\"引用内容\",\"citation_type\":\"paraphrase\",\"citation_display\":\"（见资料1）\"}],\"coherence_score\":0.9,\"requires_user_input\":false,\"order\":1}],\"global_coherence_score\":0.88,\"missing_evidence_blocks\":[],\"needs_revision\":false,\"total_word_count\":3000}"
 }
 
 【关键规则 - 强制要求】
@@ -98,49 +94,18 @@ ${research_pack.sources.slice(0, 10).map(source =>
 3. 每个 draft_block 必须有 citations（来自 research_pack）
 4. citation_display 格式：（见资料N），其中 N 是资料编号
 5. 在 content 中插入 citation_display，例如："这是一个观点（见资料1）。"
-6. citation_type 从以下选择：direct / paraphrase / reference
-7. coherence_score 范围：0-1，评估段落连贯性
-8. requires_user_input 标记是否需要用户补充
-9. global_coherence_score 评估整体连贯性
-10. missing_evidence_blocks 列出缺少证据的 block_id
-11. 每个 block 必须包含 coaching_tip，用于右侧协作引导
-
-【引用标记示例】
-正确：
-"人工智能正在改变教育模式（见资料1）。研究表明，个性化学习可以提高效率（见资料3）。"
-
-错误：
-"人工智能正在改变教育模式。" （缺少引用标记）
-
-【验证检查】
-- 确保每个 block 都有至少 1 个 citation
-- 确保 citation_display 出现在 content 中
-- 确保所有引用的 source_id 存在于 research_pack 中
-
-现在请生成结构化草稿：`;
+`;
 }
 
-export async function runDraftAgent(input: DraftInput): Promise<DraftPayload> {
-  if (!input.writing_brief) {
-    throw new Error('Draft Agent 强制依赖 writing_brief，但未提供');
-  }
-  if (!input.argument_outline || !input.argument_outline.argument_blocks || input.argument_outline.argument_blocks.length === 0) {
-    throw new Error('Draft Agent 强制依赖 argument_outline，但未提供或为空');
-  }
-  if (!input.research_pack || !input.research_pack.insights || input.research_pack.insights.length === 0) {
-    throw new Error('Draft Agent 强制依赖 research_pack，但未提供或为空');
-  }
-
-  const prompt = buildDraftPrompt(input);
-
-  const result = await runLLMAgent<DraftPayload>({
-    agentName: 'draftAgent',
+export async function runDraftContentAgent(input: DraftInput): Promise<DraftPayload> {
+  const prompt = buildDraftContentPrompt(input);
+  
+  const result = await runLLMAgent({
+    agentName: 'draftContentAgent',
     prompt,
     schema: draftSchema,
-    model: 'gemini-2.5-flash',
-    temperature: 0.6,
-    maxTokens: 16384,
+    temperature: 0.7
   });
 
-  return result.data;
+  return result.data as DraftPayload;
 }

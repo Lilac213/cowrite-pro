@@ -50,9 +50,17 @@ export async function updateDraft(draftId: string, updates: Partial<Draft>) {
 }
 
 export async function callDraftAgent(projectId: string) {
-  return apiJson('/api/draft-agent', { project_id: projectId });
+  return apiJson('/api/draft-agent', { project_id: projectId }, true);
+}
+
+export async function callDraftContentAgent(projectId: string) {
+  return apiJson('/api/draft/generate-content', { project_id: projectId }, true);
+}
+
+export async function callDraftAnalysisAgent(draftId: string) {
+  return apiJson('/api/draft/analyze-structure', { draft_id: draftId }, true);
 }
 
 export async function callReviewAgent(projectId: string) {
-  return apiJson('/api/review-agent', { project_id: projectId });
+  return apiJson('/api/review-agent', { project_id: projectId }, true);
 }

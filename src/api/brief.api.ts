@@ -36,5 +36,5 @@ export async function updateBrief(briefId: string, updates: Partial<Brief>) {
 }
 
 export async function callBriefAgent(projectId: string, topic: string, userInput: string) {
-  return apiJson('/api/brief-agent', { project_id: projectId, topic, user_input: userInput });
+  return apiJson('/api/brief-agent', { project_id: projectId, topic, user_input: userInput }, true);
 }

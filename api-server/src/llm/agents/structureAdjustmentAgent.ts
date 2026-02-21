@@ -1,5 +1,11 @@
 import { runLLMAgent } from '../runtime/LLMRuntime.js';
-import { structureSchema } from '../schemas/structureSchema.js';
+
+const adjustmentSchema = {
+  required: ['core_thesis', 'argument_blocks'],
+  validate: (data: any) => {
+    return !!data.core_thesis && Array.isArray(data.argument_blocks);
+  }
+};
 
 export interface StructureAdjustmentInput {
   core_thesis: string;
@@ -13,7 +19,7 @@ export async function runStructureAdjustmentAgent(input: StructureAdjustmentInpu
 
   let currentStructure = `核心论点：${core_thesis}\n\n当前论证块：\n`;
   argument_blocks.forEach((block: any, index: number) => {
-    currentStructure += `${index + 1}. ${block.title}\n   作用：${block.description}\n`;
+    currentStructure += `Block ID: ${block.id || 'new'}\n序号: ${index + 1}\n标题: ${block.title}\n作用: ${block.description || block.main_argument}\n---\n`;
   });
 
   let taskDescription = '';
@@ -40,14 +46,29 @@ ${taskDescription}
 2. 确保论证块之间的逻辑关系清晰（并列/递进/因果/对比）
 3. 最后一个论证块必须是总结性质：复述总论点、总结升华或展望未来
 4. 整体结构应该完整：引入→展开→总结
-5. 不生成具体段落内容
+5. 不生成具体段落内容，但请保留或生成每个块的 "main_argument" (主要论点/作用)
 6. 输出应稳定、抽象、可编辑
+7. **重要**: 如果是保留原有的 Block，请务必返回原有的 "id" (Block ID)。如果是新增的 Block，请使用 "new_block" 作为 id 或留空。
+
+【输出格式】
+{
+  "core_thesis": "核心论点",
+  "argument_blocks": [
+    {
+      "id": "block_id_from_input_or_new",
+      "title": "标题",
+      "main_argument": "论证作用/主要论点",
+      "order": 1,
+      "relation": "并列/递进/因果/对比/总结"
+    }
+  ]
+}
 
 请严格按照要求的JSON格式返回调整后的完整结构。`;
 
   return await runLLMAgent({
     prompt,
-    schema: structureSchema,
+    schema: adjustmentSchema,
     agentName: 'structureAdjustmentAgent'
   });
 }

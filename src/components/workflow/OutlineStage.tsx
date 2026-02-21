@@ -72,10 +72,19 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
       if (latestStructure && (latestStructure as any).payload_jsonb) {
         const structure = (latestStructure as any).payload_jsonb as any;
         setCoreThesis(structure.core_thesis || '');
-        setArgumentBlocks(structure.argument_blocks || []);
+        // Normalize block_id to id
+        const blocks = (structure.argument_blocks || []).map((b: any) => ({
+          ...b,
+          id: b.id || b.block_id,
+        }));
+        setArgumentBlocks(blocks);
       } else if (projectData?.article_argument_structure) {
         setCoreThesis(projectData.article_argument_structure.core_thesis || '');
-        setArgumentBlocks(projectData.article_argument_structure.argument_blocks || []);
+        const blocks = (projectData.article_argument_structure.argument_blocks || []).map((b: any) => ({
+          ...b,
+          id: b.id || b.block_id,
+        }));
+        setArgumentBlocks(blocks);
       } else if (!hasAttemptedAutoGenerate && !generatingStructure) {
         // 如果没有结构且未尝试生成过，则自动生成
         setHasAttemptedAutoGenerate(true);
@@ -91,8 +100,10 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
   const handleGenerateArticleStructure = async () => {
     setGeneratingStructure(true);
     try {
+      console.log('[OutlineStage] Calling structure-agent for project:', projectId);
       // 调用新的 structure-agent
       const result = await callStructureAgent(projectId);
+      console.log('[OutlineStage] structure-agent result:', result);
       
       if (result.error) {
         throw new Error(result.details || result.error);
@@ -102,7 +113,11 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
       if (result.argument_outline) {
         const argumentOutline = result.argument_outline;
         setCoreThesis(argumentOutline.core_thesis);
-        setArgumentBlocks(argumentOutline.argument_blocks);
+        const blocks = (argumentOutline.argument_blocks || []).map((b: any) => ({
+          ...b,
+          id: b.id || b.block_id,
+        }));
+        setArgumentBlocks(blocks);
         
         // 保存到 projects 表（保持兼容性）
         await supabase
@@ -111,11 +126,10 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
           .update({
             article_argument_structure: {
               core_thesis: argumentOutline.core_thesis,
-              argument_blocks: argumentOutline.argument_blocks,
+              argument_blocks: blocks,
             },
           })
           .eq('id', projectId);
-
         toast({
           title: '生成成功',
           description: '文章级论证结构已生成',
@@ -181,38 +195,27 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
   // 保存文章级论证结构（带自动调整）
   const handleSaveArticleStructure = async () => {
     try {
-      // 调用调整接口，确保结构连贯且最后一块是总结
-      const data = await apiJson('/api/adjust-article-structure', {
-        project_id: projectId,
-        coreThesis,
-        argumentBlocks,
-        operation: 'check',
-      });
-
-      // 使用调整后的结构
-      const adjustedStructure = {
-        core_thesis: data.core_thesis,
-        argument_blocks: data.argument_blocks,
-      };
-
+      // 直接保存用户的修改，不再强制调用 AI 调整
+      // 如果需要 AI 优化，应该提供单独的按钮
+      
       const { error: saveError } = await supabase
         .from('projects')
         // @ts-ignore - article_argument_structure is a JSONB field
         .update({
-          article_argument_structure: adjustedStructure,
+          article_argument_structure: {
+            core_thesis: coreThesis,
+            argument_blocks: argumentBlocks,
+          },
         })
         .eq('id', projectId);
 
       if (saveError) throw saveError;
 
-      // 更新本地状态
-      setCoreThesis(data.core_thesis);
-      setArgumentBlocks(data.argument_blocks);
       setEditingStructure(false);
 
       toast({
         title: '保存成功',
-        description: '论证结构已优化并保存',
+        description: '论证结构已保存',
       });
     } catch (error: any) {
       console.error('Save article structure error:', error);
@@ -253,7 +256,7 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
         argumentBlocks: updatedBlocks,
         operation: 'add',
         blockIndex: index,
-      });
+      }, true);
 
       if (data && data.argument_blocks) {
         setArgumentBlocks(data.argument_blocks);
@@ -289,7 +292,7 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
         argumentBlocks: updatedBlocks,
         operation: 'delete',
         blockIndex,
-      });
+      }, true);
 
       if (data && data.argument_blocks) {
         setArgumentBlocks(data.argument_blocks);
@@ -632,13 +635,17 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
                                   </Badge>
                                 )}
                               </div>
-                              <p className="text-sm text-muted-foreground mb-2">{block.main_argument || block.description}</p>
+                              <p className="text-sm mb-2 whitespace-pre-wrap text-foreground">
+                                <span className="font-semibold text-xs text-muted-foreground block mb-1">主要论点:</span>
+                                {block.main_argument || block.description}
+                              </p>
                               
                               {block.supporting_points && block.supporting_points.length > 0 && (
                                 <div className="pl-2 border-l-2 border-muted mb-2 space-y-1">
+                                  <span className="font-semibold text-xs text-muted-foreground block mb-1">支持论据:</span>
                                   {block.supporting_points.map((point: string, idx: number) => (
-                                    <p key={idx} className="text-xs text-muted-foreground flex gap-2">
-                                      <span className="mt-1.5 h-1 w-1 rounded-full bg-muted-foreground flex-shrink-0" />
+                                    <p key={idx} className="text-xs flex gap-2 text-foreground">
+                                      <span className="mt-1.5 h-1 w-1 rounded-full bg-primary flex-shrink-0" />
                                       {point}
                                     </p>
                                   ))}

@@ -1,29 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getLatestDraft, createDraft, updateDraft, getBrief, getKnowledgeBase, getOutlines, getMaterials, getReferenceArticles } from '@/api';
+import { getLatestDraft, updateDraft, callDraftContentAgent, callDraftAnalysisAgent } from '@/api';
 import type { Draft, ParagraphAnnotation } from '@/types';
-import { apiJson } from '@/api/http';
 
-async function callLLMGenerate(prompt: string) {
-  const data = await apiJson<{ result: { content: string; annotations?: ParagraphAnnotation[] } }>(
-    '/api/llm/generate',
-    {
-      prompt,
-      schema: { required: ['content', 'annotations'] }
-    },
-    true
-  );
-  return data.result;
-}
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { DRAFT_WITH_ANNOTATIONS_PROMPT } from '@/constants/prompts';
 import DraftWithAnnotations from './DraftWithAnnotations';
 import { Loader2, FileText, MessageSquare, Sparkles } from 'lucide-react';
+import { useTypewriter } from '@/hooks/useTypewriter';
 
 interface DraftStageProps {
   projectId: string;
@@ -36,11 +25,15 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
   const [content, setContent] = useState('');
   const [annotations, setAnnotations] = useState<ParagraphAnnotation[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'annotated' | 'plain'>('annotated');
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Typewriter effect hook
+  const { displayedText, isTyping } = useTypewriter(content, { speed: 10 });
 
   useEffect(() => {
     loadDraft();
@@ -63,96 +56,81 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
 
   const handleGenerate = async () => {
     setGenerating(true);
+    setAnalyzing(false);
+    setContent('');
+    setAnnotations([]);
+    
     try {
-      const brief = await getBrief(projectId);
-      const knowledge = await getKnowledgeBase(projectId);
-      const outlines = await getOutlines(projectId);
-
-      const selectedKnowledge = knowledge.filter((k) => k.selected);
-      const selectedOutlines = outlines.filter((o) => o.selected);
-
-      // 获取用户的素材和参考文章（仅观点，不包含案例）
-      let userMaterials: any[] = [];
-      let userReferences: any[] = [];
-      if (user) {
-        const materials = await getMaterials(user.id);
-        const references = await getReferenceArticles(user.id);
+      // 1. Generate Content
+      const contentResult: any = await callDraftContentAgent(projectId);
+      
+      if (contentResult.success) {
+        const fullContent = contentResult.content;
+        const draftId = contentResult.draft_id;
         
-        // 过滤掉案例类型的素材，只保留观点和个人经历
-        userMaterials = materials.filter(m => m.material_type !== 'case');
-        userReferences = references;
-      }
+        // Update content to start typing
+        setContent(fullContent);
+        setGenerating(false); // Stop "generating" spinner, start typing
+        
+        // Update draft state with basic info
+        setDraft({
+             id: draftId,
+             project_id: projectId,
+             content: fullContent,
+             annotations: [],
+             version: 1,
+             created_at: new Date().toISOString(),
+             updated_at: new Date().toISOString()
+         } as Draft);
 
-      const prompt = `${DRAFT_WITH_ANNOTATIONS_PROMPT}
+        // 2. Start Analysis (async)
+        setAnalyzing(true);
+        
+        // Use a slight delay to let the UI settle/typing start
+        setTimeout(() => {
+            callDraftAnalysisAgent(draftId).then(async (analysisResult: any) => {
+                if (analysisResult.success) {
+                  setAnnotations(analysisResult.annotations || []);
+                  
+                  // Reload latest draft to sync everything
+                  const newDraft = await getLatestDraft(projectId);
+                  if (newDraft) setDraft(newDraft);
+        
+                  toast({
+                    title: '分析完成',
+                    description: `已生成 ${analysisResult.annotations?.length || 0} 条注释`,
+                  });
+                } else {
+                    console.error('Analysis failed:', analysisResult.error);
+                     toast({
+                        title: '分析失败',
+                        description: analysisResult.error || '无法生成注释',
+                        variant: 'destructive',
+                    });
+                }
+            }).catch((err: any) => {
+                 console.error('Analysis error:', err);
+                 toast({
+                    title: '分析错误',
+                    description: '无法生成注释',
+                    variant: 'destructive',
+                });
+            }).finally(() => {
+                setAnalyzing(false);
+            });
+        }, 1000);
 
-## 需求信息
-主题：${brief?.topic || ''}
-格式要求：${brief?.format_template || ''}
-具体要求：${JSON.stringify(brief?.requirements || {})}
-
-## 知识库资料（仅使用观点，严禁使用案例）
-${selectedKnowledge.map((k) => `
-标题：${k.title}
-来源：${k.source}
-内容：${k.content}
-关键词：${k.keywords?.join('、') || ''}
-`).join('\n---\n')}
-
-## 用户素材（仅观点和经历，不含案例）
-${userMaterials.map((m) => `
-类型：${m.material_type === 'opinion' ? '观点' : '个人经历'}
-标题：${m.title}
-内容：${m.content}
-摘要：${m.summary || ''}
-标签：${m.keywords?.join('、') || ''}
-`).join('\n---\n')}
-
-## 参考文章（仅提取观点）
-${userReferences.slice(0, 5).map((r) => `
-标题：${r.title}
-来源：${r.source_type || ''}
-摘要：${r.summary || ''}
-关键词：${r.keywords?.join('、') || ''}
-`).join('\n---\n')}
-
-## 段落结构
-${selectedOutlines.map((o, i) => `${i + 1}. ${o.summary}`).join('\n')}
-
-请严格按照 JSON 格式输出，包含 content 和 annotations 两个字段。`;
-
-      const parsedResult = await callLLMGenerate(prompt);
-
-      setContent(parsedResult.content);
-      setAnnotations(parsedResult.annotations || []);
-
-      if (!draft) {
-        const newDraft = await createDraft({
-          project_id: projectId,
-          content: parsedResult.content,
-          annotations: parsedResult.annotations,
-          version: 1,
-        });
-        setDraft(newDraft);
       } else {
-        const updated = await updateDraft(draft.id, {
-          content: parsedResult.content,
-          annotations: parsedResult.annotations,
-          version: draft.version + 1,
-        });
-        setDraft(updated);
+        throw new Error(contentResult.error || '生成失败');
       }
 
-      toast({
-        title: '生成成功',
-        description: `文章已生成，包含 ${parsedResult.annotations?.length || 0} 条注释`,
-      });
     } catch (error: any) {
+      console.error('Generate draft error:', error);
       toast({
         title: '生成失败',
         description: error.message || '无法生成文章',
         variant: 'destructive',
       });
-    } finally {
       setGenerating(false);
     }
   };
@@ -179,7 +157,7 @@ ${selectedOutlines.map((o, i) => `${i + 1}. ${o.summary}`).join('\n')}
     }
   };
 
-  if (!draft && !generating) {
+  if (!draft && !generating && !content) {
     return (
       <Card>
         <CardHeader>
@@ -212,7 +190,7 @@ ${selectedOutlines.map((o, i) => `${i + 1}. ${o.summary}`).join('\n')}
           <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
           <p className="text-lg font-medium">正在生成文章...</p>
           <p className="text-sm text-muted-foreground mt-2">
-            AI 正在分析资料并生成带注释的初稿
+            AI 正在分析资料并撰写初稿
           </p>
         </CardContent>
       </Card>
@@ -223,7 +201,10 @@ ${selectedOutlines.map((o, i) => `${i + 1}. ${o.summary}`).join('\n')}
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">文章草稿</h2>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            文章草稿
+            {analyzing && <Badge variant="secondary" className="animate-pulse"><Loader2 className="h-3 w-3 mr-1 animate-spin"/> 分析结构中...</Badge>}
+          </h2>
           <p className="text-muted-foreground mt-1">
             查看文章内容和段落注释，了解每段的来源和生成逻辑
           </p>
@@ -231,24 +212,17 @@ ${selectedOutlines.map((o, i) => `${i + 1}. ${o.summary}`).join('\n')}
         <div className="flex gap-2">
           {!readonly && (
             <>
-              <Button
-                variant="outline"
-                onClick={() => navigate(`/project/${projectId}/draft`)}
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                增强生成模式
-              </Button>
-              <Button variant="outline" onClick={handleGenerate} disabled={generating}>
-                {generating ? (
+              <Button variant="outline" onClick={handleGenerate} disabled={generating || analyzing || isTyping}>
+                {(generating || analyzing || isTyping) ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    重新生成
+                    生成中
                   </>
                 ) : (
                   '重新生成'
                 )}
               </Button>
-              <Button onClick={handleSave} disabled={saving}>
+              <Button onClick={handleSave} disabled={saving || isTyping}>
                 {saving ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -276,21 +250,12 @@ ${selectedOutlines.map((o, i) => `${i + 1}. ${o.summary}`).join('\n')}
         </TabsList>
 
         <TabsContent value="annotated" className="mt-6">
-          {annotations.length > 0 ? (
             <DraftWithAnnotations
-              content={content}
+              content={isTyping ? displayedText : content}
               annotations={annotations}
               onContentChange={setContent}
-              readonly={readonly}
+              readonly={readonly || isTyping}
             />
-          ) : (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <p>暂无注释信息</p>
-                <p className="text-sm mt-2">请重新生成文章以获取注释</p>
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
 
         <TabsContent value="plain" className="mt-6">
@@ -301,10 +266,10 @@ ${selectedOutlines.map((o, i) => `${i + 1}. ${o.summary}`).join('\n')}
             </CardHeader>
             <CardContent>
               <Textarea
-                value={content}
+                value={isTyping ? displayedText : content}
                 onChange={(e) => setContent(e.target.value)}
                 rows={25}
-                disabled={readonly}
+                disabled={readonly || isTyping}
                 className="font-mono"
               />
             </CardContent>

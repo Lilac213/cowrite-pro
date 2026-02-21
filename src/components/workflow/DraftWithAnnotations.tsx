@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ParagraphAnnotation } from '@/types';
-import { FileText, BookOpen, Lightbulb, Edit3 } from 'lucide-react';
+import { FileText, BookOpen, Lightbulb, Edit3, Sparkles } from 'lucide-react';
 
 interface DraftWithAnnotationsProps {
   content: string;
@@ -37,6 +37,10 @@ export default function DraftWithAnnotations({
 }: DraftWithAnnotationsProps) {
   const [activeParagraphId, setActiveParagraphId] = useState<string | null>(null);
   const [editableContent, setEditableContent] = useState(content);
+
+  useEffect(() => {
+    setEditableContent(content);
+  }, [content]);
 
   // 解析段落
   const paragraphs = content.split(/\n\n+/).filter(p => p.trim());
@@ -113,12 +117,12 @@ export default function DraftWithAnnotations({
         </CardContent>
       </Card>
 
-      {/* 右侧：注释 */}
-      <Card className="flex flex-col">
+      {/* 右侧：协作教练 */}
+      <Card className="flex flex-col bg-slate-50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BookOpen className="h-5 w-5" />
-            段落注释
+            协作教练 (COACHING RAIL)
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1 overflow-hidden">
@@ -127,87 +131,99 @@ export default function DraftWithAnnotations({
               {annotations.map((annotation) => {
                 const isActive = activeParagraphId === annotation.paragraph_id;
 
+                if (!isActive && activeParagraphId !== null) return null; // Only show active annotation if one is selected
+
                 return (
                   <Card
                     key={annotation.paragraph_id}
                     id={`annotation-${annotation.paragraph_id}`}
-                    className={`cursor-pointer transition-all ${
-                      isActive ? 'ring-2 ring-primary' : ''
+                    className={`transition-all ${
+                      isActive ? 'ring-2 ring-primary shadow-lg' : 'opacity-80 hover:opacity-100'
                     }`}
                     onClick={() => handleAnnotationClick(annotation.paragraph_id)}
                   >
-                    <CardHeader className="pb-3">
+                    <CardHeader className="pb-3 border-b bg-white rounded-t-lg">
                       <div className="flex items-center justify-between">
-                        <Badge variant="outline">{annotation.paragraph_id} 注释</Badge>
-                        <Badge className={paragraphTypeColors[annotation.paragraph_type]}>
-                          {annotation.paragraph_type}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-xs font-mono">#{annotation.paragraph_id}</Badge>
+                          <span className="font-semibold text-sm">{annotation.paragraph_type}</span>
+                        </div>
+                        {isActive && <Badge variant="default" className="bg-green-600">当前聚焦</Badge>}
                       </div>
                     </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      {/* 信息来源 */}
-                      <div>
-                        <div className="font-semibold mb-1 flex items-center gap-1">
-                          <FileText className="h-3 w-3" />
-                          信息来源
-                        </div>
-                        <div className="text-muted-foreground space-y-1">
-                          {annotation.information_source.references && annotation.information_source.references.length > 0 ? (
-                            <div>
-                              <span className="font-medium">参考文献：</span>
-                              {annotation.information_source.references.join('；')}
-                            </div>
-                          ) : (
-                            <div>
-                              <span className="font-medium">参考文献：</span>无直接引用
-                            </div>
-                          )}
-                          {annotation.information_source.data_sources && annotation.information_source.data_sources.length > 0 && (
-                            <div>
-                              <span className="font-medium">数据来源：</span>
-                              {annotation.information_source.data_sources.join('；')}
-                            </div>
-                          )}
-                          <div>
-                            <span className="font-medium">是否直接引用：</span>
-                            {annotation.information_source.is_direct_quote ? '是' : '否（改写）'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 观点生成方式 */}
-                      <div>
-                        <div className="font-semibold mb-1 flex items-center gap-1">
+                    <CardContent className="space-y-4 p-4 text-sm bg-white rounded-b-lg">
+                      
+                      {/* 段落逻辑 (LOGIC) */}
+                      <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
+                        <div className="font-bold text-slate-700 mb-2 flex items-center gap-2 text-xs uppercase tracking-wider">
                           <Lightbulb className="h-3 w-3" />
-                          观点生成方式
+                          段落逻辑 (LOGIC)
                         </div>
-                        <div className="text-muted-foreground">
-                          {viewpointGenerationLabels[annotation.viewpoint_generation]}
-                        </div>
-                      </div>
-
-                      {/* 本段展开逻辑 */}
-                      <div>
-                        <div className="font-semibold mb-1">本段展开逻辑</div>
-                        <div className="text-muted-foreground">
-                          {annotation.development_logic}
+                        <div className="text-slate-600 leading-relaxed">
+                          {annotation.development_logic || "本段逻辑推演..."}
                         </div>
                       </div>
 
-                      {/* 可编辑建议 */}
-                      <div className="bg-muted/50 p-3 rounded-md">
-                        <div className="font-semibold mb-1 flex items-center gap-1 text-primary">
+                      {/* 建议补充 (SUGGESTIONS) */}
+                      <div className="bg-amber-50 p-3 rounded-md border border-amber-100">
+                        <div className="font-bold text-amber-700 mb-2 flex items-center gap-2 text-xs uppercase tracking-wider">
                           <Edit3 className="h-3 w-3" />
-                          可编辑建议
+                          建议补充 (SUGGESTIONS)
                         </div>
-                        <div className="text-muted-foreground">
-                          {annotation.editing_suggestions}
+                        <div className="text-amber-800 italic leading-relaxed">
+                          "{annotation.editing_suggestions || "无具体建议"}"
                         </div>
                       </div>
+
+                      {/* 实时协作 (ACTIVE) - 模拟用户提到的功能 */}
+                      <div className="bg-black text-white p-4 rounded-lg shadow-md mt-4">
+                        <div className="font-bold text-white mb-2 flex items-center justify-between text-xs uppercase tracking-wider">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="h-3 w-3 text-yellow-400" />
+                            实时协作 (ACTIVE)
+                          </div>
+                          <Sparkles className="h-3 w-3 text-yellow-400" />
+                        </div>
+                        <div className="space-y-3">
+                           <p className="text-gray-300 text-xs">
+                             激发协作：插入个人视角
+                           </p>
+                           <p className="text-gray-400 text-xs italic">
+                             系统检测到您在 Step 2 笔记中提到过“某大型国有银行的迁移阵痛”。
+                           </p>
+                           <button className="w-full bg-white text-black py-2 px-3 rounded text-xs font-bold hover:bg-gray-100 transition-colors flex items-center justify-center gap-2">
+                             <div className="w-4 h-4 rounded-full bg-black text-white flex items-center justify-center text-[10px]">+</div>
+                             插入我的创业亲身经历
+                           </button>
+                        </div>
+                      </div>
+
+                      {/* 信息来源 (collapsed by default or smaller) */}
+                      <div className="pt-2 border-t mt-2">
+                        <div className="font-semibold mb-1 flex items-center gap-1 text-xs text-muted-foreground">
+                          <FileText className="h-3 w-3" />
+                          参考来源
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-1 pl-4 border-l-2 border-muted">
+                          {annotation.information_source.references && annotation.information_source.references.length > 0 ? (
+                            annotation.information_source.references.map((ref, i) => (
+                              <div key={i} className="truncate">• {ref}</div>
+                            ))
+                          ) : (
+                            <div>无直接引用</div>
+                          )}
+                        </div>
+                      </div>
+
                     </CardContent>
                   </Card>
                 );
               })}
+              {annotations.length === 0 && (
+                <div className="text-center text-muted-foreground py-10">
+                  暂无教练建议，请生成草稿
+                </div>
+              )}
             </div>
           </ScrollArea>
         </CardContent>

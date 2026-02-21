@@ -49,5 +49,5 @@ export async function batchCreateOutlines(outlines: Array<Omit<Outline, 'id' | '
 }
 
 export async function callStructureAgent(projectId: string) {
-  return apiJson('/api/structure-agent', { project_id: projectId });
+  return apiJson('/api/structure-agent', { project_id: projectId }, true);
 }
