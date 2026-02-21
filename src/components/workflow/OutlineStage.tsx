@@ -229,7 +229,10 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
     const newBlock = {
       id: `block_${Date.now()}`,
       title: '',
+      main_argument: '',
       description: '',
+      supporting_points: [],
+      estimated_word_count: 500,
       order: index + 1,
       relation: '',
     };
@@ -499,22 +502,99 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
                           }
                           placeholder="论证块标题"
                         />
-                        <Textarea
-                          value={block.description}
-                          onChange={(e) =>
-                            setArgumentBlocks(
-                              argumentBlocks.map((b) =>
-                                b.id === block.id ? { ...b, description: e.target.value } : b
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">主要论点</label>
+                          <Textarea
+                            value={block.main_argument || block.description || ''}
+                            onChange={(e) =>
+                              setArgumentBlocks(
+                                argumentBlocks.map((b) =>
+                                  b.id === block.id ? { ...b, main_argument: e.target.value, description: e.target.value } : b
+                                )
                               )
-                            )
-                          }
-                          placeholder={
-                            index === argumentBlocks.length - 1
-                              ? '该论证块的作用（结尾应复述总论点/总结升华/展望未来）'
-                              : '该论证块的作用和要证明的内容'
-                          }
-                          rows={2}
-                        />
+                            }
+                            placeholder={
+                              index === argumentBlocks.length - 1
+                                ? '该论证块的作用（结尾应复述总论点/总结升华/展望未来）'
+                                : '该论证块的作用和要证明的内容'
+                            }
+                            rows={3}
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">支持论据 / 细分点</label>
+                          <div className="space-y-2 pl-2 border-l-2 border-muted">
+                            {(block.supporting_points || []).map((point: string, pIndex: number) => (
+                              <div key={pIndex} className="flex gap-2">
+                                <div className="flex-none pt-2">
+                                  <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                                </div>
+                                <Textarea
+                                  value={point}
+                                  onChange={(e) => {
+                                    const newPoints = [...(block.supporting_points || [])];
+                                    newPoints[pIndex] = e.target.value;
+                                    setArgumentBlocks(
+                                      argumentBlocks.map((b) =>
+                                        b.id === block.id ? { ...b, supporting_points: newPoints } : b
+                                      )
+                                    );
+                                  }}
+                                  rows={2}
+                                  className="text-sm min-h-[60px]"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                  onClick={() => {
+                                    const newPoints = (block.supporting_points || []).filter((_: any, idx: number) => idx !== pIndex);
+                                    setArgumentBlocks(
+                                      argumentBlocks.map((b) =>
+                                        b.id === block.id ? { ...b, supporting_points: newPoints } : b
+                                      )
+                                    );
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full text-xs dashed"
+                              onClick={() => {
+                                const newPoints = [...(block.supporting_points || []), ''];
+                                setArgumentBlocks(
+                                  argumentBlocks.map((b) =>
+                                    b.id === block.id ? { ...b, supporting_points: newPoints } : b
+                                  )
+                                );
+                              }}
+                            >
+                              <Plus className="h-3 w-3 mr-1" /> 添加支持点
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">预估字数</label>
+                          <Input
+                            type="number"
+                            value={block.estimated_word_count || 0}
+                            onChange={(e) =>
+                              setArgumentBlocks(
+                                argumentBlocks.map((b) =>
+                                  b.id === block.id ? { ...b, estimated_word_count: parseInt(e.target.value) || 0 } : b
+                                )
+                              )
+                            }
+                            className="w-24 h-8 text-sm"
+                          />
+                        </div>
+
                         {block.relation && (
                           <p className="text-xs text-muted-foreground">
                             与前一块关系：{block.relation}
@@ -552,12 +632,29 @@ export default function OutlineStage({ projectId, onComplete }: OutlineStageProp
                                   </Badge>
                                 )}
                               </div>
-                              <p className="text-sm text-muted-foreground">{block.description}</p>
-                              {block.relation && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  关系：{block.relation}
-                                </p>
+                              <p className="text-sm text-muted-foreground mb-2">{block.main_argument || block.description}</p>
+                              
+                              {block.supporting_points && block.supporting_points.length > 0 && (
+                                <div className="pl-2 border-l-2 border-muted mb-2 space-y-1">
+                                  {block.supporting_points.map((point: string, idx: number) => (
+                                    <p key={idx} className="text-xs text-muted-foreground flex gap-2">
+                                      <span className="mt-1.5 h-1 w-1 rounded-full bg-muted-foreground flex-shrink-0" />
+                                      {point}
+                                    </p>
+                                  ))}
+                                </div>
                               )}
+
+                              <div className="flex items-center gap-4 text-xs text-muted-foreground mt-2">
+                                {block.estimated_word_count && (
+                                  <span className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded">
+                                    约 {block.estimated_word_count} 字
+                                  </span>
+                                )}
+                                {block.relation && (
+                                  <span>关系：{block.relation}</span>
+                                )}
+                              </div>
                             </Card>
                           ))}
                         </div>
