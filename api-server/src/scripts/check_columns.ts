@@ -37,6 +37,7 @@ async function checkColumns() {
     'insight_id',
     'category',
     'insight',
+    'insight_text', // Check this one too
     'supporting_data',
     'source_type',
     'recommended_usage',

@@ -168,20 +168,21 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
              if (fallbackInsights.length > 0 || fallbackGaps.length > 0) {
                console.log('[MaterialReviewStage] 使用 fallback 数据:', fallbackInsights.length, fallbackGaps.length);
                // 转换为 ResearchInsight 类型 (部分字段可能缺失，需注意)
-               insights = fallbackInsights.map((item: any) => ({
-                 id: isUUID(item.id) ? item.id : crypto.randomUUID(),
-                 session_id: session.id,
-                 insight_id: item.id, // Store original ID (e.g. "insight_1") here
-                 category: item.category,
-                 insight: item.insight,
-                 supporting_data: item.supporting_data,
-                 source_type: item.source_type,
-                 recommended_usage: item.recommended_usage,
-                 citability: item.citability,
-                 limitations: item.limitations,
-                 user_decision: 'pending',
-                 created_at: new Date().toISOString()
-               })) as any; // 强制类型转换
+              insights = fallbackInsights.map((item: any) => ({
+                id: isUUID(item.id) ? item.id : crypto.randomUUID(),
+                session_id: session.id,
+                insight_id: item.id, // Store original ID (e.g. "insight_1") here
+                category: item.category,
+                insight: item.insight,
+                insight_text: item.insight, // Ensure insight_text is populated
+                supporting_data: item.supporting_data,
+                source_type: item.source_type,
+                recommended_usage: item.recommended_usage,
+                citability: item.citability,
+                limitations: item.limitations,
+                user_decision: 'pending',
+                created_at: new Date().toISOString()
+              })) as any; // 强制类型转换
 
                gaps = fallbackGaps.map((item: any) => ({
                  id: isUUID(item.id) ? item.id : crypto.randomUUID(),
@@ -245,6 +246,7 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
                  insight_id: item.id, // Store original ID (e.g. "insight_1") here
                  category: item.category,
                  insight: item.insight,
+                 insight_text: item.insight, // Ensure insight_text is populated
                  supporting_data: item.supporting_data,
                  source_type: item.source_type,
                  recommended_usage: item.recommended_usage,
