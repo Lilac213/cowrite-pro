@@ -1728,14 +1728,61 @@ app.post('/api/draft/generate-content', async (req, reply) => {
     const argument_outline = structure.payload_jsonb.argument_outline || structure.payload_jsonb;
 
     // 3. 获取 Research Pack
-    const { data: insights } = await supabase.from('research_insights')
-      .select('*').eq('project_id', project_id).in('user_decision', ['adopt', 'downgrade']);
+    // 优先使用 session_id 过滤
+    let insightsQuery = supabase
+      .from('research_insights')
+      .select('*')
+      .in('user_decision', ['adopt', 'downgrade']); // 获取用户采用(adopt)或降级(downgrade)的洞察
+
+    // 尝试获取 session_id
+    let currentSessionId: string | undefined;
+    const { data: session } = await supabase
+      .from('writing_sessions')
+      .select('id')
+      .eq('project_id', project_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+      
+    if (session) {
+      currentSessionId = session.id;
+      insightsQuery = insightsQuery.eq('session_id', currentSessionId);
+    } else {
+      insightsQuery = insightsQuery.eq('project_id', project_id);
+    }
+
+    const { data: insights } = await insightsQuery;
     
-    const { data: sources } = await supabase.from('retrieved_materials')
-      .select('*').eq('project_id', project_id);
+    // 4. 获取 Sources (从 retrieved_materials 表)
+    let sourcesQuery = supabase
+      .from('retrieved_materials')
+      .select('*');
+
+    if (currentSessionId) {
+      sourcesQuery = sourcesQuery.eq('session_id', currentSessionId);
+    } else {
+      sourcesQuery = sourcesQuery.eq('project_id', project_id);
+    }
+
+    const { data: sources } = await sourcesQuery;
+
+    // 如果没有找到 insights，尝试只用 project_id 再次查询（作为兜底）
+    let finalInsights = insights || [];
+    if (finalInsights.length === 0 && currentSessionId) {
+       console.log('未通过 session_id 找到 insights，尝试使用 project_id 兜底');
+       const { data: backupInsights } = await supabase.from('research_insights')
+        .select('*').eq('project_id', project_id).in('user_decision', ['adopt', 'downgrade']);
+       if (backupInsights) finalInsights = backupInsights;
+    }
+
+    // 如果仍然为空，且是开发/测试环境，可能允许继续（但 Agent 会报错）
+    // 为了防止 Agent 报错，如果没有 insights，我们可以尝试生成一个占位符，或者直接让 Agent 报错并返回更友好的信息
+    if (finalInsights.length === 0) {
+        throw new Error('Research Pack 为空：未找到已采纳的洞察 (research_insights)。请确保已完成研究阶段并采纳了相关洞察。');
+    }
 
     const research_pack = {
-      insights: (insights || []).map(i => ({
+      insights: finalInsights.map(i => ({
         id: i.insight_id || i.id,
         content: i.insight_text || i.insight,
         supporting_source_ids: [],
