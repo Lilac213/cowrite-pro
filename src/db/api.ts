@@ -1758,19 +1758,26 @@ export async function callArticleStructureAgent(
     console.log('  - contradictions_or_gaps_present:', structureInput.context_flags.contradictions_or_gaps_present);
     console.log('[callArticleStructureAgent] 完整输入 JSON:', JSON.stringify(structureInput, null, 2));
 
-    // 6. 调用 Edge Function
-    console.log('[callArticleStructureAgent] 步骤6: 调用 generate-article-structure Edge Function');
-    const data = await apiJson('/api/generate-article-structure', { input: structureInput });
+    // 6. 调用 api-server 的 structure-agent
+    console.log('[callArticleStructureAgent] 步骤6: 调用 api-server structure-agent');
+    const response = await apiJson('/api/structure-agent', { 
+      project_id: projectId,
+      session_id: sessionId
+    });
+    
+    // structure-agent 返回: { success: true, structure_id: ..., argument_outline: ... }
+    const data = response.argument_outline;
 
     console.log('[callArticleStructureAgent] 调用成功');
     console.log('[callArticleStructureAgent] 返回数据:', JSON.stringify(data, null, 2));
 
     // 7. 保存结构结果到 session
-    console.log('[callArticleStructureAgent] 步骤7: 保存结构结果到数据库');
+    console.log('[callArticleStructureAgent] 步骤7: 更新 session 状态为 structure');
     const { error: updateError } = await supabase
       .from('writing_sessions')
       .update({
-        structure_result: data,
+        // api-server 已保存 structure_result，这里主要是为了更新状态和本地冗余（如果需要）
+        // structure_result: data, // api-server 已保存，这里可以不传，或者为了前端立即更新 store 可传
         current_stage: 'structure',
         updated_at: new Date().toISOString()
       })

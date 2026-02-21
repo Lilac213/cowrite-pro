@@ -80,6 +80,50 @@ async function checkColumns() {
       console.log(`Column '${col}' exists.`);
     }
   }
+
+  console.log('\nChecking writing_sessions columns...');
+  const sessionColumns = [
+    'structure_result',
+    'synthesis_result',
+    'topic',
+    'target_audience',
+    'writing_purpose',
+    'key_points'
+  ];
+
+  for (const col of sessionColumns) {
+    const { error } = await supabase
+      .from('writing_sessions')
+      .select(col)
+      .limit(1);
+      
+    if (error) {
+      console.log(`Column '${col}' check failed:`, error.message);
+    } else {
+      console.log(`Column '${col}' exists.`);
+    }
+  }
+
+  console.log('\nChecking retrieved_materials columns...');
+  const materialColumns = [
+    'title',
+    'url',
+    'authors',
+    'year'
+  ];
+
+  for (const col of materialColumns) {
+    const { error } = await supabase
+      .from('retrieved_materials')
+      .select(col)
+      .limit(1);
+      
+    if (error) {
+      console.log(`Column '${col}' check failed:`, error.message);
+    } else {
+      console.log(`Column '${col}' exists.`);
+    }
+  }
 }
 
 checkColumns().catch(console.error);

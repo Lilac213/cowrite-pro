@@ -1327,7 +1327,7 @@ app.post('/api/brief-agent', async (req, reply) => {
 });
 
 app.post('/api/structure-agent', async (req, reply) => {
-  const { project_id } = (req.body || {}) as { project_id?: string };
+  const { project_id, session_id } = (req.body || {}) as { project_id?: string; session_id?: string };
 
   if (!project_id) {
     return reply.code(400).send({ error: '缺少必需参数：project_id' });
@@ -1335,13 +1335,14 @@ app.post('/api/structure-agent', async (req, reply) => {
 
   const supabase = getSupabaseAdmin();
 
+  // 1. 获取 Writing Brief (从 requirements 表)
   const { data: requirement, error: reqError } = await supabase
     .from('requirements')
     .select('payload_jsonb')
     .eq('project_id', project_id)
     .order('created_at', { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   if (reqError || !requirement) {
     return reply.code(400).send({ error: '未找到 writing_brief，请先运行 brief-agent' });
@@ -1349,36 +1350,91 @@ app.post('/api/structure-agent', async (req, reply) => {
 
   const writing_brief = requirement.payload_jsonb;
 
-  const { data: insights, error: insightsError } = await supabase
-    .from('synthesized_insights')
+  // 2. 确定 Session ID
+  let currentSessionId = session_id;
+  if (!currentSessionId) {
+    const { data: session, error: sessionError } = await supabase
+      .from('writing_sessions')
+      .select('id')
+      .eq('project_id', project_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+      
+    if (sessionError || !session) {
+       // 如果没有 session，尝试使用 project_id 直接查询 insights (兼容旧逻辑或无 session 情况)
+       // 但通常应该有 session
+       console.log('未找到 writing_session，尝试直接使用 project_id');
+    } else {
+      currentSessionId = session.id;
+    }
+  }
+
+  // 3. 获取 Insights (从 research_insights 表)
+  // 优先使用 session_id 过滤，如果没有则使用 project_id
+  let insightsQuery = supabase
+    .from('research_insights')
     .select('*')
-    .eq('project_id', project_id)
-    .eq('user_decision', 'confirmed');
+    .eq('user_decision', 'accepted'); // 只获取用户接受的洞察
+
+  if (currentSessionId) {
+    insightsQuery = insightsQuery.eq('session_id', currentSessionId);
+  } else {
+    insightsQuery = insightsQuery.eq('project_id', project_id);
+  }
+
+  const { data: insights, error: insightsError } = await insightsQuery;
 
   if (insightsError) throw insightsError;
 
-  const { data: sources, error: sourcesError } = await supabase
-    .from('research_sources')
-    .select('*')
-    .eq('project_id', project_id);
+  // 4. 获取 Sources (从 retrieved_materials 表)
+  // 同样优先使用 session_id
+  let sourcesQuery = supabase
+    .from('retrieved_materials')
+    .select('*');
+
+  if (currentSessionId) {
+    sourcesQuery = sourcesQuery.eq('session_id', currentSessionId);
+  } else {
+    sourcesQuery = sourcesQuery.eq('project_id', project_id);
+  }
+  
+  const { data: sources, error: sourcesError } = await sourcesQuery;
 
   if (sourcesError) throw sourcesError;
 
   if (!insights || insights.length === 0) {
-    return reply.code(400).send({ error: '未找到 research_pack，请先运行 research-agent 并确认洞察' });
+    // 尝试查询 research_gaps 作为补充? 或者直接报错
+    // 暂时报错，但提示更明确
+    return reply.code(400).send({ error: '未找到有效的 research_insights (需状态为 accepted)，请先在资料整理页确认洞察' });
   }
 
+  // 5. 构建 Research Pack
   const research_pack = {
-    sources: sources || [],
+    sources: (sources || []).map(s => ({
+      id: s.id,
+      title: s.title || '无标题',
+      content: s.full_text || s.abstract || '',
+      summary: (s.abstract || s.full_text || '').substring(0, 200),
+      source_url: s.url || '',
+      source_type: (['web', 'personal', 'academic', 'news'].includes(s.source_type) ? s.source_type : 'web') as any,
+      credibility_score: 0.8,
+      recency_score: 0.8,
+      relevance_score: 0.8,
+      token_length: (s.full_text || '').length,
+      tags: [],
+      created_at: new Date().toISOString()
+    })),
     insights: insights.map(i => ({
-      id: i.id,
-      category: i.category,
-      content: i.content,
-      supporting_source_ids: i.supporting_source_ids || [],
-      citability: i.citability,
-      evidence_strength: i.evidence_strength,
-      risk_flag: i.risk_flag,
-      confidence_score: i.confidence_score
+      id: i.insight_id || i.id, // 优先使用 insight_id
+      category: i.category || 'General',
+      content: i.insight_text || i.insight, // 优先使用 insight_text
+      supporting_source_ids: [], // 目前没有直接关联，设为空
+      citability: (['direct', 'paraphrase', 'background'].includes(i.citability) ? i.citability : 'paraphrase') as any,
+      evidence_strength: 'medium' as any, // 默认值
+      risk_flag: false,
+      confidence_score: 0.9,
+      user_decision: 'confirmed' as any
     })),
     summary: {
       total_sources: sources?.length || 0,
@@ -1388,8 +1444,21 @@ app.post('/api/structure-agent', async (req, reply) => {
     }
   };
 
+  // 6. 调用 Agent
   const argumentOutline = await llmQueue.add(() => runStructureAgent({ writing_brief, research_pack })) as Awaited<ReturnType<typeof runStructureAgent>>;
 
+  // 7. 保存结果 (保存到 writing_sessions 表的 structure_result 列)
+  if (currentSessionId) {
+    await supabase
+      .from('writing_sessions')
+      .update({
+        structure_result: argumentOutline,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', currentSessionId);
+  }
+
+  // 同时保存到 article_structures 表 (保持兼容性)
   const { data: structure, error: insertError } = await supabase
     .from('article_structures')
     .insert({
