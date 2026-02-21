@@ -1375,7 +1375,7 @@ app.post('/api/structure-agent', async (req, reply) => {
   let insightsQuery = supabase
     .from('research_insights')
     .select('*')
-    .eq('user_decision', 'accepted'); // 只获取用户接受的洞察
+    .in('user_decision', ['adopt', 'downgrade']); // 获取用户采用(adopt)或降级(downgrade)的洞察
 
   if (currentSessionId) {
     insightsQuery = insightsQuery.eq('session_id', currentSessionId);
@@ -1406,7 +1406,7 @@ app.post('/api/structure-agent', async (req, reply) => {
   if (!insights || insights.length === 0) {
     // 尝试查询 research_gaps 作为补充? 或者直接报错
     // 暂时报错，但提示更明确
-    return reply.code(400).send({ error: '未找到有效的 research_insights (需状态为 accepted)，请先在资料整理页确认洞察' });
+    return reply.code(400).send({ error: '未找到有效的 research_insights (需状态为 adopt 或 downgrade)，请先在资料整理页确认洞察' });
   }
 
   // 5. 构建 Research Pack
@@ -1430,11 +1430,11 @@ app.post('/api/structure-agent', async (req, reply) => {
       category: i.category || 'General',
       content: i.insight_text || i.insight, // 优先使用 insight_text
       supporting_source_ids: [], // 目前没有直接关联，设为空
-      citability: (['direct', 'paraphrase', 'background'].includes(i.citability) ? i.citability : 'paraphrase') as any,
-      evidence_strength: 'medium' as any, // 默认值
+      citability: i.user_decision === 'downgrade' ? 'background' : (['direct', 'paraphrase', 'background'].includes(i.citability) ? i.citability : 'paraphrase') as any,
+      evidence_strength: i.user_decision === 'adopt' ? 'strong' : 'medium' as any,
       risk_flag: false,
       confidence_score: 0.9,
-      user_decision: 'confirmed' as any
+      user_decision: i.user_decision as any
     })),
     summary: {
       total_sources: sources?.length || 0,
