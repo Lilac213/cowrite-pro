@@ -1841,25 +1841,37 @@ app.post('/api/draft/generate-content', async (req, reply) => {
 app.post('/api/draft/analyze-structure', async (req, reply) => {
   const { project_id, draft_id } = (req.body || {}) as { project_id?: string; draft_id?: string };
 
-  if (!project_id) {
-    return reply.code(400).send({ error: '缺少必需参数：project_id' });
+  if (!project_id && !draft_id) {
+    return reply.code(400).send({ error: '缺少必需参数：project_id 或 draft_id' });
   }
 
   const supabase = getSupabaseAdmin();
 
   try {
     // 1. 获取 Draft
-    let draftQuery = supabase.from('drafts').select('*').eq('project_id', project_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    let draft;
+    let draftError;
+
     if (draft_id) {
-      draftQuery = supabase.from('drafts').select('*').eq('id', draft_id).single();
+      const result = await supabase.from('drafts').select('*').eq('id', draft_id).single();
+      draft = result.data;
+      draftError = result.error;
+    } else if (project_id) {
+      const result = await supabase.from('drafts').select('*').eq('project_id', project_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      draft = result.data;
+      draftError = result.error;
+    } else {
+      throw new Error('缺少必需参数：project_id 或 draft_id');
     }
-    const { data: draft, error: draftError } = await draftQuery;
 
     if (draftError || !draft) throw new Error('未找到 draft');
+    
+    // 确保有 project_id (如果是通过 draft_id 查询的)
+    const currentProjectId = project_id || draft.project_id;
 
     // 2. 获取 Writing Brief 和 Article Structure (用于上下文)
-    const { data: requirement } = await supabase.from('requirements').select('payload_jsonb').eq('project_id', project_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-    const { data: structure } = await supabase.from('article_structures').select('payload_jsonb').eq('project_id', project_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const { data: requirement } = await supabase.from('requirements').select('payload_jsonb').eq('project_id', currentProjectId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const { data: structure } = await supabase.from('article_structures').select('payload_jsonb').eq('project_id', currentProjectId).order('created_at', { ascending: false }).limit(1).maybeSingle();
 
     if (!requirement || !structure) throw new Error('缺少上下文信息 (Brief 或 Structure)');
 
