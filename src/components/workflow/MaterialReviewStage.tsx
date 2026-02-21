@@ -189,6 +189,7 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
                  session_id: session.id,
                  gap_id: item.id, // Store original ID (e.g. "gap_1") here
                  issue: item.issue,
+                 gap_text: item.issue, // Ensure gap_text is populated
                  description: item.description,
                  user_decision: 'pending',
                  created_at: new Date().toISOString()
@@ -261,6 +262,7 @@ export default function MaterialReviewStage({ projectId, onComplete }: MaterialR
                  session_id: session.id,
                  gap_id: item.id, // Store original ID (e.g. "gap_1") here
                  issue: item.issue,
+                 gap_text: item.issue, // Ensure gap_text is populated
                  description: item.description,
                  user_decision: 'pending',
                  created_at: new Date().toISOString()

@@ -63,6 +63,7 @@ async function checkColumns() {
   const gapColumns = [
     'gap_id',
     'issue',
+    'gap_text', // Check this one too
     'description',
     'user_decision'
   ];
