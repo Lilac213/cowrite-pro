@@ -1833,7 +1833,7 @@ app.post('/api/draft/generate-content', async (req, reply) => {
     req.log.error(error, '生成草稿内容失败');
     return reply.code(500).send({
       error: '生成草稿内容失败',
-      details: error instanceof Error ? error.message : String(error)
+      details: error instanceof Error ? error.message : (typeof error === 'object' ? JSON.stringify(error) : String(error))
     });
   }
 });
