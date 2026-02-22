@@ -28,7 +28,7 @@ import { runBriefAgent } from './llm/agents/briefAgent.js';
 import { runStructureAgent } from './llm/agents/structureAgent.js';
 import { runDraftAgent } from './llm/agents/draftAgent.js';
 import { runDraftContentAgent } from './llm/agents/draftContentAgent.js';
-import { runDraftAnalysisAgent } from './llm/agents/draftAnalysisAgent.js';
+import { runDraftAnalysisAgent, type DraftAnalysisInput } from './llm/agents/draftAnalysisAgent.js';
 import { runReviewAgent } from './llm/agents/reviewAgent.js';
 import { runStructureAdjustmentAgent } from './llm/agents/structureAdjustmentAgent.js';
 import { runRefineParagraphAgent } from './llm/agents/refineParagraphAgent.js';
@@ -69,7 +69,13 @@ function buildAllowedOrigins(input: string) {
   return Array.from(origins);
 }
 
-const allowedOrigins = buildAllowedOrigins(frontendUrlsRaw);
+const allowedOrigins = [
+  ...buildAllowedOrigins(frontendUrlsRaw),
+  'https://www.cowrite.top',
+  'https://cowrite.top',
+  'http://localhost:3000',
+  'http://localhost:5173'
+];
 
 function getSupabaseAdmin(): SupabaseClient {
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -105,7 +111,9 @@ await app.register(cors, {
       callback(null, true);
       return;
     }
-    callback(new Error('Origin not allowed'), false);
+    // Allow any origin for development/testing if needed, or strictly enforce whitelist
+    // Here we strictly enforce if allowedOrigins is populated
+    callback(new Error(`Origin ${origin} not allowed`), false);
   },
   credentials: true
 });

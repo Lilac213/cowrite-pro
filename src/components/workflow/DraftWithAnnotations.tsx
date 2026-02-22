@@ -473,10 +473,22 @@ export default function DraftWithAnnotations({
                   {selectedCitation.material_title}
                 </h3>
                 
+                {selectedCitation.insight && (
+                  <div className="bg-amber-50 rounded-lg p-3 space-y-2 mb-3 border border-amber-100">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 uppercase tracking-wider">
+                      <Wand2 className="h-3 w-3" />
+                      观点洞察
+                    </div>
+                    <p className="text-sm text-slate-700 leading-relaxed">
+                      {selectedCitation.insight}
+                    </p>
+                  </div>
+                )}
+                
                 <div className="bg-slate-50 rounded-lg p-3 space-y-2 mb-3 border border-slate-100">
                   <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">摘要:</div>
                   <p className="text-sm text-slate-600 leading-relaxed line-clamp-4">
-                    {selectedCitation.material_summary || selectedCitation.insight || "暂无摘要"}
+                    {selectedCitation.material_summary || "暂无摘要"}
                   </p>
                 </div>
 
@@ -485,10 +497,10 @@ export default function DraftWithAnnotations({
                     href={selectedCitation.material_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-primary transition-colors group"
+                    className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors group bg-blue-50 p-2 rounded-md hover:bg-blue-100"
                   >
-                    查看原始文档
                     <ExternalLink className="h-3 w-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                    查看原始文档
                   </a>
                 )}
               </div>
