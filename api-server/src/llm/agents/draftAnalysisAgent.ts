@@ -27,10 +27,37 @@ const analysisSchema = {
     annotations: []
   },
   validate: (data: any) => {
-    if (!Array.isArray(data.annotations)) return false;
-    for (const item of data.annotations) {
-      if (!item.paragraph_id || !item.development_logic || !item.editing_suggestions) return false;
+    if (!Array.isArray(data.annotations)) {
+      data.annotations = [];
+      return true;
     }
+    const cleaned: any[] = [];
+    for (const item of data.annotations) {
+      if (!item || !item.paragraph_id) {
+        continue;
+      }
+      const normalized = {
+        paragraph_id: String(item.paragraph_id),
+        paragraph_type:
+          item.paragraph_type &&
+          ['引言', '文献综述', '观点提出', '对比分析', '方法说明', '结论', '其他'].includes(
+            item.paragraph_type
+          )
+            ? item.paragraph_type
+            : '其他',
+        development_logic: item.development_logic || '',
+        editing_suggestions: item.editing_suggestions || '',
+        viewpoint_generation:
+          item.viewpoint_generation &&
+          ['文献直接观点', '多文献综合', '基于数据的推导', '模型逻辑推演'].includes(
+            item.viewpoint_generation
+          )
+            ? item.viewpoint_generation
+            : '多文献综合'
+      };
+      cleaned.push(normalized);
+    }
+    data.annotations = cleaned;
     return true;
   }
 };

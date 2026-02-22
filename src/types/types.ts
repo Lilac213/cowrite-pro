@@ -267,6 +267,8 @@ export interface Citation {
   insight?: string;
   quote?: string;
   position: number;
+  source_kind?: 'retrieved_material' | 'research_insight';
+  citations_detail?: any[];
 }
 
 export interface ParagraphAnnotation {

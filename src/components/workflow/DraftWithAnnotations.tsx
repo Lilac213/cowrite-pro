@@ -96,7 +96,6 @@ export default function DraftWithAnnotations({
 
   // Fetch materials for citations
   useEffect(() => {
-    // If citations are provided via props (e.g. from agent response), use them
     if (citations && Object.keys(citations).length > 0) {
       setMaterials(citations);
       return;
@@ -106,44 +105,95 @@ export default function DraftWithAnnotations({
 
     const fetchMaterials = async () => {
       try {
-        // Fetch research insights as they are the source of "资料X" usually
-        const { data: insights } = await supabase
-          .from('research_insights')
-          .select('*')
-          .eq('project_id', projectId);
+        const matMap: Record<string, Citation> = {};
 
-        if (insights) {
-          const matMap: Record<string, Citation> = {};
-          insights.forEach((insight: any, index: number) => {
-            const titleSource = insight?.supporting_data?.title || insight?.supporting_data?.source_title;
-            const titleFallback = insight?.insight ? `${insight.insight.slice(0, 50)}${insight.insight.length > 50 ? '...' : ''}` : '未命名资料';
-            const summary = insight?.supporting_data?.summary || insight?.supporting_data?.abstract || insight?.supporting_data?.content_summary;
-            const materialUrl = insight?.supporting_data?.url || insight?.supporting_data?.source_url || insight?.supporting_data?.link;
-            const quote = insight?.supporting_data?.quote || insight?.supporting_data?.excerpt || insight?.supporting_data?.text;
+        const { data: session } = await supabase
+          .from('writing_sessions')
+          .select('id')
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-            // Map index+1 (e.g. "1") to citation data
-            // We assume text uses (见资料1), (见资料2) etc.
+        let retrievedQuery = supabase
+          .from('retrieved_materials')
+          .select('*');
+
+        if (session) {
+          retrievedQuery = retrievedQuery.eq('session_id', (session as any).id);
+        } else {
+          retrievedQuery = retrievedQuery.eq('project_id', projectId);
+        }
+
+        const { data: retrievedMaterials } = await retrievedQuery.order('created_at', { ascending: true });
+
+        if (retrievedMaterials && Array.isArray(retrievedMaterials)) {
+          retrievedMaterials.forEach((material: any, index: number) => {
+            const title = material.title || '未命名资料';
+            const summary = material.abstract || material.full_text || '';
+            const materialUrl = material.url;
+            const metadata = material.metadata || {};
+            const citationsDetail = Array.isArray(metadata.citations)
+              ? metadata.citations
+              : Array.isArray(metadata.references)
+              ? metadata.references
+              : [];
+
             matMap[(index + 1).toString()] = {
-              id: insight.id,
-              material_id: insight.id, // Add material_id to match Citation type if needed, or update Citation type
-              material_title: titleSource || titleFallback,
-              material_source: insight.source_type || insight.category || '研究洞察',
+              id: material.id,
+              material_id: material.id,
+              material_title: title,
+              material_source: material.source_type || '原始资料',
               material_summary: summary,
-              insight: insight.insight,
-              quote,
               material_url: materialUrl,
-              position: 0 // Not used in this context
+              quote: '',
+              position: 0,
+              source_kind: 'retrieved_material',
+              citations_detail: citationsDetail
             };
           });
-          setMaterials(matMap);
         }
+
+        if (Object.keys(matMap).length === 0) {
+          const { data: insights } = await supabase
+            .from('research_insights')
+            .select('*')
+            .eq('project_id', projectId);
+
+          if (insights && Array.isArray(insights)) {
+            insights.forEach((insight: any, index: number) => {
+              const titleSource = insight?.supporting_data?.title || insight?.supporting_data?.source_title;
+              const titleFallback = insight?.insight
+                ? `${insight.insight.slice(0, 50)}${insight.insight.length > 50 ? '...' : ''}`
+                : '未命名资料';
+              const summary = insight?.supporting_data?.summary || insight?.supporting_data?.abstract || insight?.supporting_data?.content_summary;
+              const materialUrl = insight?.supporting_data?.url || insight?.supporting_data?.source_url || insight?.supporting_data?.link;
+              const quote = insight?.supporting_data?.quote || insight?.supporting_data?.excerpt || insight?.supporting_data?.text;
+
+              matMap[(index + 1).toString()] = {
+                id: insight.id,
+                material_id: insight.id,
+                material_title: titleSource || titleFallback,
+                material_source: insight.source_type || insight.category || '研究洞察',
+                material_summary: summary,
+                insight: insight.insight,
+                quote,
+                material_url: materialUrl,
+                position: 0,
+                source_kind: 'research_insight'
+              };
+            });
+          }
+        }
+
+        setMaterials(matMap);
       } catch (error) {
         console.error('Failed to fetch materials:', error);
       }
     };
 
     fetchMaterials();
-  }, [projectId]);
+  }, [projectId, citations]);
 
   const handleParagraphClick = (paragraphId: string) => {
     if (activeParagraphId === paragraphId) return;
@@ -276,7 +326,10 @@ export default function DraftWithAnnotations({
                 // Return original text or a neutral placeholder as per user request (no red ?)
                 // The user asked to hide it or show gray "0". Since we parsed the ID, let's show a neutral disabled badge.
                 return (
-                  <span key={i} className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-slate-300 bg-slate-50 rounded-sm cursor-default mx-0.5 align-super select-none">
+                  <span
+                    key={i}
+                    className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-slate-300 bg-slate-50 rounded-sm cursor-default mx-0.5 align-super select-none"
+                  >
                     {id}
                   </span>
                 );
@@ -559,23 +612,69 @@ export default function DraftWithAnnotations({
                 )}
                 
                 <div className="bg-slate-50 rounded-lg p-3 space-y-2 mb-3 border border-slate-100">
-                  <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">摘要:</div>
+                  <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">摘要</div>
                   <p className="text-sm text-slate-600 leading-relaxed line-clamp-4">
-                    {selectedCitation.material_summary || "暂无摘要"}
+                    {selectedCitation.material_summary || '暂无摘要'}
                   </p>
                 </div>
 
+                {Array.isArray(selectedCitation.citations_detail) && selectedCitation.citations_detail.length > 0 && (
+                  <div className="bg-slate-50 rounded-lg p-3 space-y-2 mb-3 border border-slate-100">
+                    <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">引用信息</div>
+                    <div className="space-y-1">
+                      {selectedCitation.citations_detail.map((item: any, idx: number) => {
+                        if (typeof item === 'string') {
+                          return (
+                            <div key={idx} className="text-xs text-slate-600 leading-relaxed">
+                              {idx + 1}. {item}
+                            </div>
+                          );
+                        }
+
+                        const title = item.title || item.text || item.label || '';
+                        const author = item.author || item.authors;
+                        const year = item.year;
+                        const url = item.url || item.link;
+
+                        return (
+                          <div key={idx} className="text-xs text-slate-600 leading-relaxed">
+                            <div>
+                              {idx + 1}. {title || '未命名引用'}
+                            </div>
+                            {(author || year) && (
+                              <div className="text-[11px] text-slate-500">
+                                {[author, year].filter(Boolean).join(' · ')}
+                              </div>
+                            )}
+                            {url && (
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 mt-0.5"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                查看引用来源
+                              </a>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {selectedCitation.material_url && (
-              <a
-                href={selectedCitation.material_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors group bg-blue-50 p-2 rounded-md hover:bg-blue-100"
-              >
-                <ExternalLink className="h-3 w-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-                查看全文
-              </a>
-            )}
+                  <a
+                    href={selectedCitation.material_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors group bg-blue-50 p-2 rounded-md hover:bg-blue-100"
+                  >
+                    <ExternalLink className="h-3 w-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                    查看全文
+                  </a>
+                )}
               </div>
             )}
             

@@ -18,11 +18,19 @@ interface CitationMarkerProps {
 export default function CitationMarker({ citation, index, onSelect }: CitationMarkerProps) {
   const [open, setOpen] = useState(false);
 
-  // If onSelect is provided, we use it instead of Popover (for side panel display)
+  const isRetrievedMaterial = citation.source_kind === 'retrieved_material';
+  const badgeClasses =
+    'inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-sm cursor-pointer mx-0.5 align-super transition-colors';
+  const retrievedClasses =
+    'text-white bg-blue-600 hover:bg-blue-700';
+  const insightClasses =
+    'text-amber-800 bg-amber-100 hover:bg-amber-200';
+  const headerLabel = isRetrievedMaterial ? '原始资料' : '分析洞察';
+
   if (onSelect) {
     return (
       <button
-        className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-slate-500 bg-slate-100 rounded-sm hover:bg-slate-200 hover:text-slate-700 transition-colors cursor-pointer mx-0.5 align-super"
+        className={`${badgeClasses} ${isRetrievedMaterial ? retrievedClasses : insightClasses}`}
         onClick={() => onSelect(citation)}
       >
         {index}
@@ -34,7 +42,7 @@ export default function CitationMarker({ citation, index, onSelect }: CitationMa
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-slate-500 bg-slate-100 rounded-sm hover:bg-slate-200 hover:text-slate-700 transition-colors cursor-pointer mx-0.5 align-super"
+          className={`${badgeClasses} ${isRetrievedMaterial ? retrievedClasses : insightClasses}`}
           onClick={() => setOpen(true)}
         >
           {index}
@@ -44,8 +52,11 @@ export default function CitationMarker({ citation, index, onSelect }: CitationMa
         <div className="bg-white">
             <div className="p-4 border-b bg-white relative z-20">
                 <div className="flex items-center justify-between mb-3">
-                  <Badge variant="default" className="bg-black hover:bg-black text-white px-3 py-1 text-xs font-bold rounded-full">
-                    来源详情 [{index}]
+                  <Badge
+                    variant="default"
+                    className={`${isRetrievedMaterial ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-500 hover:bg-amber-600'} text-white px-3 py-1 text-xs font-bold rounded-full`}
+                  >
+                    {headerLabel} [{index}]
                   </Badge>
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setOpen(false)}>
                     <X className="h-4 w-4 text-slate-400" />
@@ -69,11 +80,57 @@ export default function CitationMarker({ citation, index, onSelect }: CitationMa
                 )}
                 
                 <div className="bg-slate-50 rounded-lg p-3 space-y-2 mb-3 border border-slate-100">
-                  <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">摘要:</div>
+                  <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">摘要</div>
                   <p className="text-sm text-slate-600 leading-relaxed line-clamp-4">
-                    {citation.material_summary || "暂无摘要"}
+                    {citation.material_summary || '暂无摘要'}
                   </p>
                 </div>
+
+                {Array.isArray(citation.citations_detail) && citation.citations_detail.length > 0 && (
+                  <div className="bg-slate-50 rounded-lg p-3 space-y-2 mb-3 border border-slate-100">
+                    <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">引用信息</div>
+                    <div className="space-y-1">
+                      {citation.citations_detail.map((item: any, idx: number) => {
+                        if (typeof item === 'string') {
+                          return (
+                            <div key={idx} className="text-xs text-slate-600 leading-relaxed">
+                              {idx + 1}. {item}
+                            </div>
+                          );
+                        }
+
+                        const title = item.title || item.text || item.label || '';
+                        const author = item.author || item.authors;
+                        const year = item.year;
+                        const url = item.url || item.link;
+
+                        return (
+                          <div key={idx} className="text-xs text-slate-600 leading-relaxed">
+                            <div>
+                              {idx + 1}. {title || '未命名引用'}
+                            </div>
+                            {(author || year) && (
+                              <div className="text-[11px] text-slate-500">
+                                {[author, year].filter(Boolean).join(' · ')}
+                              </div>
+                            )}
+                            {url && (
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 mt-0.5"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                查看引用来源
+                              </a>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {citation.material_url && (
                   <a
