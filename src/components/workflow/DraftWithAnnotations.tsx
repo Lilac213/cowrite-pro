@@ -155,9 +155,9 @@ export default function DraftWithAnnotations({
         newParagraphs[index] = editValue;
         onContentChange(newParagraphs.join('\n\n'));
         
-        // Trigger Material Save Dialog
-        setPendingMaterialContent(editValue);
-        setShowSaveMaterialDialog(true);
+        // Trigger Material Save Dialog - REMOVED per user request (only for Real-time Collab)
+        // setPendingMaterialContent(editValue);
+        // setShowSaveMaterialDialog(true);
       }
     }
     
@@ -206,11 +206,14 @@ export default function DraftWithAnnotations({
         newParagraphs[index] = newContent;
         onContentChange(newParagraphs.join('\n\n'));
         
-        // Trigger Material Save Dialog
-        setPendingMaterialContent(newContent);
-        setShowSaveMaterialDialog(true);
+        // Material Save Dialog is now handled explicitly by DraftGuidance via callback
       }
     }
+  };
+
+  const handleSaveToLibrary = (content: string) => {
+    setPendingMaterialContent(content);
+    setShowSaveMaterialDialog(true);
   };
 
   const handleCitationSelect = (citation: Citation) => {
@@ -418,6 +421,7 @@ export default function DraftWithAnnotations({
                 activeParagraphId={activeParagraphId || undefined}
                 paragraphContent={activeParagraphId ? paragraphs[parseInt(activeParagraphId.replace('P', '')) - 1] : undefined}
                 onUpdateParagraph={updateParagraphFromGuidance}
+                onSaveToLibrary={handleSaveToLibrary}
               />
             </div>
           </div>

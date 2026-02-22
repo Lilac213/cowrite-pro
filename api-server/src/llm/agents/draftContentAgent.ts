@@ -89,11 +89,12 @@ ${research_pack.sources.slice(0, 10).map(source =>
 }
 
 【关键规则 - 强制要求】
-1. 禁止使用中文标点符号
-2. 每个 draft_block 必须有 derived_from（来自 argument_outline）
-3. 每个 draft_block 必须有 citations（来自 research_pack）
-4. citation_display 格式：（见资料N），其中 N 是资料编号
-5. 在 content 中插入 citation_display，例如："这是一个观点（见资料1）。"
+1. 语言要求：必须与 argument_outline 中使用的语言保持一致（如果结构是中文，正文必须是中文；如果结构是英文，正文必须是英文）。
+2. 禁止使用中文标点符号（如果正文是英文）。
+3. 每个 draft_block 必须有 derived_from（来自 argument_outline）
+4. 每个 draft_block 必须有 citations（来自 research_pack）
+5. citation_display 格式：（见资料N），其中 N 是资料编号
+6. 在 content 中插入 citation_display，例如："这是一个观点（见资料1）。"
 `;
 }
 

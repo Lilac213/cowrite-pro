@@ -14,13 +14,15 @@ interface DraftGuidanceProps {
   activeParagraphId?: string;
   paragraphContent?: string;
   onUpdateParagraph?: (id: string, content: string) => void;
+  onSaveToLibrary?: (content: string) => void;
 }
 
 export default function DraftGuidance({ 
   guidance, 
   activeParagraphId, 
   paragraphContent = '',
-  onUpdateParagraph 
+  onUpdateParagraph,
+  onSaveToLibrary
 }: DraftGuidanceProps) {
   const [insertTarget, setInsertTarget] = useState<{ key: string; suggestion: string } | null>(null);
   const [insertInput, setInsertInput] = useState('');
@@ -39,12 +41,23 @@ export default function DraftGuidance({
     if (!activeParagraphId || !onUpdateParagraph) return;
 
     if (insertTarget?.key === key) {
-      const merged = insertInput.trim()
-        ? `${suggestion}\n${insertInput.trim()}`
-        : suggestion;
-      const newContent = paragraphContent ? `${paragraphContent}\n${merged}` : merged;
-      onUpdateParagraph(activeParagraphId, newContent);
-      toast.success('已插入建议内容');
+      const userCase = insertInput.trim();
+      if (!userCase) return;
+
+      // Simulate "Analysis & Integration"
+      // TODO: Call actual AI agent to integrate the case naturally
+      const integratedContent = paragraphContent 
+        ? `${paragraphContent}\n\n${userCase}` 
+        : userCase;
+
+      onUpdateParagraph(activeParagraphId, integratedContent);
+      toast.success('已插入个人经历');
+      
+      // Trigger "Save to Personal Library" dialog for the raw case content
+      if (onSaveToLibrary) {
+        onSaveToLibrary(userCase);
+      }
+
       setInsertTarget(null);
       setInsertInput('');
       return;
