@@ -3,7 +3,9 @@ import { supabase } from '@/db/supabase';
 const rawBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
 const inferredBaseUrl = typeof window !== 'undefined' && window.location.hostname.endsWith('cowrite.top')
   ? 'https://api.cowrite.top'
-  : '';
+  : (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+    ? 'http://localhost:3000'
+    : '';
 const apiBaseUrl = (rawBaseUrl || inferredBaseUrl).replace(/\/$/, '');
 
 function buildUrl(path: string) {
