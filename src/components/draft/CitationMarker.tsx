@@ -83,7 +83,7 @@ export default function CitationMarker({ citation, index, onSelect }: CitationMa
                     className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors group bg-blue-50 p-2 rounded-md hover:bg-blue-100"
                   >
                     <ExternalLink className="h-3 w-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-                    查看原始文档
+                    查看全文
                   </a>
                 )}
               </div>

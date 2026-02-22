@@ -75,7 +75,7 @@ ${research_pack.sources.slice(0, 10).map(source =>
 1. 为每个论证模块生成 1-3 个段落
 2. 每个段落必须基于 argument_outline 中的 derived_from
 3. 每个段落必须引用 research_pack 中的资料
-4. 使用可视化引用标记：当引用资料时，在文中标注（见资料N）
+4. 使用可视化引用标记：当引用资料时，在文中标注[资料N]
 5. 评估每个段落的连贯性（coherence_score）
 6. 标记是否需要用户补充内容
 
@@ -85,7 +85,7 @@ ${research_pack.sources.slice(0, 10).map(source =>
     "agent": "draftContentAgent",
     "timestamp": "当前时间ISO格式"
   },
-  "payload": "{\"draft_blocks\":[{\"block_id\":\"block_1\",\"paragraph_id\":\"p1\",\"content\":\"段落内容...（见资料1）...\",\"derived_from\":[\"insight_1\"],\"citations\":[{\"source_id\":\"source_1\",\"source_url\":\"https://...\",\"source_title\":\"资料标题\",\"quote\":\"引用内容\",\"citation_type\":\"paraphrase\",\"citation_display\":\"（见资料1）\"}],\"coherence_score\":0.9,\"requires_user_input\":false,\"order\":1}],\"global_coherence_score\":0.88,\"missing_evidence_blocks\":[],\"needs_revision\":false,\"total_word_count\":3000}"
+  "payload": "{\"draft_blocks\":[{\"block_id\":\"block_1\",\"paragraph_id\":\"p1\",\"content\":\"段落内容...[资料1]...\",\"derived_from\":[\"insight_1\"],\"citations\":[{\"source_id\":\"source_1\",\"source_url\":\"https://...\",\"source_title\":\"资料标题\",\"quote\":\"引用内容\",\"citation_type\":\"paraphrase\",\"citation_display\":\"[资料1]\"}],\"coherence_score\":0.9,\"requires_user_input\":false,\"order\":1}],\"global_coherence_score\":0.88,\"missing_evidence_blocks\":[],\"needs_revision\":false,\"total_word_count\":3000}"
 }
 
 【关键规则 - 强制要求】
@@ -93,8 +93,8 @@ ${research_pack.sources.slice(0, 10).map(source =>
 2. 禁止使用中文标点符号（如果正文是英文）。
 3. 每个 draft_block 必须有 derived_from（来自 argument_outline）
 4. 每个 draft_block 必须有 citations（来自 research_pack）
-5. citation_display 格式：（见资料N），其中 N 是资料编号
-6. 在 content 中插入 citation_display，例如："这是一个观点（见资料1）。"
+5. citation_display 格式：[资料N]，其中 N 是资料编号
+6. 在 content 中插入 citation_display，例如："这是一个观点[资料1]。"
 `;
 }
 
