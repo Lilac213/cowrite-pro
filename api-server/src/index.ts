@@ -103,19 +103,25 @@ async function runStrictJsonPrompt(
 
 await app.register(cors, {
   origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) {
       callback(null, true);
       return;
     }
-    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+    
+    // Check if origin is allowed
+    const isAllowed = allowedOrigins.includes(origin) || 
+                      allowedOrigins.some(o => o.replace(/\/$/, '') === origin.replace(/\/$/, ''));
+                      
+    if (isAllowed) {
       callback(null, true);
-      return;
+    } else {
+      callback(new Error(`Origin ${origin} is not allowed by CORS`), false);
     }
-    // Allow any origin for development/testing if needed, or strictly enforce whitelist
-    // Here we strictly enforce if allowedOrigins is populated
-    callback(new Error(`Origin ${origin} not allowed`), false);
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 });
 
 app.setNotFoundHandler((req, reply) => {

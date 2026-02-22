@@ -61,7 +61,8 @@ ${argument_outline.argument_blocks.map((block, i) =>
 ${research_pack.insights.map(insight => 
   `[${insight.id}] ${insight.content.substring(0, 150)}...
    来源：${insight.supporting_source_ids.join(', ')}
-   证据强度：${insight.evidence_strength}`
+   证据强度：${insight.evidence_strength}
+   参考文献：${(insight.references || []).map(ref => `[${ref.id}] ${ref.title}`).join(', ')}`
 ).join('\n')}
 
 可用资料（${research_pack.sources.length} 个）：

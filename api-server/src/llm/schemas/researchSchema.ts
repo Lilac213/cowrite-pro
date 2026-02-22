@@ -19,6 +19,11 @@ export interface SynthesizedInsight {
   category: string;
   content: string;
   supporting_source_ids: string[];
+  references?: Array<{
+    id: string;
+    title: string;
+    url?: string;
+  }>;
   citability: 'direct' | 'paraphrase' | 'background';
   evidence_strength: 'strong' | 'medium' | 'weak';
   risk_flag: boolean;

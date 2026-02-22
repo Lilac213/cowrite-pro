@@ -273,7 +273,13 @@ export default function DraftWithAnnotations({
               const material = materials[id];
               // Only render valid citations if material exists, otherwise just text
               if (!material) {
-                return <span key={i} className="text-red-500 text-xs mx-0.5">[{id}?]</span>;
+                // Return original text or a neutral placeholder as per user request (no red ?)
+                // The user asked to hide it or show gray "0". Since we parsed the ID, let's show a neutral disabled badge.
+                return (
+                  <span key={i} className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-slate-300 bg-slate-50 rounded-sm cursor-default mx-0.5 align-super select-none">
+                    {id}
+                  </span>
+                );
               }
               return (
                 <CitationMarker 

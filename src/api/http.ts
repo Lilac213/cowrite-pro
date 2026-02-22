@@ -38,21 +38,53 @@ export async function apiFetch(
   }
 
   const url = buildUrl(path);
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers
-    });
+  const MAX_RETRIES = 2;
+  const RETRY_DELAY = 500;
 
-    return response;
-  } catch (error) {
-    console.error('API 请求失败:', {
-      url,
-      method: options.method || (options.body === undefined ? 'GET' : 'POST'),
-      hasBody: options.body !== undefined && options.body !== null
-    }, error);
-    throw error;
+  let lastError: any;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers
+      });
+
+      if (response.status === 502) {
+        throw new Error('502 Bad Gateway');
+      }
+
+      return response;
+    } catch (error: any) {
+      lastError = error;
+      const errorMessage = error.message || '';
+      
+      const isRetryable = error.name === 'TypeError' || 
+                          errorMessage.includes('Load failed') || 
+                          errorMessage.includes('502');
+
+      if (isRetryable && attempt < MAX_RETRIES) {
+        console.warn(`API Request failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${RETRY_DELAY}ms...`, { url, error });
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        continue;
+      }
+
+      // Final attempt failure
+      if (attempt === MAX_RETRIES && isRetryable) {
+        console.error('API Max Retries Reached:', { url, error });
+        error.message = '服务器临时不可用，请稍后重试';
+        // You might want to generate an errorId here or log to a service
+        // const errorId = generateErrorId();
+        // console.error(`Error ID: ${errorId}`, error);
+      } else if (!isRetryable) {
+         console.error('API Non-retryable Error:', { url, error });
+      }
+
+      throw error;
+    }
   }
+
+  throw lastError || new Error('Unknown API error');
 }
 
 function buildErrorMessage(
