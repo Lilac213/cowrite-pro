@@ -4,7 +4,8 @@ import { Lightbulb, User, Heart, Sparkles, MessageSquare } from 'lucide-react';
 import type { ParagraphAnnotation } from '@/types';
 import CoachingChat from './CoachingChat';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
+import { Textarea } from '@/components/ui/textarea';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 interface DraftGuidanceProps {
@@ -20,18 +21,36 @@ export default function DraftGuidance({
   paragraphContent = '',
   onUpdateParagraph 
 }: DraftGuidanceProps) {
+  const [insertTarget, setInsertTarget] = useState<{ key: string; suggestion: string } | null>(null);
+  const [insertInput, setInsertInput] = useState('');
+
+  useEffect(() => {
+    setInsertTarget(null);
+    setInsertInput('');
+  }, [activeParagraphId]);
+
   // Find guidance for active paragraph or show all if none selected
   const displayGuidance = activeParagraphId
     ? guidance.filter(g => g.paragraph_id === activeParagraphId)
     : guidance;
 
-  const handleInsertSuggestion = (suggestion: string) => {
-     if (activeParagraphId && onUpdateParagraph) {
-        // Append suggestion to current paragraph
-        const newContent = paragraphContent ? `${paragraphContent}\n${suggestion}` : suggestion;
-        onUpdateParagraph(activeParagraphId, newContent);
-        toast.success('已插入建议内容');
-     }
+  const handleInsertSuggestion = (key: string, suggestion: string) => {
+    if (!activeParagraphId || !onUpdateParagraph) return;
+
+    if (insertTarget?.key === key) {
+      const merged = insertInput.trim()
+        ? `${suggestion}\n${insertInput.trim()}`
+        : suggestion;
+      const newContent = paragraphContent ? `${paragraphContent}\n${merged}` : merged;
+      onUpdateParagraph(activeParagraphId, newContent);
+      toast.success('已插入建议内容');
+      setInsertTarget(null);
+      setInsertInput('');
+      return;
+    }
+
+    setInsertTarget({ key, suggestion });
+    setInsertInput('');
   };
 
   if (displayGuidance.length === 0) {
@@ -88,7 +107,11 @@ export default function DraftGuidance({
                     建议补充 (个人内容)
                   </div>
                   <ul className="space-y-2 pl-6">
-                    {personalSuggestions.map((suggestion, idx) => (
+                    {personalSuggestions.map((suggestion, idx) => {
+                      const insertKey = `${item.paragraph_id}-personal-${idx}`;
+                      const isInsertActive = insertTarget?.key === insertKey;
+
+                      return (
                       <li key={idx} className="text-sm text-slate-600 list-disc group">
                         <div className="flex flex-col gap-1">
                           <span>{suggestion}</span>
@@ -97,14 +120,22 @@ export default function DraftGuidance({
                               variant="ghost" 
                               size="sm" 
                               className="w-fit h-6 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 -ml-2"
-                              onClick={() => handleInsertSuggestion(suggestion)}
+                              onClick={() => handleInsertSuggestion(insertKey, suggestion)}
                             >
-                              + 插入此观点
+                              {isInsertActive ? '插入到正文' : '+ 插入此观点'}
                             </Button>
+                          )}
+                          {isActive && isInsertActive && (
+                            <Textarea
+                              value={insertInput}
+                              onChange={(e) => setInsertInput(e.target.value)}
+                              placeholder="补充你的内容后再插入..."
+                              className="text-xs bg-white"
+                            />
                           )}
                         </div>
                       </li>
-                    ))}
+                    )})}
                   </ul>
                 </div>
               )}
@@ -117,7 +148,11 @@ export default function DraftGuidance({
                     建议补充 (个人经历)
                   </div>
                   <ul className="space-y-2 pl-6">
-                    {experienceSuggestions.map((suggestion, idx) => (
+                    {experienceSuggestions.map((suggestion, idx) => {
+                      const insertKey = `${item.paragraph_id}-experience-${idx}`;
+                      const isInsertActive = insertTarget?.key === insertKey;
+
+                      return (
                       <li key={idx} className="text-sm text-slate-600 list-disc group">
                          <div className="flex flex-col gap-1">
                           <span>{suggestion}</span>
@@ -126,14 +161,22 @@ export default function DraftGuidance({
                               variant="ghost" 
                               size="sm" 
                               className="w-fit h-6 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 -ml-2"
-                              onClick={() => handleInsertSuggestion(suggestion)}
+                              onClick={() => handleInsertSuggestion(insertKey, suggestion)}
                             >
-                              + 插入此经历
+                              {isInsertActive ? '插入到正文' : '+ 插入此经历'}
                             </Button>
+                          )}
+                          {isActive && isInsertActive && (
+                            <Textarea
+                              value={insertInput}
+                              onChange={(e) => setInsertInput(e.target.value)}
+                              placeholder="补充你的经历后再插入..."
+                              className="text-xs bg-white"
+                            />
                           )}
                         </div>
                       </li>
-                    ))}
+                    )})}
                   </ul>
                 </div>
               )}

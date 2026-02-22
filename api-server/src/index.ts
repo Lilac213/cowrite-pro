@@ -1883,8 +1883,18 @@ app.post('/api/draft/analyze-structure', async (req, reply) => {
       argument_outline: structure.payload_jsonb.argument_outline || structure.payload_jsonb
     })) as Awaited<ReturnType<typeof runDraftAnalysisAgent>>;
 
+    const resolvedAnnotations = analysisPayload.annotations?.length
+      ? analysisPayload.annotations
+      : draft.payload_jsonb.draft_blocks.map((block: any) => ({
+          paragraph_id: block.paragraph_id,
+          paragraph_type: '其他',
+          development_logic: '暂无分析结果，请稍后重试或补充上下文信息。',
+          editing_suggestions: '建议补充个人化细节或具体案例。',
+          viewpoint_generation: '多文献综合'
+        }));
+
     // 4. 转换 Annotations 格式以匹配前端
-    const annotations = analysisPayload.annotations.map(a => {
+    const annotations = resolvedAnnotations.map((a: any) => {
       // 查找对应的 block 以获取引用信息
       const block = draft.payload_jsonb.draft_blocks.find((b: any) => b.paragraph_id === a.paragraph_id);
       

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -53,6 +53,7 @@ export default function DraftWithAnnotations({
   const [editingParagraphId, setEditingParagraphId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [materials, setMaterials] = useState<Record<string, Citation>>({});
+  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
   
   // Material Save Dialog State
   const [showSaveMaterialDialog, setShowSaveMaterialDialog] = useState(false);
@@ -61,6 +62,18 @@ export default function DraftWithAnnotations({
   // Parse paragraphs
   // Note: We use a more robust split that preserves empty lines if needed, but for now standard split is fine
   const paragraphs = (content || '').split(/\n\n+/).filter(p => p.trim());
+
+  useEffect(() => {
+    if (paragraphs.length === 0) return;
+    if (!activeParagraphId) {
+      setActiveParagraphId('P1');
+      return;
+    }
+    const index = parseInt(activeParagraphId.replace('P', '')) - 1;
+    if (index < 0 || index >= paragraphs.length) {
+      setActiveParagraphId('P1');
+    }
+  }, [activeParagraphId, paragraphs.length]);
 
   // Fetch materials for citations
   useEffect(() => {
@@ -77,15 +90,23 @@ export default function DraftWithAnnotations({
         if (insights) {
           const matMap: Record<string, Citation> = {};
           insights.forEach((insight: any, index: number) => {
+            const titleSource = insight?.supporting_data?.title || insight?.supporting_data?.source_title;
+            const titleFallback = insight?.insight ? `${insight.insight.slice(0, 50)}${insight.insight.length > 50 ? '...' : ''}` : '未命名资料';
+            const summary = insight?.supporting_data?.summary || insight?.supporting_data?.abstract || insight?.supporting_data?.content_summary;
+            const materialUrl = insight?.supporting_data?.url || insight?.supporting_data?.source_url || insight?.supporting_data?.link;
+            const quote = insight?.supporting_data?.quote || insight?.supporting_data?.excerpt || insight?.supporting_data?.text;
+
             // Map index+1 (e.g. "1") to citation data
             // We assume text uses (见资料1), (见资料2) etc.
             matMap[(index + 1).toString()] = {
               id: insight.id,
               material_id: insight.id, // Add material_id to match Citation type if needed, or update Citation type
-              material_title: (insight.original_text?.slice(0, 50) + '...') || '未命名资料', // Fallback title
-              material_source: '研究洞察',
-              material_summary: insight.insight,
-              quote: insight.original_text,
+              material_title: titleSource || titleFallback,
+              material_source: insight.source_type || insight.category || '研究洞察',
+              material_summary: summary,
+              insight: insight.insight,
+              quote,
+              material_url: materialUrl,
               position: 0 // Not used in this context
             };
           });
@@ -192,12 +213,16 @@ export default function DraftWithAnnotations({
     }
   };
 
+  const handleCitationSelect = (citation: Citation) => {
+    setSelectedCitation(citation);
+  };
+
   // Render paragraph content with interactive citations
   const renderParagraphContent = (text: string) => {
     // Regex to match (见资料X) or [资料X] or (资料X)
     // Captures the number
     const regex = /[(（\[]见?资料(\d+)[)）\]]/g;
-    const parts = [];
+    const parts: ReactNode[] = [];
     let lastIndex = 0;
     let match;
 
@@ -211,13 +236,14 @@ export default function DraftWithAnnotations({
       const material = materials[materialIndex];
       
       if (material) {
-        parts.push(
-          <CitationMarker 
-            key={`${match.index}`} 
-            citation={material} 
-            index={parseInt(materialIndex)} 
-          />
-        );
+          parts.push(
+            <CitationMarker 
+              key={`${match.index}`} 
+              citation={material} 
+              index={parseInt(materialIndex)} 
+              onSelect={handleCitationSelect}
+            />
+          );
       } else {
         parts.push(match[0]); // Keep original if no material found
       }
@@ -271,7 +297,7 @@ export default function DraftWithAnnotations({
                       <Textarea
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
-                        className="min-h-[150px] font-serif text-xl leading-relaxed resize-none shadow-inner bg-slate-50"
+                        className="min-h-[150px] font-serif text-base leading-relaxed resize-none shadow-inner bg-slate-50"
                         autoFocus
                         onKeyDown={(e) => {
                           // Ctrl+Enter or Cmd+Enter to save
@@ -327,7 +353,7 @@ export default function DraftWithAnnotations({
                     </div>
                     
                     {/* Content */}
-                    <p className="text-xl text-slate-800 leading-loose font-serif text-justify whitespace-pre-wrap">
+                    <p className="text-base text-slate-800 leading-relaxed font-serif text-justify whitespace-pre-wrap">
                       {renderParagraphContent(cleanText)}
                     </p>
                   </div>
@@ -348,12 +374,65 @@ export default function DraftWithAnnotations({
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1 overflow-hidden p-0">
-          <DraftGuidance 
-            guidance={annotations} 
-            activeParagraphId={activeParagraphId || undefined}
-            paragraphContent={activeParagraphId ? paragraphs[parseInt(activeParagraphId.replace('P', '')) - 1] : undefined}
-            onUpdateParagraph={updateParagraphFromGuidance}
-          />
+          <div className="flex flex-col h-full">
+            <div className="border-b bg-white">
+              <div className="p-4 space-y-3">
+                <div className="text-sm font-medium text-slate-700">资料详情</div>
+                {selectedCitation ? (
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-xs text-muted-foreground">标题</div>
+                      <div className="text-sm text-slate-800">{selectedCitation.material_title}</div>
+                    </div>
+                    {selectedCitation.material_source && (
+                      <div>
+                        <div className="text-xs text-muted-foreground">来源</div>
+                        <div className="text-sm text-slate-800">{selectedCitation.material_source}</div>
+                      </div>
+                    )}
+                    {selectedCitation.insight && (
+                      <div>
+                        <div className="text-xs text-muted-foreground">观点洞察</div>
+                        <div className="text-sm text-slate-800">{selectedCitation.insight}</div>
+                      </div>
+                    )}
+                    {selectedCitation.material_summary && (
+                      <div>
+                        <div className="text-xs text-muted-foreground">摘要</div>
+                        <div className="text-sm text-slate-800">{selectedCitation.material_summary}</div>
+                      </div>
+                    )}
+                    {selectedCitation.quote && (
+                      <div>
+                        <div className="text-xs text-muted-foreground">引用内容</div>
+                        <div className="text-sm text-slate-700 italic">{selectedCitation.quote}</div>
+                      </div>
+                    )}
+                    {selectedCitation.material_url && (
+                      <a
+                        href={selectedCitation.material_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center text-xs text-primary hover:underline"
+                      >
+                        查看原文
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">点击正文中的资料编号查看详情</div>
+                )}
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <DraftGuidance 
+                guidance={annotations} 
+                activeParagraphId={activeParagraphId || undefined}
+                paragraphContent={activeParagraphId ? paragraphs[parseInt(activeParagraphId.replace('P', '')) - 1] : undefined}
+                onUpdateParagraph={updateParagraphFromGuidance}
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
 

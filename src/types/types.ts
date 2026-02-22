@@ -244,6 +244,7 @@ export interface Citation {
   material_source?: string;
   material_url?: string;
   material_summary?: string;
+  insight?: string;
   position: number; // Character position in the content
   paragraph_id?: string;
   quote?: string; // The actual quoted text
@@ -263,6 +264,7 @@ export interface Citation {
   material_source?: string;
   material_summary?: string;
   material_url?: string;
+  insight?: string;
   quote?: string;
   position: number;
 }

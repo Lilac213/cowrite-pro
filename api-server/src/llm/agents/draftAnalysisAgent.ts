@@ -23,6 +23,9 @@ export interface AnalysisPayload {
 
 const analysisSchema = {
   required: ['annotations'],
+  defaults: {
+    annotations: []
+  },
   validate: (data: any) => {
     if (!Array.isArray(data.annotations)) return false;
     for (const item of data.annotations) {
@@ -47,7 +50,7 @@ function buildDraftAnalysisPrompt(input: DraftAnalysisInput): string {
 ${draft_payload.draft_blocks.map(block => 
   `[ID: ${block.paragraph_id}]
    内容：${block.content.substring(0, 300)}...
-   引用：${block.citations.map(c => c.source_title).join(', ')}`
+   引用：${(block.citations || []).map(c => c.source_title).join(', ')}`
 ).join('\n\n')}
 
 【你的任务】
