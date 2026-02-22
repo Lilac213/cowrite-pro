@@ -56,12 +56,25 @@ export default function DraftGuidance({
 
   if (displayGuidance.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
-        <div className="text-center space-y-2">
-          <Sparkles className="h-8 w-8 mx-auto opacity-50" />
-          <p className="text-sm">暂无生成说明</p>
+      <ScrollArea className="h-full">
+        <div className="space-y-6 p-4">
+          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground bg-slate-50/50 rounded-xl border border-dashed">
+            <Sparkles className="h-8 w-8 mb-3 opacity-20" />
+            <p className="text-sm font-medium text-slate-400">本段落暂无AI生成说明</p>
+            <p className="text-xs text-slate-300 mt-1">您可以在下方直接与AI协作</p>
+          </div>
+
+          {activeParagraphId && onUpdateParagraph && (
+            <div className="pt-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <CoachingChat 
+                paragraphId={activeParagraphId}
+                paragraphContent={paragraphContent}
+                onUpdateParagraph={(newContent) => onUpdateParagraph(activeParagraphId, newContent)}
+              />
+            </div>
+          )}
         </div>
-      </div>
+      </ScrollArea>
     );
   }
 
