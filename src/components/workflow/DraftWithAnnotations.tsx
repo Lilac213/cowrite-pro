@@ -1,14 +1,22 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea';
-import type { ParagraphAnnotation, Citation } from '@/types';
-import { FileText, BookOpen, Edit3, Check, X, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/db/supabase';
-import CitationMarker from '../draft/CitationMarker';
-import DraftGuidance from '../draft/DraftGuidance';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { 
+  FileText, 
+  MessageSquare, 
+  ChevronRight, 
+  Wand2, 
+  RotateCcw, 
+  Save, 
+  Check, 
+  X, 
+  BookOpen, 
+  ExternalLink,
+  Edit3
+} from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,16 +27,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { toast } from 'sonner';
+import { supabase } from '@/db/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { createMaterial } from '@/api/material.api';
-import { toast } from 'sonner';
+import type { Citation, ParagraphAnnotation, ParagraphGuidance } from '@/types';
+import DraftGuidance from '@/components/draft/DraftGuidance';
+import CitationMarker from '@/components/draft/CitationMarker';
 
 interface DraftWithAnnotationsProps {
   content: string;
   annotations: ParagraphAnnotation[];
-  onContentChange?: (content: string) => void;
+  guidance?: ParagraphGuidance[];
+  projectId: string;
+  onContentChange?: (newContent: string) => void;
   readonly?: boolean;
-  projectId?: string;
 }
 
 const paragraphTypeColors: Record<string, string> = {
@@ -44,9 +57,10 @@ const paragraphTypeColors: Record<string, string> = {
 export default function DraftWithAnnotations({
   content,
   annotations,
-  onContentChange,
-  readonly = false,
+  guidance = [],
   projectId,
+  onContentChange,
+  readonly = false
 }: DraftWithAnnotationsProps) {
   const { user } = useAuth();
   const [activeParagraphId, setActiveParagraphId] = useState<string | null>(null);
@@ -55,7 +69,7 @@ export default function DraftWithAnnotations({
   const [materials, setMaterials] = useState<Record<string, Citation>>({});
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
   
-  // Material Save Dialog State
+  // State for Material Save Dialog
   const [showSaveMaterialDialog, setShowSaveMaterialDialog] = useState(false);
   const [pendingMaterialContent, setPendingMaterialContent] = useState('');
 
@@ -69,6 +83,9 @@ export default function DraftWithAnnotations({
       setActiveParagraphId('P1');
       return;
     }
+    // Check if active paragraph still exists (e.g. after content update)
+    // If not, reset to P1 or keep current if it's within bounds?
+    // Here we just ensure P1 if completely out of bounds or empty
     const index = parseInt(activeParagraphId.replace('P', '')) - 1;
     if (index < 0 || index >= paragraphs.length) {
       setActiveParagraphId('P1');
@@ -222,9 +239,10 @@ export default function DraftWithAnnotations({
 
   // Render paragraph content with interactive citations
   const renderParagraphContent = (text: string) => {
-    // Regex to match (见资料X) or [资料X] or (资料X)
-    // Captures the number
-    const regex = /[(（\[]见?资料(\d+)[)）\]]/g;
+    // Regex to match (见资料X)、(见洞察Y)、(见资料A，资料B) etc.
+    // Matches the whole parenthesis group and captures the content inside
+    const regex = /[(（\[]\s*见?((?:资料|洞察)\s*\d+(?:[，,]\s*(?:资料|洞察)?\s*\d+)*)\s*[)）\]]/g;
+    
     const parts: ReactNode[] = [];
     let lastIndex = 0;
     let match;
@@ -235,20 +253,42 @@ export default function DraftWithAnnotations({
         parts.push(text.substring(lastIndex, match.index));
       }
       
-      const materialIndex = match[1];
-      const material = materials[materialIndex];
+      const content = match[1];
+      // Extract all numbers from the content string
+      // e.g. "资料1，资料2" -> ["1", "2"]
+      // e.g. "洞察3" -> ["3"]
+      const idRegex = /\d+/g;
+      let idMatch;
+      const ids: string[] = [];
+      while ((idMatch = idRegex.exec(content)) !== null) {
+        ids.push(idMatch[0]);
+      }
       
-      if (material) {
-          parts.push(
-            <CitationMarker 
-              key={`${match.index}`} 
-              citation={material} 
-              index={parseInt(materialIndex)} 
-              onSelect={handleCitationSelect}
-            />
-          );
+      if (ids.length > 0) {
+          // Render a CitationMarker for each ID found
+          // We wrap them in a span to keep them together if needed, or just push them
+          const markers = ids.map((id, i) => {
+            const material = materials[id];
+            if (material) {
+              return (
+                <CitationMarker 
+                  key={`${match!.index}-${id}`} 
+                  citation={material} 
+                  index={parseInt(id)} 
+                  onSelect={handleCitationSelect} // Using onSelect for side panel or undefined for Popover
+                />
+              );
+            }
+            return null;
+          }).filter(Boolean);
+
+          if (markers.length > 0) {
+            parts.push(...markers);
+          } else {
+             parts.push(match[0]); // Keep original if no valid materials found
+          }
       } else {
-        parts.push(match[0]); // Keep original if no material found
+        parts.push(match[0]); // Keep original if no numbers found
       }
       
       lastIndex = regex.lastIndex;
@@ -362,6 +402,45 @@ export default function DraftWithAnnotations({
                   </div>
                 );
               })}
+
+              {/* References Section */}
+              {Object.keys(materials).length > 0 && (
+                <div className="mt-12 pt-8 border-t border-slate-200">
+                  <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <BookOpen className="h-5 w-5 text-primary" />
+                    参考文献
+                  </h3>
+                  <div className="space-y-4">
+                    {Object.entries(materials)
+                      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                      .map(([index, material]) => (
+                        <div key={index} className="flex gap-4 text-sm group items-start p-3 rounded-lg hover:bg-slate-50 transition-colors">
+                          <span className="font-mono text-slate-400 font-bold min-w-[24px] mt-0.5">[{index}]</span>
+                          <div className="flex-1 space-y-1">
+                            <div className="font-medium text-slate-900 leading-snug">
+                              {material.material_title}
+                            </div>
+                            {material.material_summary && (
+                              <p className="text-slate-500 text-xs line-clamp-2 leading-relaxed">
+                                {material.material_summary}
+                              </p>
+                            )}
+                            {material.material_url && (
+                              <a 
+                                href={material.material_url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-primary hover:text-primary/80 hover:underline text-xs inline-flex items-center gap-1 mt-1 font-medium transition-colors"
+                              >
+                                查看原文 <ExternalLink className="h-3 w-3" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           </ScrollArea>
         </CardContent>

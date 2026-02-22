@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, FileText, X } from 'lucide-react';
+import { ExternalLink, FileText, X, Lightbulb } from 'lucide-react';
 import {
   Popover,
   PopoverContent,
@@ -40,7 +40,7 @@ export default function CitationMarker({ citation, index, onSelect }: CitationMa
           {index}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-[320px] p-0 overflow-hidden rounded-xl shadow-xl border-slate-200" align="start" sideOffset={8}>
+      <PopoverContent className="w-[360px] p-0 overflow-hidden rounded-xl shadow-xl border-slate-200" align="start" sideOffset={8}>
         <div className="bg-white">
             <div className="p-4 border-b bg-white relative z-20">
                 <div className="flex items-center justify-between mb-3">
@@ -56,10 +56,22 @@ export default function CitationMarker({ citation, index, onSelect }: CitationMa
                   {citation.material_title}
                 </h3>
                 
+                {citation.insight && (
+                  <div className="bg-amber-50 rounded-lg p-3 space-y-2 mb-3 border border-amber-100">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 uppercase tracking-wider">
+                      <Lightbulb className="h-3 w-3" />
+                      观点洞察
+                    </div>
+                    <p className="text-sm text-slate-700 leading-relaxed">
+                      {citation.insight}
+                    </p>
+                  </div>
+                )}
+                
                 <div className="bg-slate-50 rounded-lg p-3 space-y-2 mb-3 border border-slate-100">
                   <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">摘要:</div>
                   <p className="text-sm text-slate-600 leading-relaxed line-clamp-4">
-                    {citation.material_summary || citation.insight || "暂无摘要"}
+                    {citation.material_summary || "暂无摘要"}
                   </p>
                 </div>
 
@@ -68,10 +80,10 @@ export default function CitationMarker({ citation, index, onSelect }: CitationMa
                     href={citation.material_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-primary transition-colors group"
+                    className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors group bg-blue-50 p-2 rounded-md hover:bg-blue-100"
                   >
-                    查看原始文档
                     <ExternalLink className="h-3 w-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                    查看原始文档
                   </a>
                 )}
               </div>
