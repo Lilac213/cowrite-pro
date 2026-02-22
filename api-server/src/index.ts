@@ -833,48 +833,7 @@ app.post('/api/adjust-article-structure', async (req, reply) => {
   }
 });
 
-app.post('/api/draft/generate-content', async (req, reply) => {
-  const body = req.body as any;
-  if (!body.project_id) {
-    return reply.code(400).send({ error: 'Missing project_id' });
-  }
 
-  // Fetch data from DB
-  const supabase = getSupabaseAdmin();
-  
-  // 1. Fetch Writing Brief
-  const { data: briefData } = await supabase
-    .from('writing_briefs')
-    .select('content')
-    .eq('project_id', body.project_id)
-    .single();
-    
-  // 2. Fetch Argument Outline
-  const { data: structureData } = await supabase
-    .from('article_structures')
-    .select('content')
-    .eq('project_id', body.project_id)
-    .single();
-    
-  // 3. Fetch Research Pack
-  const { data: researchData } = await supabase
-    .from('research_packs')
-    .select('content')
-    .eq('project_id', body.project_id)
-    .single();
-
-  if (!briefData || !structureData || !researchData) {
-    return reply.code(404).send({ error: 'Missing required project data (brief, structure, or research)' });
-  }
-
-  const result = await runDraftContentAgent({
-    writing_brief: briefData.content,
-    argument_outline: structureData.content,
-    research_pack: researchData.content
-  });
-
-  return result;
-});
 
 app.post('/api/generate-article-structure', async (req, reply) => {
   try {
