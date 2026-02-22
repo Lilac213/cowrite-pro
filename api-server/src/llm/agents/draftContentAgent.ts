@@ -85,15 +85,15 @@ ${research_pack.sources.slice(0, 10).map(source =>
     "agent": "draftContentAgent",
     "timestamp": "当前时间ISO格式"
   },
-  "payload": "{\"draft_blocks\":[{\"block_id\":\"block_1\",\"paragraph_id\":\"p1\",\"content\":\"段落内容...[资料1]...\",\"derived_from\":[\"insight_1\"],\"citations\":[{\"source_id\":\"source_1\",\"source_url\":\"https://...\",\"source_title\":\"资料标题\",\"quote\":\"引用内容\",\"citation_type\":\"paraphrase\",\"citation_display\":\"[资料1]\"}],\"coherence_score\":0.9,\"requires_user_input\":false,\"order\":1}],\"global_coherence_score\":0.88,\"missing_evidence_blocks\":[],\"needs_revision\":false,\"total_word_count\":3000}"
+  "payload": "{\"draft_blocks\":[{\"block_id\":\"block_1\",\"paragraph_id\":\"p1\",\"content\":\"段落内容...[资料1]...\",\"derived_from\":[\"insight_1\"],\"citations\":[{\"source_id\":\"source_1\",\"source_url\":\"https://...\",\"source_title\":\"资料标题\",\"source_abstract\":\"资料摘要\",\"quote\":\"引用内容\",\"citation_type\":\"paraphrase\",\"citation_display\":\"[资料1]\",\"relevance_score\":0.95}],\"coherence_score\":0.9,\"requires_user_input\":false,\"order\":1}],\"global_coherence_score\":0.88,\"missing_evidence_blocks\":[],\"needs_revision\":false,\"total_word_count\":3000}"
 }
 
 【关键规则 - 强制要求】
 1. 语言要求：必须与 argument_outline 中使用的语言保持一致（如果结构是中文，正文必须是中文；如果结构是英文，正文必须是英文）。
 2. 禁止使用中文标点符号（如果正文是英文）。
 3. 每个 draft_block 必须有 derived_from（来自 argument_outline）
-4. 每个 draft_block 必须有 citations（来自 research_pack）
-5. citation_display 格式：[资料N]，其中 N 是资料编号
+4.95. 每个 draft_block 必须有 citations（来自 research_pack），并包含完整信息（source_id, source_title, source_abstract, source_url, relevance_score）
+96. citation_display 格式：[资料N]，其中 N 是资料编号
 6. 在 content 中插入 citation_display，例如："这是一个观点[资料1]。"
 `;
 }

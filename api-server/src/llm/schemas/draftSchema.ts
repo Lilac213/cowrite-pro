@@ -2,9 +2,11 @@ export interface Citation {
   source_id: string;
   source_url?: string;
   source_title: string;
+  source_abstract?: string;
   quote?: string;
   citation_type: 'direct' | 'paraphrase' | 'reference';
   citation_display: string;
+  relevance_score?: number;
 }
 
 export interface DraftBlock {
@@ -59,7 +61,7 @@ export const draftSchema = {
       }
 
       for (const citation of block.citations) {
-        if (!citation.source_id || !citation.citation_type || !citation.citation_display) {
+        if (!citation.source_id || !citation.citation_type || !citation.citation_display || !citation.source_title) {
           return false;
         }
       }

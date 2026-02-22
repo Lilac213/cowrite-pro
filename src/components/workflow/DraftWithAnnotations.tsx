@@ -41,6 +41,7 @@ interface DraftWithAnnotationsProps {
   projectId: string;
   onContentChange?: (newContent: string) => void;
   readonly?: boolean;
+  citations?: Record<string, Citation>;
 }
 
 const paragraphTypeColors: Record<string, string> = {
@@ -59,7 +60,8 @@ export default function DraftWithAnnotations({
   guidance = [],
   projectId,
   onContentChange,
-  readonly = false
+  readonly = false,
+  citations
 }: DraftWithAnnotationsProps) {
   const { user } = useAuth();
   const [activeParagraphId, setActiveParagraphId] = useState<string | null>(null);
@@ -94,6 +96,12 @@ export default function DraftWithAnnotations({
 
   // Fetch materials for citations
   useEffect(() => {
+    // If citations are provided via props (e.g. from agent response), use them
+    if (citations && Object.keys(citations).length > 0) {
+      setMaterials(citations);
+      return;
+    }
+
     if (!projectId) return;
 
     const fetchMaterials = async () => {
@@ -231,66 +239,65 @@ export default function DraftWithAnnotations({
 
   // Render paragraph content with interactive citations
   const renderParagraphContent = (text: string) => {
-    // Regex to match (见资料X)、(见洞察Y)、(见资料A，资料B) etc.
-    // Matches the whole parenthesis group and captures the content inside
-    const regex = /[(（\[]\s*见?((?:资料|洞察)\s*\d+(?:[，,]\s*(?:资料|洞察)?\s*\d+)*)\s*[)）\]]/g;
+    // Regex to match citations like (见资料1), [资料2], (资料3), 参考资料4
+    const regex = /([\[(（]|^|\s)(?:见|参考)?(?:资料|洞察)\s*(\d+)(?:[，,]\s*(?:资料|洞察)?\s*\d+)*([\])）]|$|\s)/g;
     
     const parts: ReactNode[] = [];
     let lastIndex = 0;
     let match;
 
     while ((match = regex.exec(text)) !== null) {
-      // Text before match
-      if (match.index > lastIndex) {
-        parts.push(text.substring(lastIndex, match.index));
+      // match[0] is full match
+      // match[1] is prefix (bracket or space)
+      // match[2] is the FIRST number found (we need to parse all numbers if multiple)
+      // match[3] is suffix
+      
+      const fullMatch = match[0];
+      const matchIndex = match.index;
+      
+      // Push text before match
+      if (matchIndex > lastIndex) {
+        parts.push(text.substring(lastIndex, matchIndex));
       }
       
-      const content = match[1];
-      // Extract all numbers from the content string
-      // e.g. "资料1，资料2" -> ["1", "2"]
-      // e.g. "洞察3" -> ["3"]
+      // Parse IDs from the match
+      // We look for all numbers in the full match string
       const idRegex = /\d+/g;
-      let idMatch;
-      const ids: string[] = [];
-      while ((idMatch = idRegex.exec(content)) !== null) {
-        ids.push(idMatch[0]);
-      }
+      const ids = fullMatch.match(idRegex);
       
-      if (ids.length > 0) {
-          // Render a CitationMarker for each ID found
-          // We wrap them in a span to keep them together if needed, or just push them
-          const markers = ids.map((id) => {
-            const material = materials[id];
-            if (material) {
+      if (ids && ids.length > 0) {
+        // Render citation marker
+        parts.push(
+          <span key={matchIndex} className="inline-flex items-baseline mx-0.5">
+            {ids.map((id, i) => {
+              const material = materials[id];
+              // Only render valid citations if material exists, otherwise just text
+              if (!material) {
+                return <span key={i} className="text-red-500 text-xs mx-0.5">[{id}?]</span>;
+              }
               return (
                 <CitationMarker 
-                  key={`${match!.index}-${id}`} 
+                  key={i} 
                   citation={material} 
                   index={parseInt(id)} 
-                  onSelect={handleCitationSelect} // Using onSelect for side panel or undefined for Popover
+                  onSelect={handleCitationSelect}
                 />
               );
-            }
-            return null;
-          }).filter(Boolean);
-
-          if (markers.length > 0) {
-            parts.push(...markers);
-          } else {
-             parts.push(match[0]); // Keep original if no valid materials found
-          }
+            })}
+          </span>
+        );
       } else {
-        parts.push(match[0]); // Keep original if no numbers found
+        parts.push(fullMatch);
       }
       
       lastIndex = regex.lastIndex;
     }
-
+    
     if (lastIndex < text.length) {
       parts.push(text.substring(lastIndex));
     }
-
-    return parts.length > 0 ? parts : text;
+    
+    return parts;
   };
 
   return (
