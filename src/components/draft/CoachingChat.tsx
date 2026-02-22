@@ -176,6 +176,32 @@ export default function CoachingChat({
       </ScrollArea>
 
       <div className="p-3 border-t bg-white">
+        <div className="flex flex-wrap gap-2 mb-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+            onClick={() => setInput('润色当前段落，使其更正式')}
+          >
+            润色当前段落
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+            onClick={() => setInput('寻找相反论据')}
+          >
+            寻找相反论据
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+            onClick={() => setInput('补充一个实际案例')}
+          >
+            补充案例
+          </Button>
+        </div>
         <div className="relative">
           <Textarea
             value={input}

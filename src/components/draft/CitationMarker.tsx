@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { ExternalLink, FileText } from 'lucide-react';
+import { ExternalLink, FileText, X } from 'lucide-react';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import type { Citation } from '@/types';
 
 interface CitationMarkerProps {
@@ -18,10 +18,11 @@ interface CitationMarkerProps {
 export default function CitationMarker({ citation, index, onSelect }: CitationMarkerProps) {
   const [open, setOpen] = useState(false);
 
+  // If onSelect is provided, we use it instead of Popover (for side panel display)
   if (onSelect) {
     return (
       <button
-        className="inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-primary bg-primary/10 rounded-full hover:bg-primary/20 transition-colors cursor-pointer mx-0.5"
+        className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-slate-500 bg-slate-100 rounded-sm hover:bg-slate-200 hover:text-slate-700 transition-colors cursor-pointer mx-0.5 align-super"
         onClick={() => onSelect(citation)}
       >
         {index}
@@ -33,74 +34,48 @@ export default function CitationMarker({ citation, index, onSelect }: CitationMa
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          className="inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-primary bg-primary/10 rounded-full hover:bg-primary/20 transition-colors cursor-pointer mx-0.5"
+          className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-slate-500 bg-slate-100 rounded-sm hover:bg-slate-200 hover:text-slate-700 transition-colors cursor-pointer mx-0.5 align-super"
           onClick={() => setOpen(true)}
         >
           {index}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-96" align="start">
-        <Card className="border-0 shadow-none">
-          <CardHeader className="p-4 pb-2">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2 flex-1">
-                <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                <CardTitle className="text-sm font-medium line-clamp-2">
+      <PopoverContent className="w-[320px] p-0 overflow-hidden rounded-xl shadow-xl border-slate-200" align="start" sideOffset={8}>
+        <div className="bg-white">
+            <div className="p-4 border-b bg-white relative z-20">
+                <div className="flex items-center justify-between mb-3">
+                  <Badge variant="default" className="bg-black hover:bg-black text-white px-3 py-1 text-xs font-bold rounded-full">
+                    来源详情 [{index}]
+                  </Badge>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setOpen(false)}>
+                    <X className="h-4 w-4 text-slate-400" />
+                  </Button>
+                </div>
+                
+                <h3 className="text-base font-bold text-slate-900 mb-3 leading-snug line-clamp-2">
                   {citation.material_title}
-                </CardTitle>
+                </h3>
+                
+                <div className="bg-slate-50 rounded-lg p-3 space-y-2 mb-3 border border-slate-100">
+                  <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">摘要:</div>
+                  <p className="text-sm text-slate-600 leading-relaxed line-clamp-4">
+                    {citation.material_summary || citation.insight || "暂无摘要"}
+                  </p>
+                </div>
+
+                {citation.material_url && (
+                  <a
+                    href={citation.material_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-primary transition-colors group"
+                  >
+                    查看原始文档
+                    <ExternalLink className="h-3 w-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                  </a>
+                )}
               </div>
-            </div>
-            {citation.material_source && (
-              <CardDescription className="text-xs mt-1">
-                来源：{citation.material_source}
-              </CardDescription>
-            )}
-          </CardHeader>
-          <CardContent className="p-4 pt-2 space-y-3">
-            {citation.insight && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">观点洞察</p>
-                <p className="text-sm text-foreground line-clamp-4">
-                  {citation.insight}
-                </p>
-              </div>
-            )}
-            {citation.material_summary && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">摘要</p>
-                <p className="text-sm text-foreground line-clamp-4">
-                  {citation.material_summary}
-                </p>
-              </div>
-            )}
-            {citation.quote && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">引用内容</p>
-                <p className="text-sm text-foreground italic border-l-2 border-primary pl-2">
-                  "{citation.quote}"
-                </p>
-              </div>
-            )}
-            {citation.material_url && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                asChild
-              >
-                <a
-                  href={citation.material_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  查看原文
-                </a>
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+        </div>
       </PopoverContent>
     </Popover>
   );

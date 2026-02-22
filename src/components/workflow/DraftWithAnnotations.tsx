@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import type { ParagraphAnnotation, Citation } from '@/types';
-import { FileText, BookOpen, Edit3, Check, X } from 'lucide-react';
+import { FileText, BookOpen, Edit3, Check, X, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/db/supabase';
 import CitationMarker from '../draft/CitationMarker';
@@ -374,57 +374,45 @@ export default function DraftWithAnnotations({
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1 overflow-hidden p-0">
-          <div className="flex flex-col h-full">
-            <div className="border-b bg-white">
-              <div className="p-4 space-y-3">
-                <div className="text-sm font-medium text-slate-700">资料详情</div>
-                {selectedCitation ? (
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-xs text-muted-foreground">标题</div>
-                      <div className="text-sm text-slate-800">{selectedCitation.material_title}</div>
-                    </div>
-                    {selectedCitation.material_source && (
-                      <div>
-                        <div className="text-xs text-muted-foreground">来源</div>
-                        <div className="text-sm text-slate-800">{selectedCitation.material_source}</div>
-                      </div>
-                    )}
-                    {selectedCitation.insight && (
-                      <div>
-                        <div className="text-xs text-muted-foreground">观点洞察</div>
-                        <div className="text-sm text-slate-800">{selectedCitation.insight}</div>
-                      </div>
-                    )}
-                    {selectedCitation.material_summary && (
-                      <div>
-                        <div className="text-xs text-muted-foreground">摘要</div>
-                        <div className="text-sm text-slate-800">{selectedCitation.material_summary}</div>
-                      </div>
-                    )}
-                    {selectedCitation.quote && (
-                      <div>
-                        <div className="text-xs text-muted-foreground">引用内容</div>
-                        <div className="text-sm text-slate-700 italic">{selectedCitation.quote}</div>
-                      </div>
-                    )}
-                    {selectedCitation.material_url && (
-                      <a
-                        href={selectedCitation.material_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center text-xs text-primary hover:underline"
-                      >
-                        查看原文
-                      </a>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-xs text-muted-foreground">点击正文中的资料编号查看详情</div>
+          <div className="flex flex-col h-full bg-slate-50/30">
+            {/* Citation Detail Card */}
+            {selectedCitation && (
+              <div className="p-4 border-b bg-white animate-in slide-in-from-top-2 duration-300 shadow-sm relative z-20">
+                <div className="flex items-center justify-between mb-3">
+                  <Badge variant="default" className="bg-black hover:bg-black text-white px-3 py-1 text-xs font-bold rounded-full">
+                    来源详情 [{Object.keys(materials).find(key => materials[key] === selectedCitation)}]
+                  </Badge>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedCitation(null)}>
+                    <X className="h-4 w-4 text-slate-400" />
+                  </Button>
+                </div>
+                
+                <h3 className="text-base font-bold text-slate-900 mb-3 leading-snug line-clamp-2">
+                  {selectedCitation.material_title}
+                </h3>
+                
+                <div className="bg-slate-50 rounded-lg p-3 space-y-2 mb-3 border border-slate-100">
+                  <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">摘要:</div>
+                  <p className="text-sm text-slate-600 leading-relaxed line-clamp-4">
+                    {selectedCitation.material_summary || selectedCitation.insight || "暂无摘要"}
+                  </p>
+                </div>
+
+                {selectedCitation.material_url && (
+                  <a
+                    href={selectedCitation.material_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-primary transition-colors group"
+                  >
+                    查看原始文档
+                    <ExternalLink className="h-3 w-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                  </a>
                 )}
               </div>
-            </div>
-            <div className="flex-1 overflow-hidden">
+            )}
+            
+            <div className="flex-1 overflow-hidden relative">
               <DraftGuidance 
                 guidance={annotations} 
                 activeParagraphId={activeParagraphId || undefined}

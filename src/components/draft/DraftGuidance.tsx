@@ -5,6 +5,7 @@ import type { ParagraphAnnotation } from '@/types';
 import CoachingChat from './CoachingChat';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -66,143 +67,111 @@ export default function DraftGuidance({
 
   return (
     <ScrollArea className="h-full">
-      <div className="space-y-4 p-4">
-        {displayGuidance.map((item, index) => {
+      <div className="space-y-6 p-4">
+        {displayGuidance.map((item) => {
           const isActive = activeParagraphId === item.paragraph_id;
           
           // Map fields if missing
           const generationRationale = item.generation_rationale || item.development_logic;
           const collaborationPrompt = item.collaboration_prompt || item.editing_suggestions;
           const personalSuggestions = item.personal_content_suggestions || [];
-          const experienceSuggestions = item.experience_suggestions || [];
+          
+          if (!isActive) return null; // Only show active paragraph guidance in this new design
 
           return (
-          <Card key={item.paragraph_id} className={`border-l-4 ${isActive ? 'border-l-primary ring-2 ring-primary/20' : 'border-l-muted'}`}>
-            <CardHeader className="pb-3 bg-slate-50/50">
-              <CardTitle className="text-base flex items-center justify-between">
+          <div key={item.paragraph_id} className="space-y-4 animate-in fade-in duration-500">
+            {/* 1. Logic Analysis Card (Light) */}
+            <Card className="border-0 shadow-sm bg-slate-50">
+              <CardHeader className="pb-2 pt-4 px-4">
                 <div className="flex items-center gap-2">
-                  <Sparkles className={`h-4 w-4 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
-                  段落 {item.paragraph_id}
+                  <Badge variant="secondary" className="bg-slate-200 text-slate-700 font-bold tracking-wider text-[10px] uppercase">
+                    段落逻辑 (LOGIC)
+                  </Badge>
+                  <span className="text-xs text-slate-400 font-mono ml-auto">#{item.paragraph_id}</span>
                 </div>
-                {isActive && <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">当前聚焦</span>}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6 pt-4">
-              {/* Generation Rationale */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <Lightbulb className="h-4 w-4 text-amber-500" />
-                  生成逻辑
-                </div>
-                <p className="text-sm text-slate-600 pl-6 leading-relaxed bg-slate-50 p-2 rounded">
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <p className="text-sm text-slate-700 leading-relaxed">
                   {generationRationale}
                 </p>
+                
+                {personalSuggestions.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-slate-200 border-dashed">
+                    <div className="flex items-center gap-2 mb-2">
+                       <Lightbulb className="h-3 w-3 text-amber-500" />
+                       <span className="text-xs font-bold text-slate-500 uppercase">建议补充 (SUGGESTIONS)</span>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-100 rounded-md p-3">
+                      <p className="text-sm text-slate-700 italic">
+                        "{personalSuggestions[0]}"
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 2. Active Collaboration Card (Dark) */}
+            <Card className="border-0 shadow-lg bg-black text-white overflow-hidden relative group">
+               <div className="absolute top-0 right-0 p-2">
+                 <Sparkles className="h-4 w-4 text-yellow-400 animate-pulse" />
+               </div>
+               <CardHeader className="pb-2 pt-4 px-4">
+                 <Badge variant="outline" className="w-fit border-slate-700 text-slate-300 font-bold tracking-wider text-[10px] uppercase bg-slate-900/50">
+                    实时协作 (ACTIVE)
+                 </Badge>
+               </CardHeader>
+               <CardContent className="px-4 pb-6 space-y-4">
+                 <div>
+                   <h4 className="text-sm font-bold text-white mb-1">激发协作：插入个人视角</h4>
+                   <p className="text-xs text-slate-400 leading-relaxed">
+                     系统检测到您在前期笔记中提到过相关内容。
+                     {collaborationPrompt ? `提示：${collaborationPrompt}` : '点击下方按钮快速插入您的经历。'}
+                   </p>
+                 </div>
+                 
+                 <Button 
+                   className="w-full bg-white text-black hover:bg-slate-200 font-bold h-10 transition-transform active:scale-95"
+                   onClick={() => handleInsertSuggestion(`${item.paragraph_id}-collab`, collaborationPrompt || '我的个人经历...')}
+                 >
+                   <div className="flex items-center gap-2">
+                     <div className="bg-black text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]">+</div>
+                     插入我的创业亲身经历
+                   </div>
+                 </Button>
+
+                 {insertTarget?.key === `${item.paragraph_id}-collab` && (
+                    <div className="space-y-2 animate-in slide-in-from-top-2">
+                      <Textarea
+                        value={insertInput}
+                        onChange={(e) => setInsertInput(e.target.value)}
+                        placeholder="描述您的经历（背景-经过-结果）..."
+                        className="bg-slate-900 border-slate-800 text-slate-200 text-sm min-h-[100px] placeholder:text-slate-600 focus-visible:ring-slate-700"
+                        autoFocus
+                      />
+                      <Button 
+                        size="sm" 
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                        onClick={() => handleInsertSuggestion(`${item.paragraph_id}-collab`, collaborationPrompt || '')}
+                      >
+                        确认插入并分析
+                      </Button>
+                    </div>
+                 )}
+               </CardContent>
+            </Card>
+
+            {/* 3. AI Chat Interface */}
+            {onUpdateParagraph && (
+              <div className="pt-2">
+                <CoachingChat 
+                  paragraphId={item.paragraph_id}
+                  paragraphContent={paragraphContent}
+                  onUpdateParagraph={(newContent) => onUpdateParagraph(item.paragraph_id, newContent)}
+                />
               </div>
-
-              {/* Personal Content Suggestions */}
-              {personalSuggestions.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <User className="h-4 w-4 text-blue-500" />
-                    建议补充 (个人内容)
-                  </div>
-                  <ul className="space-y-2 pl-6">
-                    {personalSuggestions.map((suggestion, idx) => {
-                      const insertKey = `${item.paragraph_id}-personal-${idx}`;
-                      const isInsertActive = insertTarget?.key === insertKey;
-
-                      return (
-                      <li key={idx} className="text-sm text-slate-600 list-disc group">
-                        <div className="flex flex-col gap-1">
-                          <span>{suggestion}</span>
-                          {isActive && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="w-fit h-6 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 -ml-2"
-                              onClick={() => handleInsertSuggestion(insertKey, suggestion)}
-                            >
-                              {isInsertActive ? '插入到正文' : '+ 插入此观点'}
-                            </Button>
-                          )}
-                          {isActive && isInsertActive && (
-                            <Textarea
-                              value={insertInput}
-                              onChange={(e) => setInsertInput(e.target.value)}
-                              placeholder="补充你的内容后再插入..."
-                              className="text-xs bg-white"
-                            />
-                          )}
-                        </div>
-                      </li>
-                    )})}
-                  </ul>
-                </div>
-              )}
-
-              {/* Experience Suggestions */}
-              {experienceSuggestions.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <Heart className="h-4 w-4 text-rose-500" />
-                    建议补充 (个人经历)
-                  </div>
-                  <ul className="space-y-2 pl-6">
-                    {experienceSuggestions.map((suggestion, idx) => {
-                      const insertKey = `${item.paragraph_id}-experience-${idx}`;
-                      const isInsertActive = insertTarget?.key === insertKey;
-
-                      return (
-                      <li key={idx} className="text-sm text-slate-600 list-disc group">
-                         <div className="flex flex-col gap-1">
-                          <span>{suggestion}</span>
-                          {isActive && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="w-fit h-6 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 -ml-2"
-                              onClick={() => handleInsertSuggestion(insertKey, suggestion)}
-                            >
-                              {isInsertActive ? '插入到正文' : '+ 插入此经历'}
-                            </Button>
-                          )}
-                          {isActive && isInsertActive && (
-                            <Textarea
-                              value={insertInput}
-                              onChange={(e) => setInsertInput(e.target.value)}
-                              placeholder="补充你的经历后再插入..."
-                              className="text-xs bg-white"
-                            />
-                          )}
-                        </div>
-                      </li>
-                    )})}
-                  </ul>
-                </div>
-              )}
-
-              {/* Collaboration Prompt */}
-              {collaborationPrompt && (
-                <div className="bg-primary/5 rounded-lg p-3 border border-primary/20">
-                  <p className="text-sm text-foreground italic flex gap-2">
-                    <span className="not-italic">💡</span>
-                    {collaborationPrompt}
-                  </p>
-                </div>
-              )}
-
-              {/* AI Chat Interface (Only for active paragraph) */}
-              {isActive && onUpdateParagraph && (
-                <div className="mt-6 pt-4 border-t animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <CoachingChat 
-                    paragraphId={item.paragraph_id}
-                    paragraphContent={paragraphContent}
-                    onUpdateParagraph={(newContent) => onUpdateParagraph(item.paragraph_id, newContent)}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            )}
+          </div>
         )})}
       </div>
     </ScrollArea>
