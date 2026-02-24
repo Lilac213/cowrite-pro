@@ -5,8 +5,6 @@ import type { Draft, ParagraphAnnotation } from '@/types';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,7 +25,6 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
   const [generating, setGenerating] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [viewMode, setViewMode] = useState<'annotated' | 'plain'>('annotated');
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -188,9 +185,12 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-12">
           <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-          <p className="text-lg font-medium">正在生成文章...</p>
+          <p className="text-lg font-medium">正在为你生成文章草稿...</p>
           <p className="text-sm text-muted-foreground mt-2">
-            AI 正在分析资料并撰写初稿
+            步骤 1/3：加载研究资料与写作结构
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            随后将依次完成 步骤 2/3：生成正文草稿，步骤 3/3：结构分析与协作建议
           </p>
         </CardContent>
       </Card>
@@ -206,7 +206,9 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
             {analyzing && <Badge variant="secondary" className="animate-pulse"><Loader2 className="h-3 w-3 mr-1 animate-spin"/> 分析结构中...</Badge>}
           </h2>
           <p className="text-muted-foreground mt-1">
-            查看文章内容和段落注释，了解每段的来源和生成逻辑
+            {analyzing
+              ? '步骤 3/3：正文已生成，AI 正在分析段落结构并补充协作建议'
+              : '全部 3 个步骤已完成，现在可以在协作模式下优化段落，或在审阅模式通读全文'}
           </p>
         </div>
         <div className="flex gap-2">
@@ -237,46 +239,15 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
         </div>
       </div>
 
-      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'annotated' | 'plain')}>
-        <TabsList>
-          <TabsTrigger value="annotated" className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" />
-            注释视图
-          </TabsTrigger>
-          <TabsTrigger value="plain" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            纯文本视图
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="annotated" className="mt-6">
-            <DraftWithAnnotations
-              content={isTyping ? displayedText : content}
-              annotations={annotations}
-              onContentChange={setContent}
-              readonly={readonly || isTyping}
-              projectId={projectId}
-            />
-        </TabsContent>
-
-        <TabsContent value="plain" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>文章内容</CardTitle>
-              <CardDescription>纯文本编辑模式</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={isTyping ? displayedText : content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={25}
-                disabled={readonly || isTyping}
-                className="font-mono"
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      <div className="mt-6">
+        <DraftWithAnnotations
+          content={isTyping ? displayedText : content}
+          annotations={annotations}
+          onContentChange={setContent}
+          readonly={readonly || isTyping}
+          projectId={projectId}
+        />
+      </div>
     </div>
   );
 }

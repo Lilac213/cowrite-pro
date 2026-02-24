@@ -373,11 +373,11 @@ export default function DraftWithAnnotations({
               <TabsList className="h-8">
                 <TabsTrigger value="rich" className="text-xs px-3 h-7">
                   <LayoutTemplate className="w-3.5 h-3.5 mr-1.5" />
-                  图文模式
+                  协作模式
                 </TabsTrigger>
                 <TabsTrigger value="plain" className="text-xs px-3 h-7">
                   <AlignLeft className="w-3.5 h-3.5 mr-1.5" />
-                  纯文本
+                  审阅模式
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -574,7 +574,7 @@ export default function DraftWithAnnotations({
 
       {/* 右侧：协作教练 (Occupies 5/12 columns) */}
       <Card className="flex flex-col bg-slate-50/50 border-l-0 rounded-l-none shadow-none lg:col-span-5">
-        <CardHeader className="bg-slate-50/80 backdrop-blur border-b sticky top-0 z-10">
+        <CardHeader className="bg-slate-50 border-b py-3 px-6 shrink-0">
           <CardTitle className="flex items-center gap-2 text-lg">
             <BookOpen className="h-5 w-5 text-primary" />
             协作教练
