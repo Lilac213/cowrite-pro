@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { Send, Sparkles, User, Bot, Check, X } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface Message {
   id: string;
@@ -34,6 +37,7 @@ export default function CoachingChat({
   const [collaborationState, setCollaborationState] = useState<'S0_DIAGNOSE' | 'S1_PROPOSE' | 'S2_REFINE' | 'S3_STYLE_SHIFT' | 'S4_INTENSITY' | 'S5_CONVERGE'>('S0_DIAGNOSE');
   const [cooperationMode, setCooperationMode] = useState('逻辑增强模式');
   const [lastInstruction, setLastInstruction] = useState('');
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const sendInstruction = async (instruction: string, nextState?: typeof collaborationState, nextMode?: string) => {
     if (!instruction.trim() || isLoading) return;
@@ -118,7 +122,7 @@ export default function CoachingChat({
   };
 
   return (
-    <div className="flex flex-col h-[400px] border rounded-lg bg-white shadow-sm">
+    <div className="flex flex-col min-h-[320px] max-h-[70vh] h-auto border rounded-lg bg-white shadow-sm transition-all duration-300">
       <div className="p-3 border-b bg-slate-50 flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-primary" />
         <span className="text-sm font-medium">AI 协作助手</span>
@@ -145,13 +149,25 @@ export default function CoachingChat({
                 </AvatarFallback>
               </Avatar>
               <div
-                className={`rounded-lg p-3 text-sm max-w-[85%] ${
+                className={`rounded-lg p-3 text-[15px] max-w-[85%] ${
                   msg.role === 'user'
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-slate-100 text-slate-800'
                 }`}
               >
-                {msg.content}
+                {msg.role === 'ai' ? (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                      p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                ) : (
+                  msg.content
+                )}
               </div>
             </div>
           ))}
@@ -170,8 +186,16 @@ export default function CoachingChat({
                     </Button>
                   </div>
                 </div>
-                <div className="text-sm bg-white p-2 rounded border border-green-100 text-slate-700">
-                  {suggestion}
+                <div className="text-[15px] bg-white p-2 rounded border border-green-100 text-slate-700">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                      p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>
+                    }}
+                  >
+                    {suggestion}
+                  </ReactMarkdown>
                 </div>
                 <Button size="sm" className="w-full bg-green-600 hover:bg-green-700 text-white h-8" onClick={handleApply}>
                   应用修改
@@ -198,13 +222,13 @@ export default function CoachingChat({
       </ScrollArea>
 
       <div className="p-3 border-t bg-white">
-        <div className="flex flex-wrap gap-2 mb-2">
+        <div className="flex flex-wrap gap-2 mb-2 transition-all duration-200 ease-out">
           {collaborationState === 'S0_DIAGNOSE' && (
             <>
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100 transition-all duration-200"
                 onClick={() => sendInstruction(lastInstruction || '请诊断这段话的主要问题', 'S0_DIAGNOSE')}
               >
                 诊断问题
@@ -212,7 +236,7 @@ export default function CoachingChat({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100 transition-all duration-200"
                 onClick={() => sendInstruction('请优化逻辑表达', 'S1_PROPOSE', '逻辑增强模式')}
               >
                 优化逻辑
@@ -220,7 +244,7 @@ export default function CoachingChat({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100 transition-all duration-200"
                 onClick={() => sendInstruction('请精简表达', 'S1_PROPOSE', '表达简洁模式')}
               >
                 精简表达
@@ -228,7 +252,7 @@ export default function CoachingChat({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100 transition-all duration-200"
                 onClick={() => sendInstruction('请调整为更学术严谨的表达', 'S1_PROPOSE', '学术严谨模式')}
               >
                 调整风格
@@ -240,15 +264,15 @@ export default function CoachingChat({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
-                onClick={() => sendInstruction('请用方案1进行精修', 'S2_REFINE')}
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100 transition-all duration-200"
+                onClick={() => setConfirmOpen(true)}
               >
                 用方案1
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100 transition-all duration-200"
                 onClick={() => sendInstruction('再给一个版本', 'S1_PROPOSE')}
               >
                 再给一个版本
@@ -260,7 +284,7 @@ export default function CoachingChat({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100 transition-all duration-200"
                 onClick={() => sendInstruction('语气再强一点', 'S4_INTENSITY', '说服力增强模式')}
               >
                 强一点
@@ -268,7 +292,7 @@ export default function CoachingChat({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100 transition-all duration-200"
                 onClick={() => sendInstruction('语气柔和一点', 'S4_INTENSITY', '表达简洁模式')}
               >
                 弱一点
@@ -276,7 +300,7 @@ export default function CoachingChat({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100 transition-all duration-200"
                 onClick={() => sendInstruction('调整风格为更正式', 'S3_STYLE_SHIFT', '学术严谨模式')}
               >
                 改风格
@@ -287,7 +311,7 @@ export default function CoachingChat({
             <Button
               variant="outline"
               size="sm"
-              className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+              className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100 transition-all duration-200"
               onClick={() => setCollaborationState('S0_DIAGNOSE')}
             >
               优化下一段
@@ -331,7 +355,7 @@ export default function CoachingChat({
               }
             }}
             placeholder="输入指令，例如：'把这段话改得更正式一点'..."
-            className="pr-10 min-h-[80px] resize-none"
+            className="pr-10 min-h-[80px] resize-none text-[15px]"
           />
           <Button
             size="icon"
@@ -343,6 +367,39 @@ export default function CoachingChat({
           </Button>
         </div>
       </div>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>是否添加到正文？</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!suggestion) {
+                  setConfirmOpen(false);
+                  return;
+                }
+                onUpdateParagraph(suggestion);
+                setSuggestion(null);
+                setMessages(prev => [
+                  ...prev,
+                  {
+                    id: Date.now().toString(),
+                    role: 'ai',
+                    content: '✅ 已替换为所选方案。',
+                    timestamp: Date.now()
+                  }
+                ]);
+                setCollaborationState('S5_CONVERGE');
+                setConfirmOpen(false);
+              }}
+            >
+              确认替换
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

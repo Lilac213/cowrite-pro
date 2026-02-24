@@ -1,23 +1,48 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, Component } from 'react';
 import { getLatestDraft, updateDraft, callDraftContentAgent, callDraftAnalysisAgent } from '@/api';
 import { getWritingSession, getResearchInsights, getResearchGaps } from '@/api/session.api';
 import { getStructureResult } from '@/db/api';
 import type { Draft, ParagraphAnnotation, ResearchGap, ResearchInsight } from '@/types';
+import { refineParagraph } from '@/api/draft.api';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
 import DraftWithAnnotations from './DraftWithAnnotations';
-import { Loader2, FileText, MessageSquare, Sparkles } from 'lucide-react';
+import { Loader2, FileText, AlertCircle, RotateCcw } from 'lucide-react';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useTypewriter } from '@/hooks/useTypewriter';
 
 interface DraftStageProps {
   projectId: string;
   onComplete?: () => void;
   readonly?: boolean;
+}
+
+class DraftErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error?: Error }> {
+  state = { hasError: false, error: undefined };
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch() {}
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6">
+          <Alert variant="destructive" className="max-w-xl">
+            <AlertCircle className="mt-0.5" />
+            <AlertTitle>页面渲染失败</AlertTitle>
+            <AlertDescription>请刷新页面后重试</AlertDescription>
+          </Alert>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 export default function DraftStage({ projectId, onComplete, readonly }: DraftStageProps) {
@@ -30,12 +55,16 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
   const [structureResult, setStructureResult] = useState<any>(null);
   const [insights, setInsights] = useState<ResearchInsight[]>([]);
   const [gaps, setGaps] = useState<ResearchGap[]>([]);
-  const { user } = useAuth();
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [aiTypingEnabled, setAiTypingEnabled] = useState(false);
+  const [typingParagraphId, setTypingParagraphId] = useState<string | null>(null);
+  const [typingParagraphContent, setTypingParagraphContent] = useState('');
+  const [typingParagraphActive, setTypingParagraphActive] = useState(false);
+  const [regeneratingParagraphId, setRegeneratingParagraphId] = useState<string | null>(null);
   const { toast } = useToast();
-  const navigate = useNavigate();
 
   // Typewriter effect hook
-  const { displayedText, isTyping } = useTypewriter(content, { speed: 10 });
+  const { displayedText, isTyping } = useTypewriter(content, { speed: 10, enabled: aiTypingEnabled, onComplete: () => setAiTypingEnabled(false) });
 
   useEffect(() => {
     loadDraft();
@@ -77,6 +106,7 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
   const handleGenerate = async () => {
     setGenerating(true);
     setAnalyzing(false);
+    setGenerateError(null);
     setContent('');
     setAnnotations([]);
     
@@ -89,6 +119,7 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
         const draftId = contentResult.draft_id;
         
         // Update content to start typing
+        setAiTypingEnabled(true);
         setContent(fullContent);
         setGenerating(false); // Stop "generating" spinner, start typing
         
@@ -146,6 +177,7 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
 
     } catch (error: any) {
       console.error('Generate draft error:', error);
+      setGenerateError('生成失败，请重新点击生成按钮再次尝试');
       toast({
         title: '生成失败',
         description: error.message || '无法生成文章',
@@ -174,6 +206,45 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRegenerateParagraph = async (paragraphId: string, paragraphText: string) => {
+    if (!paragraphText) return;
+    setRegeneratingParagraphId(paragraphId);
+    setTypingParagraphId(paragraphId);
+    setTypingParagraphContent('');
+    setTypingParagraphActive(false);
+    setAiTypingEnabled(false);
+    try {
+      const result: any = await refineParagraph(
+        paragraphText,
+        '请基于上下文重写本段，保持原意，修正逻辑与语言不通顺问题，尽量小幅修改并保留引用标记。',
+        content
+      );
+      if (!result?.refined_content) {
+        throw new Error(result?.error || '段落重写失败');
+      }
+      const paragraphs = (content || '').split(/\n\n+/).filter(p => p.trim());
+      const index = parseInt(paragraphId.replace('P', '')) - 1;
+      if (index >= 0 && index < paragraphs.length) {
+        paragraphs[index] = result.refined_content;
+        const newContent = paragraphs.join('\n\n');
+        setContent(newContent);
+        setTypingParagraphContent(result.refined_content);
+        setTypingParagraphActive(true);
+      }
+    } catch (error) {
+      toast({
+        title: '段落重写失败',
+        description: error instanceof Error ? error.message : '无法重写该段落',
+        variant: 'destructive',
+      });
+      setTypingParagraphId(null);
+      setTypingParagraphContent('');
+      setTypingParagraphActive(false);
+    } finally {
+      setRegeneratingParagraphId(null);
     }
   };
 
@@ -221,7 +292,7 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -233,6 +304,20 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
               ? '步骤 3/3：正文已生成，AI 正在分析段落结构并补充协作建议'
               : '全部 3 个步骤已完成，现在可以在协作模式下优化段落，或在审阅模式通读全文'}
           </p>
+          {generateError && (
+            <div className="mt-3 animate-in fade-in">
+              <Alert className="max-w-xl">
+                <AlertCircle className="mt-0.5" />
+                <AlertTitle>生成失败</AlertTitle>
+                <AlertDescription className="flex items-center gap-3">
+                  <span>{generateError}</span>
+                  <Button size="sm" variant="outline" onClick={handleGenerate} className="h-7 px-2 gap-1">
+                    <RotateCcw className="h-3 w-3" /> 重试
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           {!readonly && (
@@ -262,18 +347,27 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
         </div>
       </div>
 
-      <div className="mt-6">
+      <DraftErrorBoundary>
         <DraftWithAnnotations
           content={isTyping ? displayedText : content}
           annotations={annotations}
-          onContentChange={setContent}
+          onContentChange={(newContent) => {
+            setAiTypingEnabled(false);
+            setContent(newContent);
+          }}
           readonly={readonly || isTyping}
           projectId={projectId}
           insights={insights}
           gaps={gaps}
           structureResult={structureResult}
+          onRegenerateParagraph={handleRegenerateParagraph}
+          regeneratingParagraphId={regeneratingParagraphId || undefined}
+          typingParagraphId={typingParagraphId || undefined}
+          typingParagraphContent={typingParagraphContent}
+          typingParagraphActive={typingParagraphActive}
+          onTypingComplete={() => setTypingParagraphActive(false)}
         />
-      </div>
+      </DraftErrorBoundary>
     </div>
   );
 }

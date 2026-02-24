@@ -13,7 +13,9 @@ import {
   ExternalLink,
   Edit3,
   AlignLeft,
-  LayoutTemplate
+  LayoutTemplate,
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -31,6 +33,7 @@ import { supabase } from '@/db/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { createMaterial } from '@/api/material.api';
 import type { Citation, ParagraphAnnotation, ParagraphGuidance, ResearchGap, ResearchInsight } from '@/types';
+import { useTypewriter } from '@/hooks/useTypewriter';
 import DraftGuidance from '@/components/draft/DraftGuidance';
 import CitationMarker from '@/components/draft/CitationMarker';
 
@@ -45,6 +48,12 @@ interface DraftWithAnnotationsProps {
   insights?: ResearchInsight[];
   gaps?: ResearchGap[];
   structureResult?: any;
+  onRegenerateParagraph?: (paragraphId: string, paragraphContent: string) => void;
+  regeneratingParagraphId?: string;
+  typingParagraphId?: string;
+  typingParagraphContent?: string;
+  typingParagraphActive?: boolean;
+  onTypingComplete?: () => void;
 }
 
 const paragraphTypeColors: Record<string, string> = {
@@ -67,7 +76,13 @@ export default function DraftWithAnnotations({
   citations,
   insights = [],
   gaps = [],
-  structureResult
+  structureResult,
+  onRegenerateParagraph,
+  regeneratingParagraphId,
+  typingParagraphId,
+  typingParagraphContent = '',
+  typingParagraphActive = false,
+  onTypingComplete
 }: DraftWithAnnotationsProps) {
   const { user } = useAuth();
   const [activeParagraphId, setActiveParagraphId] = useState<string | null>(null);
@@ -90,6 +105,11 @@ export default function DraftWithAnnotations({
   const cleanParagraphs = paragraphs.map(p => p.replace(/^\[P\d+\]\s*/, ''));
   const paragraphCounts = cleanParagraphs.map(p => p.replace(/\s+/g, '').length);
   const totalCount = paragraphCounts.reduce((sum, count) => sum + count, 0);
+  const { displayedText: typingDisplayedText } = useTypewriter(typingParagraphContent, {
+    speed: 12,
+    enabled: typingParagraphActive,
+    onComplete: onTypingComplete
+  });
 
   useEffect(() => {
     if (paragraphs.length === 0) return;
@@ -414,6 +434,8 @@ export default function DraftWithAnnotations({
                     
                     // Clean paragraph marker if present in text (e.g. [P1])
                     const cleanText = cleanParagraphs[index];
+                    const isTypingParagraph = typingParagraphActive && typingParagraphId === paragraphId;
+                    const displayText = isTypingParagraph ? typingDisplayedText : cleanText;
 
                     if (isEditing) {
                       return (
@@ -432,7 +454,7 @@ export default function DraftWithAnnotations({
                           <Textarea
                             value={editValue}
                             onChange={(e) => setEditValue(e.target.value)}
-                            className="min-h-[150px] font-serif text-xl leading-relaxed resize-none shadow-inner bg-slate-50"
+                            className="min-h-[150px] font-serif text-lg leading-relaxed resize-none shadow-inner bg-slate-50"
                             autoFocus
                             onKeyDown={(e) => {
                               // Ctrl+Enter or Cmd+Enter to save
@@ -476,23 +498,43 @@ export default function DraftWithAnnotations({
                           
                           {/* Quick Edit Button */}
                           {!readonly && (
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 ml-auto opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditStart(paragraphId, cleanText);
-                              }}
-                            >
-                              <Edit3 className="h-3 w-3" />
-                            </Button>
+                            <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditStart(paragraphId, cleanText);
+                                }}
+                              >
+                                <Edit3 className="h-3 w-3" />
+                              </Button>
+                              {onRegenerateParagraph && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRegenerateParagraph(paragraphId, cleanText);
+                                  }}
+                                  disabled={regeneratingParagraphId === paragraphId}
+                                >
+                                  {regeneratingParagraphId === paragraphId ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              )}
+                            </div>
                           )}
                         </div>
                         
                         {/* Content */}
-                        <p className="text-xl text-slate-800 leading-relaxed font-serif text-justify whitespace-pre-wrap">
-                          {renderParagraphContent(cleanText)}
+                        <p className="text-lg text-slate-800 leading-relaxed font-serif text-justify whitespace-pre-wrap">
+                          {renderParagraphContent(displayText)}
                         </p>
                       </div>
                     );
@@ -548,14 +590,17 @@ export default function DraftWithAnnotations({
                     {paragraphs.map((paragraph, index) => {
                       // Clean paragraph marker if present in text (e.g. [P1])
                       const cleanText = cleanParagraphs[index];
+                      const paragraphId = `P${index + 1}`;
+                      const isTypingParagraph = typingParagraphActive && typingParagraphId === paragraphId;
+                      const displayText = isTypingParagraph ? typingDisplayedText : cleanText;
                       
                       return (
                         <div key={index} className="space-y-2">
                           <div className="text-xs text-slate-400">
                             第 {index + 1} 段 · 字数 {paragraphCounts[index] || 0}
                           </div>
-                          <p className="text-xl leading-loose font-serif text-justify indent-8">
-                            {renderParagraphContent(cleanText)}
+                          <p key={index} className="text-lg leading-loose font-serif text-justify indent-8">
+                            {renderParagraphContent(displayText)}
                           </p>
                         </div>
                       );

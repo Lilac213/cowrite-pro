@@ -3,10 +3,11 @@ import { useState, useEffect, useRef } from 'react';
 interface UseTypewriterOptions {
   speed?: number;
   onComplete?: () => void;
+  enabled?: boolean;
 }
 
 export function useTypewriter(text: string, options: UseTypewriterOptions = {}) {
-  const { speed = 30, onComplete } = options;
+  const { speed = 30, onComplete, enabled = true } = options;
   const [displayedText, setDisplayedText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const indexRef = useRef(0);
@@ -17,7 +18,8 @@ export function useTypewriter(text: string, options: UseTypewriterOptions = {}) 
     setDisplayedText('');
     indexRef.current = 0;
     
-    if (!text) {
+    if (!text || !enabled) {
+      setDisplayedText(text || '');
       setIsTyping(false);
       return;
     }
@@ -50,7 +52,7 @@ export function useTypewriter(text: string, options: UseTypewriterOptions = {}) 
         clearInterval(timerRef.current);
       }
     };
-  }, [text, speed]); // Removed onComplete from deps to avoid re-triggering if it's not memoized
+  }, [text, speed, enabled]); // Removed onComplete from deps to avoid re-triggering if it's not memoized
 
   return { displayedText, isTyping };
 }
