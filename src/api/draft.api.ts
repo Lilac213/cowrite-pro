@@ -72,3 +72,16 @@ export async function refineParagraph(paragraphContent: string, instruction: str
     context 
   }, true);
 }
+
+export async function coachingChat(params: {
+  user_instruction: string;
+  current_document: string;
+  selected_text?: string;
+  cursor_context?: string;
+  document_type?: string;
+  writing_goal?: string;
+  collaboration_state?: string;
+  cooperation_mode?: string;
+}) {
+  return apiJson('/api/draft/coaching-chat', params, true);
+}

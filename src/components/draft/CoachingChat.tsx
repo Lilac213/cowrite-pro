@@ -20,7 +20,7 @@ interface CoachingChatProps {
   onUpdateParagraph: (newContent: string) => void;
 }
 
-import { refineParagraph } from '@/api/draft.api';
+import { coachingChat } from '@/api/draft.api';
 
 export default function CoachingChat({
   paragraphId,
@@ -31,27 +31,43 @@ export default function CoachingChat({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [collaborationState, setCollaborationState] = useState<'S0_DIAGNOSE' | 'S1_PROPOSE' | 'S2_REFINE' | 'S3_STYLE_SHIFT' | 'S4_INTENSITY' | 'S5_CONVERGE'>('S0_DIAGNOSE');
+  const [cooperationMode, setCooperationMode] = useState('逻辑增强模式');
+  const [lastInstruction, setLastInstruction] = useState('');
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const sendInstruction = async (instruction: string, nextState?: typeof collaborationState, nextMode?: string) => {
+    if (!instruction.trim() || isLoading) return;
+    const activeState = nextState || collaborationState;
+    const activeMode = nextMode || cooperationMode;
 
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: input,
+      content: instruction,
       timestamp: Date.now()
     };
 
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
+    setLastInstruction(instruction);
+    if (nextState) setCollaborationState(nextState);
+    if (nextMode) setCooperationMode(nextMode);
 
     try {
-      // Call real API
-      const result: any = await refineParagraph(paragraphContent, userMsg.content);
+      const result: any = await coachingChat({
+        user_instruction: instruction,
+        current_document: paragraphContent,
+        selected_text: '',
+        cursor_context: paragraphContent,
+        document_type: '文章草稿',
+        writing_goal: '协作优化段落',
+        collaboration_state: activeState,
+        cooperation_mode: activeMode
+      });
       
       if (result.success) {
-        const aiResponse = `${result.explanation}\n\n建议修改:\n${result.refined_content}`;
+        const aiResponse = result.answer;
         
         const aiMsg: Message = {
           id: (Date.now() + 1).toString(),
@@ -61,7 +77,7 @@ export default function CoachingChat({
         };
 
         setMessages(prev => [...prev, aiMsg]);
-        setSuggestion(result.refined_content);
+        setSuggestion(result.suggested_text || null);
       } else {
         throw new Error(result.error || '润色失败');
       }
@@ -77,6 +93,11 @@ export default function CoachingChat({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
+    await sendInstruction(input);
   };
 
   const handleApply = () => {
@@ -101,6 +122,7 @@ export default function CoachingChat({
       <div className="p-3 border-b bg-slate-50 flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-primary" />
         <span className="text-sm font-medium">AI 协作助手</span>
+        <span className="text-xs text-slate-400 ml-auto">{collaborationState}</span>
       </div>
 
       <ScrollArea className="flex-1 p-4">
@@ -176,6 +198,102 @@ export default function CoachingChat({
       </ScrollArea>
 
       <div className="p-3 border-t bg-white">
+        <div className="flex flex-wrap gap-2 mb-2">
+          {collaborationState === 'S0_DIAGNOSE' && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                onClick={() => sendInstruction(lastInstruction || '请诊断这段话的主要问题', 'S0_DIAGNOSE')}
+              >
+                诊断问题
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                onClick={() => sendInstruction('请优化逻辑表达', 'S1_PROPOSE', '逻辑增强模式')}
+              >
+                优化逻辑
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                onClick={() => sendInstruction('请精简表达', 'S1_PROPOSE', '表达简洁模式')}
+              >
+                精简表达
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                onClick={() => sendInstruction('请调整为更学术严谨的表达', 'S1_PROPOSE', '学术严谨模式')}
+              >
+                调整风格
+              </Button>
+            </>
+          )}
+          {collaborationState === 'S1_PROPOSE' && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                onClick={() => sendInstruction('请用方案1进行精修', 'S2_REFINE')}
+              >
+                用方案1
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                onClick={() => sendInstruction('再给一个版本', 'S1_PROPOSE')}
+              >
+                再给一个版本
+              </Button>
+            </>
+          )}
+          {collaborationState === 'S2_REFINE' && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                onClick={() => sendInstruction('语气再强一点', 'S4_INTENSITY', '说服力增强模式')}
+              >
+                强一点
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                onClick={() => sendInstruction('语气柔和一点', 'S4_INTENSITY', '表达简洁模式')}
+              >
+                弱一点
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+                onClick={() => sendInstruction('调整风格为更正式', 'S3_STYLE_SHIFT', '学术严谨模式')}
+              >
+                改风格
+              </Button>
+            </>
+          )}
+          {collaborationState === 'S5_CONVERGE' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-xs px-2 bg-slate-50 hover:bg-slate-100"
+              onClick={() => setCollaborationState('S0_DIAGNOSE')}
+            >
+              优化下一段
+            </Button>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2 mb-2">
           <Button
             variant="outline"

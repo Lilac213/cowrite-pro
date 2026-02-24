@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getLatestDraft, updateDraft, callDraftContentAgent, callDraftAnalysisAgent } from '@/api';
-import type { Draft, ParagraphAnnotation } from '@/types';
+import { getWritingSession, getResearchInsights, getResearchGaps } from '@/api/session.api';
+import { getStructureResult } from '@/db/api';
+import type { Draft, ParagraphAnnotation, ResearchGap, ResearchInsight } from '@/types';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +27,9 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
   const [generating, setGenerating] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [structureResult, setStructureResult] = useState<any>(null);
+  const [insights, setInsights] = useState<ResearchInsight[]>([]);
+  const [gaps, setGaps] = useState<ResearchGap[]>([]);
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -34,6 +39,7 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
 
   useEffect(() => {
     loadDraft();
+    loadSessionData();
   }, [projectId]);
 
   const loadDraft = async () => {
@@ -48,6 +54,23 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
       }
     } catch (error) {
       console.error('加载草稿失败:', error);
+    }
+  };
+
+  const loadSessionData = async () => {
+    try {
+      const session = await getWritingSession(projectId);
+      if (!session) return;
+      const [insightData, gapData, structure] = await Promise.all([
+        getResearchInsights(session.id),
+        getResearchGaps(session.id),
+        getStructureResult(session.id)
+      ]);
+      setInsights((insightData || []).filter(i => i.user_decision === 'adopt'));
+      setGaps((gapData || []).filter(g => g.user_decision === 'respond'));
+      setStructureResult(structure);
+    } catch (error) {
+      console.error('加载研究资料失败:', error);
     }
   };
 
@@ -246,6 +269,9 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
           onContentChange={setContent}
           readonly={readonly || isTyping}
           projectId={projectId}
+          insights={insights}
+          gaps={gaps}
+          structureResult={structureResult}
         />
       </div>
     </div>

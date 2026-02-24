@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/db/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { createMaterial } from '@/api/material.api';
-import type { Citation, ParagraphAnnotation, ParagraphGuidance } from '@/types';
+import type { Citation, ParagraphAnnotation, ParagraphGuidance, ResearchGap, ResearchInsight } from '@/types';
 import DraftGuidance from '@/components/draft/DraftGuidance';
 import CitationMarker from '@/components/draft/CitationMarker';
 
@@ -42,6 +42,9 @@ interface DraftWithAnnotationsProps {
   onContentChange?: (newContent: string) => void;
   readonly?: boolean;
   citations?: Record<string, Citation>;
+  insights?: ResearchInsight[];
+  gaps?: ResearchGap[];
+  structureResult?: any;
 }
 
 const paragraphTypeColors: Record<string, string> = {
@@ -61,7 +64,10 @@ export default function DraftWithAnnotations({
   projectId,
   onContentChange,
   readonly = false,
-  citations
+  citations,
+  insights = [],
+  gaps = [],
+  structureResult
 }: DraftWithAnnotationsProps) {
   const { user } = useAuth();
   const [activeParagraphId, setActiveParagraphId] = useState<string | null>(null);
@@ -69,6 +75,9 @@ export default function DraftWithAnnotations({
   const [editValue, setEditValue] = useState('');
   const [materials, setMaterials] = useState<Record<string, Citation>>({});
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
+  const [lastEditedParagraphId, setLastEditedParagraphId] = useState<string | null>(null);
+  const [lastEditedContent, setLastEditedContent] = useState('');
+  const [lastEditSource, setLastEditSource] = useState<'manual' | 'coach' | null>(null);
   
   // State for Material Save Dialog
   const [showSaveMaterialDialog, setShowSaveMaterialDialog] = useState(false);
@@ -78,6 +87,9 @@ export default function DraftWithAnnotations({
   // Parse paragraphs
   // Note: We use a more robust split that preserves empty lines if needed, but for now standard split is fine
   const paragraphs = (content || '').split(/\n\n+/).filter(p => p.trim());
+  const cleanParagraphs = paragraphs.map(p => p.replace(/^\[P\d+\]\s*/, ''));
+  const paragraphCounts = cleanParagraphs.map(p => p.replace(/\s+/g, '').length);
+  const totalCount = paragraphCounts.reduce((sum, count) => sum + count, 0);
 
   useEffect(() => {
     if (paragraphs.length === 0) return;
@@ -229,6 +241,9 @@ export default function DraftWithAnnotations({
       if (newParagraphs[index] !== editValue) {
         newParagraphs[index] = editValue;
         onContentChange(newParagraphs.join('\n\n'));
+        setLastEditedParagraphId(paragraphId);
+        setLastEditedContent(editValue);
+        setLastEditSource('manual');
         
         // Trigger Material Save Dialog - REMOVED per user request (only for Real-time Collab)
         // setPendingMaterialContent(editValue);
@@ -272,7 +287,9 @@ export default function DraftWithAnnotations({
       if (newParagraphs[index] !== newContent) {
         newParagraphs[index] = newContent;
         onContentChange(newParagraphs.join('\n\n'));
-        
+        setLastEditedParagraphId(paragraphId);
+        setLastEditedContent(newContent);
+        setLastEditSource('coach');
         // Material Save Dialog is now handled explicitly by DraftGuidance via callback
       }
     }
@@ -364,11 +381,14 @@ export default function DraftWithAnnotations({
       {/* 左侧：正文 (Occupies 7/12 columns, making it wider) */}
       <Card className="flex flex-col border-r-0 rounded-r-none lg:col-span-7 h-full">
         <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'rich' | 'plain')} className="flex flex-col h-full">
-          <CardHeader className="bg-slate-50 border-b py-3 px-6 shrink-0">
+          <CardHeader className="bg-slate-50 border-b py-2 px-6 shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <FileText className="h-5 w-5 text-primary" />
                 文章正文
+                <Badge variant="secondary" className="text-[11px] font-normal">
+                  全文字数 {totalCount}
+                </Badge>
               </CardTitle>
               <TabsList className="h-8">
                 <TabsTrigger value="rich" className="text-xs px-3 h-7">
@@ -393,7 +413,7 @@ export default function DraftWithAnnotations({
                     const annotation = annotations.find(a => a.paragraph_id === paragraphId);
                     
                     // Clean paragraph marker if present in text (e.g. [P1])
-                    const cleanText = paragraph.replace(/^\[P\d+\]\s*/, '');
+                    const cleanText = cleanParagraphs[index];
 
                     if (isEditing) {
                       return (
@@ -444,6 +464,9 @@ export default function DraftWithAnnotations({
                         <div className="flex items-center gap-3 mb-3 opacity-60 group-hover:opacity-100 transition-opacity">
                           <Badge variant="secondary" className="font-mono text-xs bg-slate-200 text-slate-700">
                             {paragraphId}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] text-slate-500">
+                            字数 {paragraphCounts[index] || 0}
                           </Badge>
                           {annotation && (
                             <Badge className={`${paragraphTypeColors[annotation.paragraph_type]} border-0 font-normal`}>
@@ -524,12 +547,17 @@ export default function DraftWithAnnotations({
                   <div className="space-y-6 text-slate-900">
                     {paragraphs.map((paragraph, index) => {
                       // Clean paragraph marker if present in text (e.g. [P1])
-                      const cleanText = paragraph.replace(/^\[P\d+\]\s*/, '');
+                      const cleanText = cleanParagraphs[index];
                       
                       return (
-                        <p key={index} className="text-xl leading-loose font-serif text-justify indent-8">
-                          {renderParagraphContent(cleanText)}
-                        </p>
+                        <div key={index} className="space-y-2">
+                          <div className="text-xs text-slate-400">
+                            第 {index + 1} 段 · 字数 {paragraphCounts[index] || 0}
+                          </div>
+                          <p className="text-xl leading-loose font-serif text-justify indent-8">
+                            {renderParagraphContent(cleanText)}
+                          </p>
+                        </div>
                       );
                     })}
                   </div>
@@ -574,7 +602,7 @@ export default function DraftWithAnnotations({
 
       {/* 右侧：协作教练 (Occupies 5/12 columns) */}
       <Card className="flex flex-col bg-slate-50/50 border-l-0 rounded-l-none shadow-none lg:col-span-5">
-        <CardHeader className="bg-slate-50 border-b py-3 px-6 shrink-0">
+        <CardHeader className="bg-slate-50 border-b py-2 px-6 shrink-0">
           <CardTitle className="flex items-center gap-2 text-lg">
             <BookOpen className="h-5 w-5 text-primary" />
             协作教练
@@ -682,9 +710,15 @@ export default function DraftWithAnnotations({
               <DraftGuidance 
                 guidance={annotations} 
                 activeParagraphId={activeParagraphId || undefined}
-                paragraphContent={activeParagraphId ? paragraphs[parseInt(activeParagraphId.replace('P', '')) - 1] : undefined}
+                paragraphContent={activeParagraphId ? cleanParagraphs[parseInt(activeParagraphId.replace('P', '')) - 1] : undefined}
                 onUpdateParagraph={updateParagraphFromGuidance}
                 onSaveToLibrary={handleSaveToLibrary}
+                insights={insights}
+                gaps={gaps}
+                structureResult={structureResult}
+                lastEditedParagraphId={lastEditedParagraphId || undefined}
+                lastEditedContent={lastEditedContent}
+                lastEditSource={lastEditSource || undefined}
               />
             </div>
           </div>

@@ -32,6 +32,7 @@ import { runDraftAnalysisAgent, type DraftAnalysisInput } from './llm/agents/dra
 import { runReviewAgent } from './llm/agents/reviewAgent.js';
 import { runStructureAdjustmentAgent } from './llm/agents/structureAdjustmentAgent.js';
 import { runRefineParagraphAgent } from './llm/agents/refineParagraphAgent.js';
+import { runCoachingChatAgent } from './llm/agents/coachingChatAgent.js';
 import { runLLMAgent, runLLMRaw } from './llm/runtime/LLMRuntime.js';
 import { validateOrThrow } from './llm/runtime/validateSchema.js';
 import { cleanMaterials, rerankMaterialsWithEmbedding, type CleanedMaterial } from './utils/materialCleaner.js';
@@ -2278,6 +2279,56 @@ app.post('/api/draft/refine-paragraph', async (req, reply) => {
     req.log.error(error, 'Refine Paragraph Failed');
     return reply.code(500).send({
       error: '段落润色失败',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+app.post('/api/draft/coaching-chat', async (req, reply) => {
+  const {
+    user_instruction,
+    current_document,
+    selected_text,
+    cursor_context,
+    document_type,
+    writing_goal,
+    collaboration_state,
+    cooperation_mode
+  } = (req.body || {}) as {
+    user_instruction: string;
+    current_document: string;
+    selected_text?: string;
+    cursor_context?: string;
+    document_type?: string;
+    writing_goal?: string;
+    collaboration_state?: string;
+    cooperation_mode?: string;
+  };
+
+  if (!user_instruction || !current_document) {
+    return reply.code(400).send({ error: '缺少必需参数：user_instruction 或 current_document' });
+  }
+
+  try {
+    const result = await llmQueue.add(() => runCoachingChatAgent({
+      user_instruction,
+      current_document,
+      selected_text,
+      cursor_context,
+      document_type,
+      writing_goal,
+      collaboration_state: collaboration_state || 'S0_DIAGNOSE',
+      cooperation_mode: cooperation_mode || '逻辑增强模式'
+    }));
+
+    return reply.send({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    req.log.error(error, 'Coaching Chat Failed');
+    return reply.code(500).send({
+      error: '协作教练失败',
       details: error instanceof Error ? error.message : String(error)
     });
   }
