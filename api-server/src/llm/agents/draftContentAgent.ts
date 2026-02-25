@@ -1,4 +1,5 @@
-import { runLLMAgent } from '../runtime/LLMRuntime.js';
+import { runLLMRaw } from '../runtime/LLMRuntime.js';
+import { validateOrThrow } from '../runtime/validateSchema.js';
 import { type DraftPayload, draftSchema } from '../schemas/draftSchema.js';
 import { type WritingBrief } from '../schemas/briefSchema.js';
 import { type ArgumentOutline } from '../schemas/structureSchema.js';
@@ -102,12 +103,55 @@ ${research_pack.sources.slice(0, 10).map(source =>
 export async function runDraftContentAgent(input: DraftInput): Promise<DraftPayload> {
   const prompt = buildDraftContentPrompt(input);
   
-  const result = await runLLMAgent({
-    agentName: 'draftContentAgent',
+  const raw = await runLLMRaw({
     prompt,
-    schema: draftSchema,
-    temperature: 0.7
+    temperature: 0.7,
+    responseFormat: { type: 'json_object' }
   });
 
-  return result.data as DraftPayload;
+  const parsed = raw.parsed || {};
+  const draftBlocks = Array.isArray(parsed.draft_blocks) ? parsed.draft_blocks : [];
+  const sanitizedBlocks = draftBlocks
+    .map((block: any, index: number) => {
+      const citations = Array.isArray(block.citations)
+        ? block.citations.filter((citation: any) =>
+            citation?.source_id && citation?.citation_type && citation?.citation_display && citation?.source_title
+          )
+        : [];
+
+      const coachingTip =
+        block?.coaching_tip?.rationale && block?.coaching_tip?.suggestion
+          ? block.coaching_tip
+          : undefined;
+
+      return {
+        block_id: block.block_id || `block_${index + 1}`,
+        paragraph_id: block.paragraph_id || `p${index + 1}`,
+        content: block.content || '',
+        derived_from: Array.isArray(block.derived_from) ? block.derived_from : [],
+        citations,
+        coherence_score: typeof block.coherence_score === 'number' ? block.coherence_score : 0.7,
+        requires_user_input: typeof block.requires_user_input === 'boolean' ? block.requires_user_input : false,
+        order: typeof block.order === 'number' ? block.order : index + 1,
+        coaching_tip: coachingTip
+      };
+    })
+    .filter((block: any) => block.content);
+
+  const totalWordCount =
+    typeof parsed.total_word_count === 'number'
+      ? parsed.total_word_count
+      : sanitizedBlocks.map((block: any) => block.content).join('').replace(/\s+/g, '').length;
+
+  const sanitizedPayload = {
+    draft_blocks: sanitizedBlocks,
+    global_coherence_score:
+      typeof parsed.global_coherence_score === 'number' ? parsed.global_coherence_score : 0.7,
+    missing_evidence_blocks: Array.isArray(parsed.missing_evidence_blocks) ? parsed.missing_evidence_blocks : [],
+    needs_revision: typeof parsed.needs_revision === 'boolean' ? parsed.needs_revision : false,
+    total_word_count: totalWordCount,
+    created_at: parsed.created_at || new Date().toISOString()
+  };
+
+  return validateOrThrow<DraftPayload>(sanitizedPayload, draftSchema);
 }
