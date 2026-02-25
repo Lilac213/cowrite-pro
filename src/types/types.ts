@@ -282,6 +282,8 @@ export interface ParagraphAnnotation {
   viewpoint_generation: '文献直接观点' | '多文献综合' | '基于数据的推导' | '模型逻辑推演';
   development_logic: string;
   editing_suggestions: string;
+  char_start?: number;
+  char_end?: number;
   // Extended fields for Coaching Rail (optional as they might be populated from logic/suggestions)
   generation_rationale?: string;
   personal_content_suggestions?: string[];

@@ -355,6 +355,7 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
             setAiTypingEnabled(false);
             setContent(newContent);
           }}
+          onAnnotationsChange={(next) => setAnnotations(next)}
           readonly={readonly || isTyping}
           projectId={projectId}
           documentId={draft?.id || projectId}

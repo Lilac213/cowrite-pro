@@ -1,4 +1,4 @@
-import { useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect, ReactNode, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,7 @@ interface DraftWithAnnotationsProps {
   projectId: string;
   documentId?: string;
   onContentChange?: (newContent: string) => void;
+  onAnnotationsChange?: (next: ParagraphAnnotation[]) => void;
   readonly?: boolean;
   citations?: Record<string, Citation>;
   insights?: ResearchInsight[];
@@ -74,6 +75,7 @@ export default function DraftWithAnnotations({
   projectId,
   documentId,
   onContentChange,
+  onAnnotationsChange,
   readonly = false,
   citations,
   insights = [],
@@ -96,6 +98,8 @@ export default function DraftWithAnnotations({
   const [lastEditedContent, setLastEditedContent] = useState('');
   const [lastEditSource, setLastEditSource] = useState<'manual' | 'coach' | null>(null);
   const [selectedText, setSelectedText] = useState('');
+  const [highlightRange, setHighlightRange] = useState<{ start: number; end: number; paragraphId?: string } | null>(null);
+  const [undoStack, setUndoStack] = useState<string[]>([]);
   
   // State for Material Save Dialog
   const [showSaveMaterialDialog, setShowSaveMaterialDialog] = useState(false);
@@ -108,6 +112,14 @@ export default function DraftWithAnnotations({
   const cleanParagraphs = paragraphs.map(p => p.replace(/^\[P\d+\]\s*/, ''));
   const paragraphCounts = cleanParagraphs.map(p => p.replace(/\s+/g, '').length);
   const totalCount = paragraphCounts.reduce((sum, count) => sum + count, 0);
+  const paragraphOffsets = useMemo(() => {
+    return cleanParagraphs.reduce((acc, text, index) => {
+      const prev = acc[index - 1];
+      const start = prev ? prev.end + 2 : 0;
+      acc.push({ start, end: start + text.length });
+      return acc;
+    }, [] as Array<{ start: number; end: number }>);
+  }, [cleanParagraphs]);
   const { displayedText: typingDisplayedText } = useTypewriter(typingParagraphContent, {
     speed: 12,
     enabled: typingParagraphActive,
@@ -327,6 +339,32 @@ export default function DraftWithAnnotations({
     setSelectedCitation(citation);
   };
 
+  const handleFocusRange = (paragraphId: string, start?: number, end?: number) => {
+    if (start !== undefined && end !== undefined) {
+      setHighlightRange({ start, end, paragraphId });
+    } else {
+      setHighlightRange(null);
+    }
+    setActiveParagraphId(paragraphId);
+    const element = document.getElementById(`paragraph-${paragraphId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const pushUndo = () => {
+    setUndoStack(prev => [...prev, content]);
+  };
+
+  const handleUndo = () => {
+    setUndoStack(prev => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      onContentChange?.(last);
+      return prev.slice(0, -1);
+    });
+  };
+
   // Render paragraph content with interactive citations
   const renderParagraphContent = (text: string) => {
     // Regex to match citations like (见资料1), [资料2], (资料3), 参考资料4
@@ -399,6 +437,27 @@ export default function DraftWithAnnotations({
     return parts;
   };
 
+  const renderWithHighlight = (text: string, highlight?: { start: number; end: number }) => {
+    if (!highlight || highlight.end <= highlight.start) {
+      return renderParagraphContent(text);
+    }
+    const start = Math.max(0, highlight.start);
+    const end = Math.min(text.length, highlight.end);
+    if (start >= end) {
+      return renderParagraphContent(text);
+    }
+    const before = text.slice(0, start);
+    const target = text.slice(start, end);
+    const after = text.slice(end);
+    return [
+      ...renderParagraphContent(before),
+      <mark key={`${start}-${end}`} className="bg-[#FFD54F]/60 rounded-sm px-0.5">
+        {renderParagraphContent(target)}
+      </mark>,
+      ...renderParagraphContent(after)
+    ];
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-200px)]">
       {/* 左侧：正文 (Occupies 7/12 columns, making it wider) */}
@@ -439,6 +498,11 @@ export default function DraftWithAnnotations({
                     const cleanText = cleanParagraphs[index];
                     const isTypingParagraph = typingParagraphActive && typingParagraphId === paragraphId;
                     const displayText = isTypingParagraph ? typingDisplayedText : cleanText;
+                    const offset = paragraphOffsets[index] || { start: 0, end: 0 };
+                    const highlight =
+                      highlightRange && highlightRange.start < offset.end && highlightRange.end > offset.start
+                        ? { start: highlightRange.start - offset.start, end: highlightRange.end - offset.start }
+                        : undefined;
 
                     if (isEditing) {
                       return (
@@ -541,7 +605,7 @@ export default function DraftWithAnnotations({
                         
                         {/* Content */}
                         <p className="text-lg text-slate-800 leading-relaxed font-serif text-justify whitespace-pre-wrap">
-                          {renderParagraphContent(displayText)}
+                          {renderWithHighlight(displayText, highlight)}
                         </p>
                       </div>
                     );
@@ -600,6 +664,11 @@ export default function DraftWithAnnotations({
                       const paragraphId = `P${index + 1}`;
                       const isTypingParagraph = typingParagraphActive && typingParagraphId === paragraphId;
                       const displayText = isTypingParagraph ? typingDisplayedText : cleanText;
+                      const offset = paragraphOffsets[index] || { start: 0, end: 0 };
+                      const highlight =
+                        highlightRange && highlightRange.start < offset.end && highlightRange.end > offset.start
+                          ? { start: highlightRange.start - offset.start, end: highlightRange.end - offset.start }
+                          : undefined;
                       
                       return (
                         <div key={index} className="space-y-2">
@@ -607,7 +676,7 @@ export default function DraftWithAnnotations({
                             第 {index + 1} 段 · 字数 {paragraphCounts[index] || 0}
                           </div>
                           <p key={index} className="text-lg leading-loose font-serif text-justify indent-8">
-                            {renderParagraphContent(displayText)}
+                            {renderWithHighlight(displayText, highlight)}
                           </p>
                         </div>
                       );
@@ -765,10 +834,18 @@ export default function DraftWithAnnotations({
                 activeParagraphId={activeParagraphId || undefined}
                 paragraphContent={activeParagraphId ? cleanParagraphs[parseInt(activeParagraphId.replace('P', '')) - 1] : undefined}
                 selectedText={selectedText}
+                annotations={annotations}
                 onReplaceContent={(newContent) => {
                   onContentChange?.(newContent);
                 }}
                 onUpdateParagraph={updateParagraphFromGuidance}
+                onRemoveAnnotation={(paragraphId) => {
+                  onAnnotationsChange?.(annotations.filter(a => a.paragraph_id !== paragraphId));
+                }}
+                onHighlightRange={handleFocusRange}
+                onPushUndo={pushUndo}
+                onUndo={handleUndo}
+                undoAvailable={undoStack.length > 0}
               />
             </div>
           </div>

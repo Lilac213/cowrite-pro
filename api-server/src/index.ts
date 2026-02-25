@@ -1646,11 +1646,60 @@ app.post('/api/draft-agent', async (req, reply) => {
     }
   };
 
-  const draftPayload = await llmQueue.add(() => runDraftAgent({ writing_brief, argument_outline, research_pack })) as Awaited<ReturnType<typeof runDraftAgent>>;
+  const generateOnce = async () => {
+    return await llmQueue.add(() => runDraftAgent({ writing_brief, argument_outline, research_pack })) as Awaited<ReturnType<typeof runDraftAgent>>;
+  };
+
+  let draftPayload = await generateOnce();
+
+  // 结构-内容一致性校验：顺序、缺失
+  const outlineOrder = (argument_outline.argument_blocks || []).map((b: any) => b.block_id);
+  const payloadOrder = (draftPayload.draft_blocks || []).map((b: any) => b.block_id);
+  const missing = outlineOrder.filter((id: string) => !payloadOrder.includes(id));
+  const orderMismatch =
+    outlineOrder.length === payloadOrder.length &&
+    outlineOrder.some((id: string, idx: number) => payloadOrder[idx] !== id);
+
+  const hasDeviation = missing.length > 0 || orderMismatch;
+  if (hasDeviation) {
+    await supabase.from('agent_logs').insert({
+      project_id,
+      agent_name: 'draftAgent',
+      input_payload_jsonb: {
+        check: 'structure_consistency',
+        outline_order: outlineOrder,
+        payload_order: payloadOrder
+      },
+      output_payload_jsonb: { missing, order_mismatch: orderMismatch },
+      status: 'deviation_detected',
+      created_at: new Date().toISOString()
+    });
+
+    // 触发一次重写
+    const retry = await generateOnce();
+    const retryOrder = (retry.draft_blocks || []).map((b: any) => b.block_id);
+    const retryMissing = outlineOrder.filter((id: string) => !retryOrder.includes(id));
+    const retryMismatch =
+      outlineOrder.length === retryOrder.length &&
+      outlineOrder.some((id: string, idx: number) => retryOrder[idx] !== id);
+
+    if (retryMissing.length === 0 && !retryMismatch) {
+      draftPayload = retry;
+    } else {
+      await supabase.from('agent_logs').insert({
+        project_id,
+        agent_name: 'draftAgent',
+        input_payload_jsonb: { check: 'structure_consistency_retry' },
+        output_payload_jsonb: { retry_order: retryOrder, retryMissing, retryMismatch },
+        status: 'deviation_persist',
+        created_at: new Date().toISOString()
+      });
+    }
+  }
 
   // Construct full content and annotations
   const content = draftPayload.draft_blocks.map(block => block.content).join('\n\n');
-  
+  let cursor = 0;
   const annotations = draftPayload.draft_blocks.map(block => {
     // Determine paragraph type based on order or content analysis (simplified for now)
     // You might want to ask the agent to output paragraph_type explicitly if needed
@@ -1658,6 +1707,9 @@ app.post('/api/draft-agent', async (req, reply) => {
     if (block.order === 1) paragraph_type = '引言';
     else if (block.order === draftPayload.draft_blocks.length) paragraph_type = '结论';
     else paragraph_type = '观点提出'; // Default for body paragraphs
+    const char_start = cursor;
+    const char_end = cursor + (block.content || '').length;
+    cursor = char_end + 2;
 
     return {
       paragraph_id: `P${block.order}`, // Assuming order matches paragraph index + 1
@@ -1668,7 +1720,9 @@ app.post('/api/draft-agent', async (req, reply) => {
       },
       viewpoint_generation: '多文献综合', // Default or derive from logic
       development_logic: block.coaching_tip?.rationale || '逻辑推演',
-      editing_suggestions: block.coaching_tip?.suggestion || '无建议'
+      editing_suggestions: block.coaching_tip?.suggestion || '无建议',
+      char_start,
+      char_end
     };
   });
 
@@ -1747,7 +1801,19 @@ app.post('/api/draft/generate-content', async (req, reply) => {
       .maybeSingle();
 
     if (structError || !structure) throw new Error('未找到 article_structure');
-    const argument_outline = structure.payload_jsonb.argument_outline || structure.payload_jsonb;
+    let argument_outline = structure.payload_jsonb.argument_outline || structure.payload_jsonb;
+
+    const { data: sessionStructure } = await supabase
+      .from('writing_sessions')
+      .select('structure_result')
+      .eq('project_id', project_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (sessionStructure?.structure_result) {
+      argument_outline = sessionStructure.structure_result.argument_outline || sessionStructure.structure_result;
+    }
 
     // 3. 获取 Research Pack
     // 优先使用 session_id 过滤
@@ -1819,11 +1885,58 @@ app.post('/api/draft/generate-content', async (req, reply) => {
     };
 
     // 4. 运行 Draft Content Agent
-    const draftPayload = await llmQueue.add(() => runDraftContentAgent({ 
-      writing_brief, 
-      argument_outline, 
-      research_pack: research_pack as any 
-    })) as Awaited<ReturnType<typeof runDraftContentAgent>>;
+    const generateOnce = async () => {
+      return await llmQueue.add(() => runDraftContentAgent({ 
+        writing_brief, 
+        argument_outline, 
+        research_pack: research_pack as any 
+      })) as Awaited<ReturnType<typeof runDraftContentAgent>>;
+    };
+
+    let draftPayload = await generateOnce();
+
+    const outlineOrder = (argument_outline.argument_blocks || []).map((b: any) => b.block_id);
+    const payloadOrder = (draftPayload.draft_blocks || []).map((b: any) => b.block_id);
+    const missing = outlineOrder.filter((id: string) => !payloadOrder.includes(id));
+    const orderMismatch =
+      outlineOrder.length === payloadOrder.length &&
+      outlineOrder.some((id: string, idx: number) => payloadOrder[idx] !== id);
+
+    const hasDeviation = missing.length > 0 || orderMismatch;
+    if (hasDeviation) {
+      await supabase.from('agent_logs').insert({
+        project_id,
+        agent_name: 'draftContentAgent',
+        input_payload_jsonb: {
+          check: 'structure_consistency',
+          outline_order: outlineOrder,
+          payload_order: payloadOrder
+        },
+        output_payload_jsonb: { missing, order_mismatch: orderMismatch },
+        status: 'deviation_detected',
+        created_at: new Date().toISOString()
+      });
+
+      const retry = await generateOnce();
+      const retryOrder = (retry.draft_blocks || []).map((b: any) => b.block_id);
+      const retryMissing = outlineOrder.filter((id: string) => !retryOrder.includes(id));
+      const retryMismatch =
+        outlineOrder.length === retryOrder.length &&
+        outlineOrder.some((id: string, idx: number) => retryOrder[idx] !== id);
+
+      if (retryMissing.length === 0 && !retryMismatch) {
+        draftPayload = retry;
+      } else {
+        await supabase.from('agent_logs').insert({
+          project_id,
+          agent_name: 'draftContentAgent',
+          input_payload_jsonb: { check: 'structure_consistency_retry' },
+          output_payload_jsonb: { retry_order: retryOrder, retryMissing, retryMismatch },
+          status: 'deviation_persist',
+          created_at: new Date().toISOString()
+        });
+      }
+    }
 
     // 5. 构建 Content
     const content = draftPayload.draft_blocks.map(block => block.content).join('\n\n');
@@ -1915,9 +2028,18 @@ app.post('/api/draft/analyze-structure', async (req, reply) => {
         }));
 
     // 4. 转换 Annotations 格式以匹配前端
+    const paragraphOffsets = (draft.content || '').split(/\n\n+/).filter((p: string) => p.trim()).reduce((acc: any[], text: string) => {
+      const last = acc[acc.length - 1];
+      const start = last ? last.end + 2 : 0;
+      acc.push({ start, end: start + text.length });
+      return acc;
+    }, []);
+
     const annotations = resolvedAnnotations.map((a: any) => {
       // 查找对应的 block 以获取引用信息
       const block = draft.payload_jsonb.draft_blocks.find((b: any) => b.paragraph_id === a.paragraph_id);
+      const index = parseInt(String(a.paragraph_id).replace('P', ''), 10) - 1;
+      const offset = paragraphOffsets[index] || { start: 0, end: 0 };
       
       return {
         paragraph_id: a.paragraph_id,
@@ -1928,7 +2050,9 @@ app.post('/api/draft/analyze-structure', async (req, reply) => {
         },
         viewpoint_generation: a.viewpoint_generation,
         development_logic: a.development_logic,
-        editing_suggestions: a.editing_suggestions
+        editing_suggestions: a.editing_suggestions,
+        char_start: offset.start,
+        char_end: offset.end
       };
     });
 
@@ -2434,19 +2558,29 @@ app.post('/issues/apply', async (req, reply) => {
     return reply.code(400).send({ error: '该 Issue 没有可应用的修正' });
   }
 
-  let newContent = content;
-  if (issue.scope === 'paragraph' && issue.paragraph_id) {
-    const paragraphs = content.split(/\n\n+/).filter(p => p.trim());
-    const index = parseInt(issue.paragraph_id.replace('P', '')) - 1;
-    if (index >= 0 && index < paragraphs.length) {
-      paragraphs[index] = suggestedFix;
-      newContent = paragraphs.join('\n\n');
-    }
-  } else if (issue.target_text && content.includes(issue.target_text)) {
-    newContent = content.replace(issue.target_text, suggestedFix);
-  } else {
-    newContent = suggestedFix;
+  const targetText = issue.target_text;
+  if (!targetText || !content.includes(targetText)) {
+    return reply.code(400).send({ error: '无法定位目标句，无法应用修正' });
   }
+
+  const targetIndex = content.indexOf(targetText);
+  const boundaryMarks = ['。', '！', '？', '!', '?', '\n'];
+  const startCandidates = boundaryMarks
+    .map(mark => content.lastIndexOf(mark, targetIndex))
+    .filter(index => index !== -1);
+  const sentenceStart = (startCandidates.length ? Math.max(...startCandidates) : -1) + 1;
+  const afterIndex = targetIndex + targetText.length;
+  const endCandidates = boundaryMarks
+    .map(mark => content.indexOf(mark, afterIndex))
+    .filter(index => index !== -1);
+  const sentenceEnd = endCandidates.length ? Math.min(...endCandidates) + 1 : content.length;
+
+  const targetSentence = content.slice(sentenceStart, sentenceEnd);
+  if (!targetSentence.includes(targetText)) {
+    return reply.code(400).send({ error: '目标句边界定位失败' });
+  }
+  const patchedSentence = targetSentence.replace(targetText, suggestedFix);
+  const newContent = `${content.slice(0, sentenceStart)}${patchedSentence}${content.slice(sentenceEnd)}`;
 
   const version = saveVersion(document_id, issue_id, content, newContent);
   resolveIssue(document_id, issue_id);
