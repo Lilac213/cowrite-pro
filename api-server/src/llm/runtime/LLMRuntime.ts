@@ -15,6 +15,7 @@ export interface AgentRunConfig {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  responseFormat?: { type: 'json_object' };
 }
 
 export interface AgentRunResult<T = any> {
@@ -29,6 +30,7 @@ export interface RawLLMRunConfig {
   temperature?: number;
   maxTokens?: number;
   parseEnvelope?: boolean;
+  responseFormat?: { type: 'json_object' };
 }
 
 export interface RawLLMRunResult {
@@ -47,6 +49,7 @@ export async function runLLMAgent<T = any>(
       model: config.model,
       temperature: config.temperature,
       maxTokens: config.maxTokens,
+      responseFormat: config.responseFormat
     } as LLMCallConfig);
 
     const parsedData = await parseEnvelope(rawOutput);
@@ -78,6 +81,7 @@ export async function runLLMRaw(
     model: config.model,
     temperature: config.temperature,
     maxTokens: config.maxTokens,
+    responseFormat: config.responseFormat
   } as LLMCallConfig);
 
   const normalized = normalizeLLMOutput(rawOutput);

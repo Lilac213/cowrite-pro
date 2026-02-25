@@ -455,3 +455,37 @@ export interface SynthesisResult {
   };
   sessionId?: string;
 }
+
+export type IssueType = 'grammar' | 'clarity' | 'structure' | 'logic' | 'argument';
+export type IssueSeverity = 'low' | 'medium' | 'high';
+export type IssueScope = 'sentence' | 'paragraph' | 'document';
+export type IssueSource = 'live' | 'coach' | 'decision';
+export type IssueStatus = 'active' | 'ignored' | 'resolved';
+
+export interface Issue {
+  id: string;
+  type: IssueType;
+  severity: IssueSeverity;
+  scope: IssueScope;
+  source_agent: IssueSource;
+  suggestion_text: string;
+  suggested_fix?: string;
+  target_text?: string;
+  paragraph_id?: string;
+  status: IssueStatus;
+  cooldown_until?: number;
+  priority_score: number;
+  created_at: number;
+}
+
+export interface VersionSnapshot {
+  id: string;
+  document_id: string;
+  applied_issue_id: string;
+  diff: {
+    before: string;
+    after: string;
+  };
+  full_snapshot: string;
+  timestamp: number;
+}

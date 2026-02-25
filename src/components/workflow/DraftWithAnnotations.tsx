@@ -34,7 +34,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { createMaterial } from '@/api/material.api';
 import type { Citation, ParagraphAnnotation, ParagraphGuidance, ResearchGap, ResearchInsight } from '@/types';
 import { useTypewriter } from '@/hooks/useTypewriter';
-import DraftGuidance from '@/components/draft/DraftGuidance';
+import IssueCoachPanel from '@/components/draft/IssueCoachPanel';
 import CitationMarker from '@/components/draft/CitationMarker';
 
 interface DraftWithAnnotationsProps {
@@ -42,6 +42,7 @@ interface DraftWithAnnotationsProps {
   annotations: ParagraphAnnotation[];
   guidance?: ParagraphGuidance[];
   projectId: string;
+  documentId?: string;
   onContentChange?: (newContent: string) => void;
   readonly?: boolean;
   citations?: Record<string, Citation>;
@@ -71,6 +72,7 @@ export default function DraftWithAnnotations({
   annotations,
   guidance = [],
   projectId,
+  documentId,
   onContentChange,
   readonly = false,
   citations,
@@ -93,6 +95,7 @@ export default function DraftWithAnnotations({
   const [lastEditedParagraphId, setLastEditedParagraphId] = useState<string | null>(null);
   const [lastEditedContent, setLastEditedContent] = useState('');
   const [lastEditSource, setLastEditSource] = useState<'manual' | 'coach' | null>(null);
+  const [selectedText, setSelectedText] = useState('');
   
   // State for Material Save Dialog
   const [showSaveMaterialDialog, setShowSaveMaterialDialog] = useState(false);
@@ -481,6 +484,10 @@ export default function DraftWithAnnotations({
                         }`}
                         onClick={() => handleParagraphClick(paragraphId)}
                         onDoubleClick={() => handleEditStart(paragraphId, cleanText)}
+                        onMouseUp={() => {
+                          const selection = window.getSelection()?.toString() || '';
+                          setSelectedText(selection.trim());
+                        }}
                       >
                         {/* Paragraph Header */}
                         <div className="flex items-center gap-3 mb-3 opacity-60 group-hover:opacity-100 transition-opacity">
@@ -752,18 +759,16 @@ export default function DraftWithAnnotations({
             )}
             
             <div className="flex-1 overflow-hidden relative">
-              <DraftGuidance 
-                guidance={annotations} 
+              <IssueCoachPanel
+                documentId={documentId}
+                fullContent={content}
                 activeParagraphId={activeParagraphId || undefined}
                 paragraphContent={activeParagraphId ? cleanParagraphs[parseInt(activeParagraphId.replace('P', '')) - 1] : undefined}
+                selectedText={selectedText}
+                onReplaceContent={(newContent) => {
+                  onContentChange?.(newContent);
+                }}
                 onUpdateParagraph={updateParagraphFromGuidance}
-                onSaveToLibrary={handleSaveToLibrary}
-                insights={insights}
-                gaps={gaps}
-                structureResult={structureResult}
-                lastEditedParagraphId={lastEditedParagraphId || undefined}
-                lastEditedContent={lastEditedContent}
-                lastEditSource={lastEditSource || undefined}
               />
             </div>
           </div>

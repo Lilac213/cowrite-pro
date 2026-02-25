@@ -33,6 +33,10 @@ import { runReviewAgent } from './llm/agents/reviewAgent.js';
 import { runStructureAdjustmentAgent } from './llm/agents/structureAdjustmentAgent.js';
 import { runRefineParagraphAgent } from './llm/agents/refineParagraphAgent.js';
 import { runCoachingChatAgent } from './llm/agents/coachingChatAgent.js';
+import { runLiveSuggestionAgent } from './llm/agents/liveSuggestionAgent.js';
+import { runCoachAgent } from './llm/agents/coachAgent.js';
+import { runDecisionGuideAgent } from './llm/agents/decisionGuideAgent.js';
+import { addIssues, buildIssue, findIssue, getActiveIssues, ignoreIssue, resolveIssue, saveVersion, listVersions, getVersion } from './issues/store.js';
 import { runLLMAgent, runLLMRaw } from './llm/runtime/LLMRuntime.js';
 import { validateOrThrow } from './llm/runtime/validateSchema.js';
 import { cleanMaterials, rerankMaterialsWithEmbedding, type CleanedMaterial } from './utils/materialCleaner.js';
@@ -2329,6 +2333,176 @@ app.post('/api/draft/coaching-chat', async (req, reply) => {
     req.log.error(error, 'Coaching Chat Failed');
     return reply.code(500).send({
       error: '协作教练失败',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+app.post('/issues/generate', async (req, reply) => {
+  const { document_id, content, paragraph_id, selection, agent, stage } = (req.body || {}) as {
+    document_id?: string;
+    content?: string;
+    paragraph_id?: string;
+    selection?: string;
+    agent?: 'live' | 'coach';
+    stage?: 'draft' | 'argument' | 'refine';
+  };
+
+  if (!document_id || !content) {
+    return reply.code(400).send({ error: '缺少必需参数：document_id 或 content' });
+  }
+
+  try {
+    if (agent === 'coach') {
+      const coachResult = await llmQueue.add(() => runCoachAgent({
+        text: content,
+        stage: stage || 'draft'
+      })) as Awaited<ReturnType<typeof runCoachAgent>>;
+      const issues = (coachResult.issues || []).map((issue) => buildIssue({
+        type: issue.type,
+        severity: issue.severity,
+        scope: issue.target_scope || 'paragraph',
+        source_agent: 'coach',
+        suggestion_text: issue.suggestion_text,
+        suggested_fix: issue.suggested_fix_template,
+        paragraph_id
+      }));
+      addIssues(document_id, issues);
+      return reply.send({ success: true, stage: coachResult.stage, issues });
+    }
+
+    const targetText = selection?.trim() || content;
+    const liveResult = await llmQueue.add(() => runLiveSuggestionAgent({ text: targetText })) as Awaited<ReturnType<typeof runLiveSuggestionAgent>>;
+    const issues = (liveResult.issues || []).map((issue) => buildIssue({
+      type: issue.type,
+      severity: issue.severity,
+      scope: 'sentence',
+      source_agent: 'live',
+      suggestion_text: issue.suggestion_text,
+      suggested_fix: issue.suggested_fix,
+      target_text: issue.target_text,
+      paragraph_id
+    }));
+    addIssues(document_id, issues);
+    return reply.send({ success: true, issues });
+  } catch (error) {
+    req.log.error(error, 'Issue generation failed');
+    return reply.code(500).send({
+      error: '生成建议失败',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+app.get('/issues/active', async (req, reply) => {
+  const documentId = (req.query as any)?.document_id as string | undefined;
+  if (!documentId) {
+    return reply.code(400).send({ error: '缺少必需参数：document_id' });
+  }
+  const { issues, low_intervention, ignore_count } = getActiveIssues(documentId);
+  return reply.send({ success: true, issues, low_intervention, ignore_count });
+});
+
+app.post('/issues/ignore', async (req, reply) => {
+  const { document_id, issue_id } = (req.body || {}) as { document_id?: string; issue_id?: string };
+  if (!document_id || !issue_id) {
+    return reply.code(400).send({ error: '缺少必需参数：document_id 或 issue_id' });
+  }
+  ignoreIssue(document_id, issue_id);
+  return reply.send({ success: true });
+});
+
+app.post('/issues/apply', async (req, reply) => {
+  const { document_id, issue_id, content, mode } = (req.body || {}) as {
+    document_id?: string;
+    issue_id?: string;
+    content?: string;
+    mode?: 'auto_fix';
+  };
+
+  if (!document_id || !issue_id || !content) {
+    return reply.code(400).send({ error: '缺少必需参数：document_id、issue_id 或 content' });
+  }
+
+  const issue = findIssue(document_id, issue_id);
+  if (!issue) {
+    return reply.code(404).send({ error: 'Issue 未找到' });
+  }
+
+  const suggestedFix = issue.suggested_fix;
+  if (!suggestedFix) {
+    return reply.code(400).send({ error: '该 Issue 没有可应用的修正' });
+  }
+
+  let newContent = content;
+  if (issue.scope === 'paragraph' && issue.paragraph_id) {
+    const paragraphs = content.split(/\n\n+/).filter(p => p.trim());
+    const index = parseInt(issue.paragraph_id.replace('P', '')) - 1;
+    if (index >= 0 && index < paragraphs.length) {
+      paragraphs[index] = suggestedFix;
+      newContent = paragraphs.join('\n\n');
+    }
+  } else if (issue.target_text && content.includes(issue.target_text)) {
+    newContent = content.replace(issue.target_text, suggestedFix);
+  } else {
+    newContent = suggestedFix;
+  }
+
+  const version = saveVersion(document_id, issue_id, content, newContent);
+  resolveIssue(document_id, issue_id);
+
+  return reply.send({
+    success: true,
+    new_content: newContent,
+    diff: version.diff,
+    version
+  });
+});
+
+app.get('/issues/versions', async (req, reply) => {
+  const documentId = (req.query as any)?.document_id as string | undefined;
+  if (!documentId) {
+    return reply.code(400).send({ error: '缺少必需参数：document_id' });
+  }
+  return reply.send({ success: true, versions: listVersions(documentId) });
+});
+
+app.post('/issues/rollback', async (req, reply) => {
+  const { document_id, version_id } = (req.body || {}) as { document_id?: string; version_id?: string };
+  if (!document_id || !version_id) {
+    return reply.code(400).send({ error: '缺少必需参数：document_id 或 version_id' });
+  }
+  const version = getVersion(document_id, version_id);
+  if (!version) {
+    return reply.code(404).send({ error: '版本不存在' });
+  }
+  return reply.send({ success: true, content: version.full_snapshot, version });
+});
+
+app.post('/decision-guide/resolve', async (req, reply) => {
+  const { document_id, content, issues, mode } = (req.body || {}) as {
+    document_id?: string;
+    content?: string;
+    issues?: Array<{ type: string; severity: string; suggestion_text: string }>;
+    mode?: 'normal' | 'auto_fix';
+  };
+
+  if (!document_id || !content) {
+    return reply.code(400).send({ error: '缺少必需参数：document_id 或 content' });
+  }
+
+  try {
+    const result = await llmQueue.add(() => runDecisionGuideAgent({
+      text: content,
+      issues: issues || [],
+      mode: mode || 'normal'
+    }));
+
+    return reply.send({ success: true, ...result });
+  } catch (error) {
+    req.log.error(error, 'Decision guide failed');
+    return reply.code(500).send({
+      error: '决策指导失败',
       details: error instanceof Error ? error.message : String(error)
     });
   }

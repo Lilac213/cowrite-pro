@@ -357,6 +357,7 @@ export default function DraftStage({ projectId, onComplete, readonly }: DraftSta
           }}
           readonly={readonly || isTyping}
           projectId={projectId}
+          documentId={draft?.id || projectId}
           insights={insights}
           gaps={gaps}
           structureResult={structureResult}

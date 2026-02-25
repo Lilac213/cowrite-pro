@@ -3,6 +3,7 @@ export interface LLMCallConfig {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  responseFormat?: { type: 'json_object' };
 }
 
 async function callGemini(config: LLMCallConfig): Promise<string> {
@@ -11,6 +12,7 @@ async function callGemini(config: LLMCallConfig): Promise<string> {
     model = '[C渠道][1额度/次]gemini-2.5-flash',
     temperature = 0.3,
     maxTokens = 8192,
+    responseFormat
   } = config;
 
   const baseUrl = process.env.OPENAI_BASE_URL;
@@ -37,6 +39,7 @@ async function callGemini(config: LLMCallConfig): Promise<string> {
       }],
       temperature,
       max_tokens: maxTokens,
+      response_format: responseFormat
     }),
   });
 
@@ -60,6 +63,7 @@ async function callQwen(config: LLMCallConfig): Promise<string> {
     model = 'qwen-plus',
     temperature = 0.3,
     maxTokens = 8192,
+    responseFormat
   } = config;
 
   const apiKey = process.env.QIANWEN_API_KEY || process.env.QWEN_API_KEY;
@@ -83,6 +87,7 @@ async function callQwen(config: LLMCallConfig): Promise<string> {
       }],
       temperature,
       max_tokens: maxTokens,
+      response_format: responseFormat
     }),
   });
 
